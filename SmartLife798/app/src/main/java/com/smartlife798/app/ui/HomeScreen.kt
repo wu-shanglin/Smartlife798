@@ -31,7 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,11 +54,11 @@ import com.smartlife798.app.core.statusOnly
 import com.smartlife798.app.ui.components.ErrorState
 import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.SectionHeader
+import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
 import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.ui.components.usagePillState
 import com.smartlife798.app.vm.MainViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,19 +70,18 @@ fun HomeScreen(
     onOpenDevices: (DevicesShelf) -> Unit,
     onOpenOrders: () -> Unit,
 ) {
-    val profile by vm.profile.collectAsState()
-    val favorites by vm.favorites.collectAsState()
-    val recents by vm.recents.collectAsState()
-    val pinned by vm.pinned.collectAsState()
-    val active by vm.active.collectAsState()
-    val live by vm.liveStatus.collectAsState()
-    val liveAt by vm.liveUpdatedAt.collectAsState()
-    val loading by vm.loadingMaster.collectAsState()
-    val error by vm.masterError.collectAsState()
+    val profile by vm.profile.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val recents by vm.recents.collectAsStateWithLifecycle()
+    val pinned by vm.pinned.collectAsStateWithLifecycle()
+    val active by vm.active.collectAsStateWithLifecycle()
+    val live by vm.liveStatus.collectAsStateWithLifecycle()
+    val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
+    val loading by vm.loadingMaster.collectAsStateWithLifecycle()
+    val error by vm.masterError.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
 
     fun endUsage() {
         // The tap handler runs before recomposition, so guard the local flag as
@@ -111,22 +110,17 @@ fun HomeScreen(
     LaunchedEffect(active) { if (active != null) lastActive = active }
     val cardActive = active ?: lastActive?.takeIf { ending }
 
-    val refreshTick by vm.refreshTick.collectAsState()
-    val syncedAt by vm.historySyncedAt.collectAsState()
+    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
+    val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
     // Full refresh (not just master): the 「进行中」 card is reconciled with
     // `dev/status` here, so a pull-to-refresh can never leave a stale session.
     LaunchedEffect(refreshTick) { vm.refreshAll() }
-    LaunchedEffect(active) {
-        while (active != null) {
-            kotlinx.coroutines.delay(1000)
-            now = System.currentTimeMillis()
-        }
-    }
 
     val ordered = remember(favorites, pinned, recents) {
+        val recentById = recents.associateBy { it.id }
         favorites.sortedWith(
             compareByDescending<Device> { pinned.contains(it.id) }
-                .thenByDescending { d -> recents.firstOrNull { it.id == d.id }?.lastUsedAt ?: 0L },
+                .thenByDescending { d -> recentById[d.id]?.lastUsedAt ?: 0L },
         )
     }
 
@@ -138,10 +132,15 @@ fun HomeScreen(
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
-            scope.launch {
+            if (!refreshing) {
                 refreshing = true
-                vm.refreshAll()
-                refreshing = false
+                scope.launch {
+                    try {
+                        vm.refreshAll()
+                    } finally {
+                        refreshing = false
+                    }
+                }
             }
         },
         modifier = Modifier
@@ -183,7 +182,6 @@ fun HomeScreen(
             item {
                 ActiveUsageCard(
                     active = cardActive,
-                    tick = now,
                     live = liveForActive,
                     liveAt = if (liveForActive != null) liveAt else 0L,
                     ending = ending,
@@ -361,7 +359,6 @@ private fun ScanHeroCard(onScan: () -> Unit) {
 @Composable
 private fun ActiveUsageCard(
     active: com.smartlife798.app.core.ActiveUsage?,
-    tick: Long,
     live: com.smartlife798.app.core.Device?,
     liveAt: Long,
     ending: Boolean,
@@ -395,8 +392,8 @@ private fun ActiveUsageCard(
                 )
             }
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    Fmt.duration(active.startedAt, if (tick > 0) tick else System.currentTimeMillis()),
+                UsageDuration(
+                    startedAt = active.startedAt,
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                     fontWeight = FontWeight.Bold,

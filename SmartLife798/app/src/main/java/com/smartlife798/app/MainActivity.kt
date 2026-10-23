@@ -55,9 +55,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,8 +112,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val themeMode by com.smartlife798.app.core.Appearance.mode.collectAsState()
-            val dynamicColor by com.smartlife798.app.core.Appearance.dynamicColor.collectAsState()
+            val themeMode by com.smartlife798.app.core.Appearance.mode.collectAsStateWithLifecycle()
+            val dynamicColor by com.smartlife798.app.core.Appearance.dynamicColor.collectAsStateWithLifecycle()
             val dark = when (themeMode) {
                 com.smartlife798.app.core.ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
                 com.smartlife798.app.core.ThemeMode.LIGHT -> false
@@ -134,15 +135,14 @@ private data class Tab(val route: String, val label: String, val icon: @Composab
 @Composable
 private fun AppRoot(forcePreview: Boolean = false) {
     val vm: MainViewModel = viewModel()
-    val loggedIn by vm.loggedIn.collectAsState()
-    val unpaidCount by vm.unpaidCount.collectAsState()
-    val navController = rememberNavController()
+    val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
+    val unpaidCount by vm.unpaidCount.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val message by vm.message.collectAsState()
-    val updatePolicy by vm.updatePolicy.collectAsState()
-    val showUpdate by vm.showUpdate.collectAsState()
-    val checkingUpdate by vm.checkingUpdate.collectAsState()
-    val updateDownload by vm.updateDownload.collectAsState()
+    val message by vm.message.collectAsStateWithLifecycle()
+    val updatePolicy by vm.updatePolicy.collectAsStateWithLifecycle()
+    val showUpdate by vm.showUpdate.collectAsStateWithLifecycle()
+    val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
+    val updateDownload by vm.updateDownload.collectAsStateWithLifecycle()
     val updateRequired = !forcePreview && !Preview.enabled &&
         updatePolicy?.required(BuildConfig.VERSION_CODE) == true
 
@@ -199,6 +199,10 @@ private fun AppRoot(forcePreview: Boolean = false) {
         return
     }
 
+    // Freeze the graph for this signed-in UI session. Changing the preference
+    // must not navigate away from settings or reset a restored back stack.
+    val startDestination = rememberSaveable { vm.startupPage.value.route }
+    val navController = rememberNavController()
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -236,7 +240,7 @@ private fun AppRoot(forcePreview: Boolean = false) {
                 }
                 NavHost(
                     navController = navController,
-                    startDestination = "home",
+                    startDestination = startDestination,
                     modifier = Modifier.fillMaxSize(),
                     enterTransition = { EnterTransition.None },
                     exitTransition = { ExitTransition.None },

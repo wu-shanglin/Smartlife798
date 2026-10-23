@@ -176,6 +176,12 @@ object Store {
         prefs.edit { putBoolean("dynamicColor", enabled) }
     }
 
+    fun startupPage(): StartupPage = StartupPage.fromName(prefs.getString("startupPage", null))
+
+    fun saveStartupPage(page: StartupPage) {
+        if (!Preview.enabled) prefs.edit { putString("startupPage", page.name) }
+    }
+
     fun clearAll() {
         prefs.edit { clear() }
     }
@@ -185,8 +191,8 @@ object Store {
      * bookkeeping it produced (recent list / pins), so a different account can
      * never inherit another account's devices.
      *
-     * Appearance preferences are deliberately NOT touched: logging out should
-     * not reset the user's dark-mode choice.
+     * Installation preferences are deliberately retained: logging out should
+     * not reset the user's appearance or startup-page choice.
      */
     fun clearAccount() {
         prefs.edit {

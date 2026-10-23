@@ -35,6 +35,7 @@ import com.smartlife798.app.core.StartSignal
 import com.smartlife798.app.core.StartWatch
 import com.smartlife798.app.core.StoredProfile
 import com.smartlife798.app.core.Store
+import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.activeBelongsTo
 import com.smartlife798.app.core.activeSessionOver
 import com.smartlife798.app.core.blockedByOtherSession
@@ -63,6 +64,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class PayRequest(val bill: Bill?, val note: String, val createdAt: Long = System.currentTimeMillis())
 
     private val gson = Gson()
+
+    private val _startupPage: MutableStateFlow<StartupPage> = MutableStateFlow(Store.startupPage())
+    val startupPage: StateFlow<StartupPage> = _startupPage.asStateFlow()
+
+    fun setStartupPage(page: StartupPage) {
+        _startupPage.value = page
+        Store.saveStartupPage(page)
+    }
 
     val protocolVersion = com.smartlife798.app.core.OriginalAppVersion.current
     private var protocolJob: Job? = null
@@ -407,8 +416,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _wallet.value = null
             return
         }
+        val tokenAtStart = session.token
         val res = withContext(Dispatchers.IO) { Api.wallet() }
-        if (res is Res.Ok) _wallet.value = res.data
+        if (!Preview.enabled && session.token == tokenAtStart && res is Res.Ok) _wallet.value = res.data
     }
 
     /**
@@ -718,31 +728,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!session.isLoggedIn) return
         _loadingMaster.value = true
         _masterError.value = null
-        val res = withContext(Dispatchers.IO) { Api.master() }
-        when (res) {
-            is Res.Ok -> {
-                val master: Master? = res.data
-                val account = master?.account
-                if (account != null) {
-                    val p = StoredProfile(
-                        id = account.id,
-                        name = account.name.ifBlank { account.phone },
-                        phone = account.phone.ifBlank { session.phone ?: "" },
-                        no = account.no,
-                        arrear = account.arrear,
-                        score = account.useScore,
-                    )
-                    Store.saveProfile(p)
-                    _profile.value = p
+        val tokenAtStart = session.token
+        try {
+            val res = withContext(Dispatchers.IO) { Api.master() }
+            if (Preview.enabled || session.token != tokenAtStart) return
+            when (res) {
+                is Res.Ok -> {
+                    val master: Master? = res.data
+                    val account = master?.account
+                    if (account != null) {
+                        val p = StoredProfile(
+                            id = account.id,
+                            name = account.name.ifBlank { account.phone },
+                            phone = account.phone.ifBlank { session.phone ?: "" },
+                            no = account.no,
+                            arrear = account.arrear,
+                            score = account.useScore,
+                        )
+                        Store.saveProfile(p)
+                        _profile.value = p
+                    }
+                    _favorites.value = master?.favos ?: emptyList()
+                    Store.saveFavoritesCache(gson.toJson(_favorites.value))
                 }
-                _favorites.value = master?.favos ?: emptyList()
-                Store.saveFavoritesCache(gson.toJson(_favorites.value))
+                is Res.Fail -> {
+                    _masterError.value = res.msg
+                }
             }
-            is Res.Fail -> {
-                _masterError.value = res.msg
-            }
+        } finally {
+            _loadingMaster.value = false
         }
-        _loadingMaster.value = false
     }
 
     // ---------------------------------------------------------------- device

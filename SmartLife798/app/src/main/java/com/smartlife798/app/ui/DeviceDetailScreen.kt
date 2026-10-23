@@ -35,7 +35,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,8 +89,8 @@ fun DeviceDetailScreen(
         entryReady = true
     }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val favorites by vm.favorites.collectAsState()
-    val pinned by vm.pinned.collectAsState()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val pinned by vm.pinned.collectAsStateWithLifecycle()
     var detail by remember { mutableStateOf<DeviceDetail?>(null) }
     var loading by remember { mutableStateOf(true) }
     var refreshing by remember { mutableStateOf(false) }
@@ -109,7 +109,7 @@ fun DeviceDetailScreen(
     // gone (ended from Home, logout…). It must never outlive the session.
     var pendingStartUntil by remember(deviceId) { mutableStateOf(0L) }
     var seenInUseSinceStart by remember(deviceId) { mutableStateOf(false) }
-    val active by vm.active.collectAsState()
+    val active by vm.active.collectAsStateWithLifecycle()
 
     LaunchedEffect(active, deviceId) {
         // `active` is only written after a successful start. If it disappears
@@ -163,7 +163,7 @@ fun DeviceDetailScreen(
         vm.setDetailDeviceOpen(deviceId)
         onDispose { vm.setDetailDeviceOpen(null) }
     }
-    val refreshTick by vm.refreshTick.collectAsState()
+    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
     LaunchedEffect(refreshTick, deviceId) { reload(detail == null) }
 
     // 设备状态轮询：只在页面处于 RESUMED 时运行；仅“启动中/运行中”或刚启动的
@@ -347,11 +347,16 @@ fun DeviceDetailScreen(
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = {
-                scope.launch {
+                if (!refreshing) {
                     refreshing = true
-                    reload(detail == null)
-                    pollOnce()
-                    refreshing = false
+                    scope.launch {
+                        try {
+                            reload(detail == null)
+                            pollOnce()
+                        } finally {
+                            refreshing = false
+                        }
+                    }
                 }
             },
             modifier = Modifier

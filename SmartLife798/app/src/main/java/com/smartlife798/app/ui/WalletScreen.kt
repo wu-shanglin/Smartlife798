@@ -28,7 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,8 +62,8 @@ import kotlinx.coroutines.launch
 fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? Activity
-    val wallet by vm.wallet.collectAsState()
-    val tick by vm.refreshTick.collectAsState()
+    val wallet by vm.wallet.collectAsStateWithLifecycle()
+    val tick by vm.refreshTick.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var products by remember { mutableStateOf<List<Product>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }

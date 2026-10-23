@@ -21,6 +21,10 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "ux") {
+            UxFlowChecks.run(this)
+            return
+        }
         if (mode.isNotEmpty()) {
             UpdateFlowChecks.run(this, mode)
             return
