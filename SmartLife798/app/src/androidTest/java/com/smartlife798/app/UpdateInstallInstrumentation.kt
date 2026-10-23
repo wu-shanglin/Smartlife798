@@ -21,8 +21,8 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
-        if (mode == "ux") {
-            UxFlowChecks.run(this)
+        if (mode == "ux" || mode == "settings") {
+            UxFlowChecks.run(this, settingsOnly = mode == "settings")
             return
         }
         if (mode.isNotEmpty()) {
