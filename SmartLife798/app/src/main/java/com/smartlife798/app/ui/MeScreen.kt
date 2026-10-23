@@ -5,15 +5,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,8 +49,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.smartlife798.app.BuildConfig
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Appearance
@@ -147,27 +155,37 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
                             .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Column(
-                            modifier = Modifier.sharedCard(CardOrigin.WALLET).clickable(onClick = onOpenWallet),
+                            modifier = Modifier.weight(1f).fillMaxHeight().sharedCard(CardOrigin.WALLET).clickable(onClick = onOpenWallet).padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                         ) {
                             Text("钱包", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
+                            MetricValue(
                                 Fmt.money(wallet?.total ?: 0.0),
                                 modifier = Modifier.sharedCardElement(CardOrigin.WALLET, part = CardPart.AMOUNT),
-                                style = MaterialTheme.typography.headlineSmall,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         }
-                        Column {
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
                             Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${profile?.score ?: 0}", style = MaterialTheme.typography.headlineSmall)
+                            MetricValue("${profile?.score ?: 0}")
                         }
-                        Column {
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
                             Text("收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${favorites.size}", style = MaterialTheme.typography.headlineSmall)
+                            MetricValue("${favorites.size}")
                         }
                     }
                 }
@@ -363,4 +381,22 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
             },
         )
     }
+}
+
+/** Equal-width metrics keep values on one line at narrow widths and larger font scales. */
+@Composable
+private fun MetricValue(
+    value: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    BasicText(
+        text = value,
+        modifier = modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.headlineSmall.copy(color = color, textAlign = TextAlign.Center),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        softWrap = false,
+        autoSize = TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = 24.sp),
+    )
 }

@@ -334,11 +334,11 @@ private fun ScanHeroCard(onScan: () -> Unit) {
             Text(
                 "扫描设备上的二维码，自动识别水控、淋浴、洗衣等设备并进入使用页",
                 style = MaterialTheme.typography.bodySmall,
-                color = onContainer.copy(alpha = 0.85f),
+                color = onContainer,
             )
             Spacer(Modifier.height(6.dp))
             Surface(
-                color = onContainer.copy(alpha = 0.18f),
+                color = onContainer,
                 shape = RoundedCornerShape(50),
             ) {
                 Row(
@@ -348,10 +348,10 @@ private fun ScanHeroCard(onScan: () -> Unit) {
                     Text(
                         "打开相机扫码",
                         style = MaterialTheme.typography.labelLarge,
-                        color = onContainer,
+                        color = container,
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("→", color = onContainer)
+                    Text("→", color = container)
                 }
             }
         }

@@ -22,10 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 private val LightScheme = lightColorScheme(
-    primary = Teal40,
+    primary = WaterBlue40,
     onPrimary = Color.White,
-    primaryContainer = Teal90,
-    onPrimaryContainer = Teal10,
+    primaryContainer = WaterBlue90,
+    onPrimaryContainer = WaterBlue10,
     secondary = Aqua40,
     onSecondary = Color.White,
     secondaryContainer = AquaContainer,
@@ -47,13 +47,25 @@ private val LightScheme = lightColorScheme(
     outlineVariant = OutlineVariant,
     error = Danger,
     onError = Color.White,
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    surfaceTint = WaterBlue40,
+    inverseSurface = Color(0xFF2E3135),
+    inverseOnSurface = Color(0xFFF0F0F7),
+    inversePrimary = WaterBlue80,
+    surfaceDim = Color(0xFFD7DAE0),
+    surfaceBright = Mist,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF0F4FA),
+    surfaceContainer = Color(0xFFEAEEF5),
+    surfaceContainerHighest = Color(0xFFDFE3EB),
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = Teal80,
-    onPrimary = Teal10,
-    primaryContainer = Teal30,
-    onPrimaryContainer = Teal90,
+    primary = WaterBlue80,
+    onPrimary = WaterBlue10,
+    primaryContainer = WaterBlue30,
+    onPrimaryContainer = WaterBlue90,
     secondary = Aqua80,
     onSecondary = DarkOnAqua,
     secondaryContainer = DarkAquaContainer,
@@ -73,6 +85,18 @@ private val DarkScheme = darkColorScheme(
     outlineVariant = DarkOutlineVariant,
     error = DarkError,
     onError = DarkOnError,
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    surfaceTint = WaterBlue80,
+    inverseSurface = DarkOnSurface,
+    inverseOnSurface = Color(0xFF2E3135),
+    inversePrimary = WaterBlue40,
+    surfaceDim = SurfaceDark,
+    surfaceBright = Color(0xFF353B43),
+    surfaceContainerLowest = Color(0xFF0B0F14),
+    surfaceContainerLow = Color(0xFF151B22),
+    surfaceContainer = Color(0xFF171D24),
+    surfaceContainerHighest = DarkSurfaceVariant,
 )
 
 /**

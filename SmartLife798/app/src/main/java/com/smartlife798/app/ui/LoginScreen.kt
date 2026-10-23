@@ -115,13 +115,13 @@ fun LoginScreen(vm: MainViewModel) {
                     Text(
                         "直饮水 · 热水淋浴 · 智能洗衣",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f),
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(Modifier.height(14.dp))
                     Text(
                         "全新设计 · 同一账号 · 真实服务端",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f),
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
             }
