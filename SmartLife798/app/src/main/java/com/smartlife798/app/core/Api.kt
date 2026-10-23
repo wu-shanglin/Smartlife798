@@ -30,7 +30,7 @@ object Api {
      */
     const val BASE_URL: String = "https://i.ilife798.com"
 
-    /** Verified original APK version; independent of this client's release version. See docs/04. */
+    /** Verified bundled fallback; distribution discovery may supply a newer version. See docs/04. */
     const val CLIENT_VERSION: String = "3.1.9"
 
     private val gson = Gson()
@@ -41,10 +41,14 @@ object Api {
         .readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)
         .addInterceptor { chain ->
+            val version = session.versionHeader()
             val builder = chain.request().newBuilder()
                 .header("ApplicationType", "1,1")
-                .header("VersionCode", session.versionHeader())
-                .header("user-agent", "Android_ilife798_" + session.versionHeader())
+                .header("VersionCode", version)
+                .header("user-agent", "Android_ilife798_$version")
+            if (chain.request().url.encodedPath == "/api/v1/sys/app/upt") {
+                builder.url(chain.request().url.newBuilder().setQueryParameter("version", version).build())
+            }
             session.token?.takeIf { it.isNotBlank() }?.let { builder.header("Authorization", it) }
             chain.proceed(builder.build())
         }
@@ -116,8 +120,6 @@ object Api {
                     .build()
                 val req = Request.Builder().url(url)
                     .header("ApplicationType", "1,1")
-                    .header("VersionCode", CLIENT_VERSION)
-                    .header("user-agent", "Android_ilife798_$CLIENT_VERSION")
                     .get().build()
                 client.newCall(req).execute().use { if (it.isSuccessful) it.body?.bytes() else null }
             } catch (e: Exception) {
@@ -301,7 +303,7 @@ object Api {
     /** Original app's update channel, not an updater for com.smartlife798.app. */
     internal fun appUpdateQuery(): Map<String, String> = mapOf(
         "appid" to "com.cloudora.android",
-        "version" to CLIENT_VERSION,
+        "version" to session.versionHeader(),
         "type" to "1",
     )
 

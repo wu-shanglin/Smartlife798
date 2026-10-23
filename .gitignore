@@ -29,6 +29,7 @@ tools/alipay/
 # ---------- 打包产物 ----------
 dist/*.apk
 dist/update.json
+dist/release-history.json
 *.apk
 
 # ---------- 系统/临时 ----------
