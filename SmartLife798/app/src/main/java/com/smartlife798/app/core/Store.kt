@@ -166,14 +166,14 @@ object Store {
     fun themeModeName(): String? = prefs.getString("themeMode", null)
 
     fun saveThemeMode(mode: ThemeMode) {
-        prefs.edit { putString("themeMode", mode.name) }
+        if (!Preview.enabled) prefs.edit { putString("themeMode", mode.name) }
     }
 
     /** True when the user opted into wallpaper-based dynamic colour (API 31+). */
     fun dynamicColor(): Boolean = prefs.getBoolean("dynamicColor", false)
 
     fun saveDynamicColor(enabled: Boolean) {
-        prefs.edit { putBoolean("dynamicColor", enabled) }
+        if (!Preview.enabled) prefs.edit { putBoolean("dynamicColor", enabled) }
     }
 
     fun startupPage(): StartupPage = StartupPage.fromName(prefs.getString("startupPage", null))

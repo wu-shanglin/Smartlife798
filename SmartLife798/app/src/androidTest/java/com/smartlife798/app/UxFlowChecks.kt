@@ -8,6 +8,8 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.Appearance
+import com.smartlife798.app.core.ThemeMode
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.vm.MainViewModel
@@ -25,6 +27,8 @@ object UxFlowChecks {
         val original = Store.startupPage()
         val policy = Store.updatePolicyJson
         val protocol = Store.originalAppVersion
+        val theme = Store.themeModeName()
+        val dynamicColor = Store.dynamicColor()
         try {
             check(Store.token.isNullOrBlank())
             accountFree = true
@@ -98,6 +102,32 @@ object UxFlowChecks {
                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                         }
                     }
+                    stage = "reveal appearance choices"
+                    reveal(test, "跟随系统")
+                    stage = "dark selection preview isolation"
+                    click(test, "深色")
+                    test.runOnMainSync { check(Appearance.mode.value == ThemeMode.DARK) }
+                    check(Store.themeModeName() == theme)
+                    stage = "light selection preview isolation"
+                    click(test, "浅色")
+                    test.runOnMainSync { check(Appearance.mode.value == ThemeMode.LIGHT) }
+                    check(Store.themeModeName() == theme)
+                    stage = "system selection preview isolation"
+                    click(test, "跟随系统")
+                    test.runOnMainSync { check(Appearance.mode.value == ThemeMode.SYSTEM) }
+                    stage = "reveal dynamic color"
+                    reveal(test, "动态取色")
+                    stage = "dynamic color preview isolation"
+                    click(test, "动态取色开关")
+                    test.runOnMainSync { check(Appearance.dynamicColor.value != dynamicColor) }
+                    check(Store.dynamicColor() == dynamicColor)
+                    test.runOnMainSync { Appearance.setDynamicColor(dynamicColor) }
+                    test.uiAutomation.waitForIdle(500, 5_000)
+                    test.uiAutomation.takeScreenshot()?.let { bitmap ->
+                        java.io.File(test.targetContext.cacheDir, "ux-appearance.png").outputStream().use {
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    }
                 }
                 test.runOnMainSync { activity?.finish() }
                 test.waitForIdleSync()
@@ -105,7 +135,7 @@ object UxFlowChecks {
             }
             stage = "installation cache isolation"
             check(Store.updatePolicyJson == policy && Store.originalAppVersion == protocol)
-            result.putString("stream", "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, tabs/detail/back, trimmed search/no-match/clear, settings recreation and cache isolation\n")
+            result.putString("stream", "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             if (accountFree) test.uiAutomation.takeScreenshot()?.let { bitmap ->
@@ -118,6 +148,7 @@ object UxFlowChecks {
             test.runOnMainSync { activity?.finish() }
             Preview.enabled = false
             if (accountFree) Store.saveStartupPage(original)
+            if (accountFree) test.runOnMainSync { Appearance.restore() }
         }
         test.finish(code, result)
     }
@@ -164,5 +195,29 @@ object UxFlowChecks {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, query)
         }))
         test.waitForIdleSync()
+    }
+
+    private fun reveal(test: Instrumentation, label: String) {
+        repeat(12) {
+            val node = nodes(root(test)).firstOrNull {
+                (it.text?.toString()?.contains(label) == true ||
+                    it.contentDescription?.toString()?.contains(label) == true) && it.isVisibleToUser
+            }
+            if (node != null) {
+                test.uiAutomation.waitForIdle(300, 5_000)
+                return
+            }
+            // Small drags avoid skipping a compact settings group with a whole-page scroll.
+            val bounds = android.graphics.Rect()
+            root(test)!!.getBoundsInScreen(bounds)
+            val x = bounds.centerX()
+            val from = bounds.top + (bounds.height() * 0.72f).toInt()
+            val to = from - (bounds.height() * 0.18f).toInt()
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
+                "input swipe $x $from $x $to 600",
+            )).use { it.readBytes() }
+            test.uiAutomation.waitForIdle(300, 5_000)
+        }
+        error("Option not visible")
     }
 }

@@ -1,6 +1,7 @@
 package com.smartlife798.app.ui
 
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,28 +14,35 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -50,6 +58,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
@@ -208,61 +220,80 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("启动页面", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "下次打开应用时进入所选页面，未登录时先登录",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SettingsHeading(Icons.Filled.Home, "启动页面", "选择下次打开时显示的页面")
+                        Row(
+                            modifier = Modifier.fillMaxWidth().selectableGroup().height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             StartupPage.entries.forEach { page ->
-                                FilterChip(
+                                SettingsChoice(
+                                    label = page.label,
                                     selected = startupPage == page,
                                     onClick = { vm.setStartupPage(page) },
-                                    label = { Text(page.label) },
+                                    icon = if (page == StartupPage.HOME) Icons.Filled.Home else Icons.AutoMirrored.Filled.List,
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
                                 )
                             }
                         }
-                        HorizontalDivider()
-                        Text("外观", style = MaterialTheme.typography.titleSmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = themeMode == ThemeMode.SYSTEM,
-                                onClick = { Appearance.setMode(ThemeMode.SYSTEM) },
-                                label = { Text("跟随系统") },
-                            )
-                            FilterChip(
-                                selected = themeMode == ThemeMode.LIGHT,
-                                onClick = { Appearance.setMode(ThemeMode.LIGHT) },
-                                label = { Text("浅色") },
-                            )
-                            FilterChip(
-                                selected = themeMode == ThemeMode.DARK,
-                                onClick = { Appearance.setMode(ThemeMode.DARK) },
-                                label = { Text("深色") },
-                            )
+                        Text(
+                            "未登录时会先进入登录页",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SettingsHeading(Icons.Filled.Settings, "外观", "选择适合你的显示方式")
+                        Row(
+                            modifier = Modifier.fillMaxWidth().selectableGroup().height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            listOf(
+                                ThemeMode.SYSTEM to "跟随系统",
+                                ThemeMode.LIGHT to "浅色",
+                                ThemeMode.DARK to "深色",
+                            ).forEach { (mode, label) ->
+                                SettingsChoice(
+                                    label = label,
+                                    selected = themeMode == mode,
+                                    onClick = { Appearance.setMode(mode) },
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                )
+                            }
                         }
-                        // Material You dynamic colour only exists on Android 12+.
-                        // Older systems hide the option entirely instead of
-                        // showing a permanently disabled switch.
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
                             ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("动态取色", style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        "使用壁纸配色，关闭时保持品牌色",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("动态取色", style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            "使用壁纸配色，关闭时保持品牌色",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Switch(
+                                        checked = dynamicColor,
+                                        onCheckedChange = { Appearance.setDynamicColor(it) },
+                                        modifier = Modifier.semantics { contentDescription = "动态取色开关" },
                                     )
                                 }
-                                Switch(
-                                    checked = dynamicColor,
-                                    onCheckedChange = { Appearance.setDynamicColor(it) },
-                                )
                             }
                         }
                     }
@@ -426,4 +457,56 @@ private fun MetricValue(
         softWrap = false,
         autoSize = TextAutoSize.StepBased(minFontSize = 14.sp, maxFontSize = 24.sp),
     )
+}
+
+/** Settings use the same tinted icon blocks and rounded containers as the device cards. */
+@Composable
+private fun SettingsHeading(icon: ImageVector, title: String, description: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(
+            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun SettingsChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) colors.primaryContainer else colors.surfaceContainerLow,
+        contentColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
+        border = if (selected) BorderStroke(1.dp, colors.primary.copy(alpha = 0.35f)) else null,
+    ) {
+        Row(
+            modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (icon != null) Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                textAlign = if (icon == null) TextAlign.Center else TextAlign.Start,
+            )
+            if (selected) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+        }
+    }
 }
