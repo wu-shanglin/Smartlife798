@@ -283,7 +283,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text("动态取色", style = MaterialTheme.typography.bodyMedium)
                                         Text(
-                                            "使用壁纸配色，关闭时保持品牌色",
+                                            "跟随壁纸配色，关闭用品牌色",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -494,9 +494,9 @@ private fun SettingsChoice(
         border = if (selected) BorderStroke(1.dp, colors.primary.copy(alpha = 0.35f)) else null,
     ) {
         Row(
-            modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 10.dp),
+            modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = if (icon == null) 4.dp else 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (icon == null) 3.dp else 6.dp),
         ) {
             if (icon != null) Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Text(
@@ -506,7 +506,7 @@ private fun SettingsChoice(
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 textAlign = if (icon == null) TextAlign.Center else TextAlign.Start,
             )
-            if (selected) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+            if (selected) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(if (icon == null) 14.dp else 16.dp))
         }
     }
 }

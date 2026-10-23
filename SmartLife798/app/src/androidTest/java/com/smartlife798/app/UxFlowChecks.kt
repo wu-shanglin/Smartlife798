@@ -16,7 +16,7 @@ import com.smartlife798.app.vm.MainViewModel
 
 /** Offline, account-free checks; never logs in, pays, scans or starts a device. */
 object UxFlowChecks {
-    fun run(test: Instrumentation) {
+    fun run(test: Instrumentation, settingsOnly: Boolean = false) {
         test.runOnMainSync { ServiceLocator.init(test.targetContext) }
         val result = Bundle()
         var stage = "account-free guard"
@@ -55,26 +55,28 @@ object UxFlowChecks {
                     check(vm.startupPage.value != page)
                 }
                 check(Store.startupPage() == page) // preview choice is in-memory only
-                stage = "tab navigation and detail return"
-                click(test, "设备")
-                await(test, "我的设备")
-                click(test, "3 栋 2 层淋浴机 02")
-                await(test, "当前模式")
-                test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
-                await(test, "我的设备")
-                stage = "search no-match and clear"
-                setSearch(test, "NO-SUCH-DEVICE")
-                await(test, "没有匹配的设备")
-                click(test, "清除筛选")
-                await(test, "3 栋 2 层淋浴机 02")
-                stage = "trimmed search"
-                setSearch(test, "  洗衣房  ")
-                await(test, "3 栋 2 层淋浴机 02", present = false)
-                await(test, "洗衣房 3 号机")
-                click(test, "清除搜索")
-                await(test, "3 栋 2 层淋浴机 02")
+                if (!settingsOnly) {
+                    stage = "tab navigation and detail return"
+                    click(test, "设备")
+                    await(test, "我的设备")
+                    click(test, "3 栋 2 层淋浴机 02")
+                    await(test, "当前模式")
+                    test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                    await(test, "我的设备")
+                    stage = "search no-match and clear"
+                    setSearch(test, "NO-SUCH-DEVICE")
+                    await(test, "没有匹配的设备")
+                    click(test, "清除筛选")
+                    await(test, "3 栋 2 层淋浴机 02")
+                    stage = "trimmed search"
+                    setSearch(test, "  洗衣房  ")
+                    await(test, "3 栋 2 层淋浴机 02", present = false)
+                    await(test, "洗衣房 3 号机")
+                    click(test, "清除搜索")
+                    await(test, "3 栋 2 层淋浴机 02")
+                }
                 stage = "select settings after search"
-                click(test, "我的")
+                if (!settingsOnly) click(test, "我的")
                 stage = "settings visible after search"
                 await(test, "启动页面")
                 test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
@@ -122,7 +124,13 @@ object UxFlowChecks {
                     test.runOnMainSync { check(Appearance.dynamicColor.value != dynamicColor) }
                     check(Store.dynamicColor() == dynamicColor)
                     test.runOnMainSync { Appearance.setDynamicColor(dynamicColor) }
-                    test.uiAutomation.waitForIdle(500, 5_000)
+                    test.uiAutomation.waitForIdle(1_000, 5_000)
+                    val frames = java.util.concurrent.CountDownLatch(1)
+                    test.runOnMainSync {
+                        val view = activity!!.window.decorView
+                        view.postOnAnimation { view.postOnAnimation { frames.countDown() } }
+                    }
+                    check(frames.await(5, java.util.concurrent.TimeUnit.SECONDS))
                     test.uiAutomation.takeScreenshot()?.let { bitmap ->
                         java.io.File(test.targetContext.cacheDir, "ux-appearance.png").outputStream().use {
                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
@@ -135,7 +143,9 @@ object UxFlowChecks {
             }
             stage = "installation cache isolation"
             check(Store.updatePolicyJson == policy && Store.originalAppVersion == protocol)
-            result.putString("stream", "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
+            result.putString("stream", if (settingsOnly)
+                "PASS: settings-only startup choices, retention, background/recreation, appearance selection/toggle and preview/cache isolation\n"
+            else "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             if (accountFree) test.uiAutomation.takeScreenshot()?.let { bitmap ->
