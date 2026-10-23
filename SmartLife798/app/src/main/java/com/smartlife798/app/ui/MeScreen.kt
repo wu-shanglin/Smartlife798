@@ -40,7 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +59,7 @@ import com.smartlife798.app.BuildConfig
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Appearance
 import com.smartlife798.app.core.ThemeMode
+import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.components.HintBanner
 import com.smartlife798.app.ui.components.InfoRow
@@ -68,18 +69,22 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
-    val profile by vm.profile.collectAsState()
-    val favorites by vm.favorites.collectAsState()
-    val wallet by vm.wallet.collectAsState()
-    val recents by vm.recents.collectAsState()
-    val syncedAt by vm.historySyncedAt.collectAsState()
-    val refreshTick by vm.refreshTick.collectAsState()
-    val themeMode by Appearance.mode.collectAsState()
-    val dynamicColor by Appearance.dynamicColor.collectAsState()
-    val checkingUpdate by vm.checkingUpdate.collectAsState()
-    val protocolVersion by vm.protocolVersion.collectAsState()
+    val profile by vm.profile.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val wallet by vm.wallet.collectAsStateWithLifecycle()
+    val recents by vm.recents.collectAsStateWithLifecycle()
+    val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
+    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
+    val themeMode by Appearance.mode.collectAsStateWithLifecycle()
+    val dynamicColor by Appearance.dynamicColor.collectAsStateWithLifecycle()
+    val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
+    val protocolVersion by vm.protocolVersion.collectAsStateWithLifecycle()
+    val startupPage by vm.startupPage.collectAsStateWithLifecycle()
 
-    LaunchedEffect(refreshTick) { vm.refreshMaster() }
+    LaunchedEffect(refreshTick) {
+        vm.refreshMaster()
+        vm.refreshWallet()
+    }
     val coroutineScope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var checkResult by remember { mutableStateOf<String?>(null) }
@@ -89,10 +94,15 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
-            coroutineScope.launch {
+            if (!refreshing) {
                 refreshing = true
-                vm.refreshAll()
-                refreshing = false
+                coroutineScope.launch {
+                    try {
+                        vm.refreshAll()
+                    } finally {
+                        refreshing = false
+                    }
+                }
             }
         },
         modifier = Modifier
@@ -167,7 +177,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                         ) {
                             Text("钱包", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             MetricValue(
-                                Fmt.money(wallet?.total ?: 0.0),
+                                wallet?.let { Fmt.money(it.total) } ?: "—",
                                 modifier = Modifier.sharedCardElement(CardOrigin.WALLET, part = CardPart.AMOUNT),
                                 color = MaterialTheme.colorScheme.primary,
                             )
@@ -199,6 +209,22 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("启动页面", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "下次打开应用时进入所选页面，未登录时先登录",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StartupPage.entries.forEach { page ->
+                                FilterChip(
+                                    selected = startupPage == page,
+                                    onClick = { vm.setStartupPage(page) },
+                                    label = { Text(page.label) },
+                                )
+                            }
+                        }
+                        HorizontalDivider()
                         Text("外观", style = MaterialTheme.typography.titleSmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(

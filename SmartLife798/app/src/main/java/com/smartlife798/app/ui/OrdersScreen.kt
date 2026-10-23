@@ -30,7 +30,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,11 +58,11 @@ import com.smartlife798.app.ui.components.HintBanner
 import com.smartlife798.app.ui.components.InfoRow
 import com.smartlife798.app.ui.components.PaySheet
 import com.smartlife798.app.ui.components.LoadingBlock
+import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
 import com.smartlife798.app.ui.components.WavyLinearProgress
 import com.smartlife798.app.ui.components.usagePillState
 import com.smartlife798.app.vm.MainViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class OrderFilter(val label: String) {
@@ -77,14 +77,14 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? Activity
-    val active by vm.active.collectAsState()
-    val live by vm.liveStatus.collectAsState()
-    val liveAt by vm.liveUpdatedAt.collectAsState()
+    val active by vm.active.collectAsStateWithLifecycle()
+    val live by vm.liveStatus.collectAsStateWithLifecycle()
+    val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
     // `liveStatus` is global; only this device's snapshot may describe this session.
     val liveForActive = live?.takeIf { it.id == active?.deviceId }
-    val refreshTick by vm.refreshTick.collectAsState()
-    val unpaidBadge by vm.unpaidCount.collectAsState()
-    val payRequest by vm.payRequest.collectAsState()
+    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
+    val unpaidBadge by vm.unpaidCount.collectAsStateWithLifecycle()
+    val payRequest by vm.payRequest.collectAsStateWithLifecycle()
 
     // Land on the cloud records; "使用中" is one tap away when a session exists.
     var tab by remember { mutableStateOf(1) }
@@ -97,7 +97,6 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     var endReached by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<BillDetail?>(null) }
     var loadingMore by remember { mutableStateOf(false) }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
 
     suspend fun loadBills(reset: Boolean) {
@@ -143,13 +142,6 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
         vm.consumePayRequest()
     }
 
-    LaunchedEffect(active) {
-        while (active != null) {
-            delay(1000)
-            now = System.currentTimeMillis()
-        }
-    }
-
     val unpaid = bills.count { it.isUnpaid }
     val done = bills.count { it.status == BillStatus.PAID }
     val visibleBills = when (filter) {
@@ -161,11 +153,16 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
-            scope.launch {
+            if (!refreshing) {
                 refreshing = true
-                // loadBills() already refreshes the unpaid badge from page 0.
-                loadBills(true)
-                refreshing = false
+                scope.launch {
+                    try {
+                        // loadBills() already refreshes the unpaid badge from page 0.
+                        loadBills(true)
+                    } finally {
+                        refreshing = false
+                    }
+                }
             }
         },
         modifier = Modifier
@@ -242,8 +239,8 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
-                                Text(
-                                    Fmt.duration(active!!.startedAt, if (now > 0) now else System.currentTimeMillis()),
+                                UsageDuration(
+                                    startedAt = active!!.startedAt,
                                     style = MaterialTheme.typography.headlineMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,

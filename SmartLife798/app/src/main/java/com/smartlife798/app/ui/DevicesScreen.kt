@@ -12,16 +12,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,8 @@ import com.smartlife798.app.core.DeviceType
 import com.smartlife798.app.core.DevicesShelf
 import com.smartlife798.app.ui.components.DeviceCard
 import com.smartlife798.app.ui.components.EmptyState
+import com.smartlife798.app.ui.components.ErrorState
+import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
@@ -47,10 +51,12 @@ import kotlinx.coroutines.launch
 )
 @Composable
 fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) {
-    val favorites by vm.favorites.collectAsState()
-    val recents by vm.recents.collectAsState()
-    val pinned by vm.pinned.collectAsState()
-    val refreshTick by vm.refreshTick.collectAsState()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val recents by vm.recents.collectAsStateWithLifecycle()
+    val pinned by vm.pinned.collectAsStateWithLifecycle()
+    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
+    val loading by vm.loadingMaster.collectAsStateWithLifecycle()
+    val error by vm.masterError.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
 
@@ -65,15 +71,17 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
     // only ever refreshed through pull-to-refresh.
     LaunchedEffect(refreshTick) { vm.refreshMaster() }
 
-    val favoriteIds = favorites.map { it.id }.toSet()
+    val favoriteIds = remember(favorites) { favorites.mapTo(hashSetOf()) { it.id } }
+    val favoritesById = remember(favorites) { favorites.associateBy { it.id } }
+    val recentsById = remember(recents) { recents.associateBy { it.id } }
     val commons = remember(favorites, recents, pinned) {
         favorites.filter { d ->
-            pinned.contains(d.id) || (recents.firstOrNull { it.id == d.id }?.uses ?: 0) >= 2
+            pinned.contains(d.id) || (recentsById[d.id]?.uses ?: 0) >= 2
         }
     }
     val recentDevices = remember(recents, favorites) {
         recents.map { r ->
-            favorites.firstOrNull { it.id == r.id } ?: Device(
+            favoritesById[r.id] ?: Device(
                 id = r.id,
                 name = r.name,
                 bm = DeviceModel(dtype = r.dtype),
@@ -86,20 +94,30 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
         DevicesShelf.COMMON -> commons
         DevicesShelf.RECENT -> recentDevices
     }
-    val list = baseList.filter { d ->
-        (query.isBlank() || d.name.contains(query, true) || d.id.contains(query, true) ||
-            DeviceType.name(d.dtype).contains(query, true)) &&
-            (typeFilter == null || d.dtype == typeFilter)
+    val list = remember(baseList, query, typeFilter) {
+        val search = query.trim()
+        baseList.filter { d ->
+            (search.isEmpty() || d.name.contains(search, true) || d.id.contains(search, true) ||
+                DeviceType.name(d.dtype).contains(search, true)) &&
+                (typeFilter == null || d.dtype == typeFilter)
+        }
     }
-    val types = (favorites + recentDevices).map { it.dtype }.filter { it != 0 }.distinct().sorted()
+    val types = remember(favorites, recentDevices) {
+        (favorites + recentDevices).map { it.dtype }.filter { it != 0 }.distinct().sorted()
+    }
 
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
-            scope.launch {
+            if (!refreshing) {
                 refreshing = true
-                vm.refreshAll()
-                refreshing = false
+                scope.launch {
+                    try {
+                        vm.refreshAll()
+                    } finally {
+                        refreshing = false
+                    }
+                }
             }
         },
         modifier = Modifier
@@ -119,6 +137,13 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                         onValueChange = { query = it },
                         placeholder = { Text("搜索设备名称、编号或类型") },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { query = "" }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "清除搜索")
+                                }
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
@@ -156,9 +181,21 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                 }
             }
 
-            if (list.isEmpty()) {
+            if (loading && baseList.isEmpty()) {
+                item { LoadingBlock("正在同步设备…") }
+            } else if (error != null) {
+                item { ErrorState(error.orEmpty()) { vm.refreshMaster() } }
+            }
+            if (list.isEmpty() && !(baseList.isEmpty() && (loading || error != null))) {
                 item {
-                    when (shelf) {
+                    if (query.isNotBlank() || typeFilter != null) {
+                        EmptyState(
+                            "没有匹配的设备",
+                            "试试其他名称、编号或类型，也可以清除筛选查看全部设备。",
+                            actionLabel = "清除筛选",
+                            onAction = { query = ""; typeFilter = null },
+                        )
+                    } else when (shelf) {
                         DevicesShelf.FAVORITE -> EmptyState(
                             "收藏列表为空",
                             "在设备详情页点击「收藏」，设备会同步到服务端账号并展示在这里。",
