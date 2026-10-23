@@ -91,6 +91,8 @@ object UxFlowChecks {
                 await(test, "启动页面")
                 // Capture only preview data, with a stable original filename on export.
                 if (page == StartupPage.DEVICES) {
+                    test.waitForIdleSync()
+                    test.uiAutomation.waitForIdle(500, 5_000)
                     test.uiAutomation.takeScreenshot()?.let { bitmap ->
                         java.io.File(test.targetContext.cacheDir, "ux-me.png").outputStream().use {
                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
