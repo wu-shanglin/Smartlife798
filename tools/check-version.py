@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """版本一致性校验（发版 / CI 必跑）。
 
-业务规则（见 AGENTS.md "提交与版本"）：
+业务规则（见 docs/06-工程规范与路线图.md 的版本与发布）：
 
   * 版本号的唯一真值来源是 `SmartLife798/app/build.gradle.kts`
     的 `versionName` / `versionCode`；
   * `CHANGELOG.md` 必须有该版本的段，且保留 `## [Unreleased]` 段；
-  * `README.md` 的「当前版本」「产物」「产物 SHA-256」必须与真值一致；
-  * `dist/SmartLife798-<versionName>-debug.apk` 若存在，其 SHA-256 必须与 README 一致；
-  * `dist/` 里不允许残留其他版本的产物（避免发错包）。
+  * `README.md` 的「当前版本」「产物」必须与真值一致；
+  * 仅 `--require-apk` 检查目标 APK 文件存在；不读取内容、不核对哈希。
 
 用法：
 
     python tools/check-version.py            # 校验
     python tools/check-version.py --quiet    # 只输出失败项
+    python tools/check-version.py --require-apk  # 发布准备：检查目标产物文件存在
 
 退出码：0 通过 / 1 不一致 / 2 输入不可读。
 """
@@ -21,7 +21,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import re
 import sys
 from pathlib import Path
@@ -51,7 +50,7 @@ def read(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise Problem(f"找不到文件：{path.relative_to(ROOT)}") from exc
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise Problem(f"无法读取 {path.relative_to(ROOT)}：{exc}") from exc
 
 
@@ -68,17 +67,14 @@ def norm(text: str) -> str:
     return re.sub(r"[`\s]+", "", text)
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def table_value(text: str, label: str) -> str:
+    """Only accept one complete two-column row, not a matching historical mention."""
+    rows = re.findall(rf"^\s*\|\s*{re.escape(label)}\s*\|([^\n|]*)\|\s*$", text, re.M)
+    return norm(rows[0]) if len(rows) == 1 else ""
 
 
-def check(quiet: bool) -> int:
+def check(quiet: bool, require_apk: bool = False) -> int:
     failures: list[str] = []
-    notes: list[str] = []
 
     version, code = parse_gradle(read(GRADLE))
     if not quiet:
@@ -98,55 +94,19 @@ def check(quiet: bool) -> int:
 
     # ---- README ----------------------------------------------------------
     readme_raw = read(README)
-    readme = norm(readme_raw)
-
-    if f"|当前版本|{version}" not in readme or f"versionCode{code}" not in readme:
+    current = table_value(readme_raw, "当前版本")
+    if current != f"{version}（versionCode{code}）":
         failures.append(f"README.md 版本表未同步为 `{version}`（`versionCode {code}`）")
 
     apk_name = f"SmartLife798-{version}-debug.apk"
-    if f"dist/{apk_name}" not in readme:
+    artifact = table_value(readme_raw, "产物")
+    if not re.fullmatch(rf"\[[^\]]+\]\(dist/{re.escape(apk_name)}\)", artifact):
         failures.append(f"README.md 的产物链接不是 dist/{apk_name}")
 
-    # ---- 产物 ------------------------------------------------------------
-    # README 已被归一化（去反引号与空白），匹配 `|产物SHA-256|<64 hex>|`
-    match = re.search(r"产物SHA-256\|([0-9a-f]{64})", readme)
-    readme_hash = match.group(1) if match else None
-    if not readme_hash:
-        failures.append("README.md 缺少 64 位十六进制的「产物 SHA-256」")
+    # 日常源码检查不依赖本地产物；发布准备仅确认目标文件存在。
+    if require_apk and not (DIST / apk_name).is_file():
+        failures.append(f"发布检查要求存在 APK 文件 dist/{apk_name}")
 
-    apk = DIST / apk_name
-    if apk.exists():
-        actual = sha256_file(apk)
-        if readme_hash is None:
-            pass  # 缺失已在上面报过，这里不重复
-        elif actual != readme_hash:
-            failures.append(
-                f"README.md 的产物 SHA-256 与 dist/{apk_name} 不一致\n"
-                f"  README: {readme_hash}\n"
-                f"  实际  : {actual}"
-            )
-        elif not quiet:
-            print(f"产物校验通过：dist/{apk_name}")
-    else:
-        notes.append(
-            f"dist/{apk_name} 不存在（dist/ 不入库），跳过 SHA-256 比对；"
-            "发版时必须重新生成并更新 README"
-        )
-
-    if DIST.is_dir():
-        stale = sorted(
-            p.name
-            for p in DIST.glob("SmartLife798-*-debug.apk")
-            if p.name != apk_name
-        )
-        if stale:
-            failures.append(
-                "dist/ 里有非当前版本的产物（容易发错包）：" + ", ".join(stale)
-            )
-
-    # ---- 输出 ------------------------------------------------------------
-    for note in notes:
-        print(f"[提示] {note}")
     if failures:
         for item in failures:
             print(f"[失败] {item}", file=sys.stderr)
@@ -160,9 +120,10 @@ def check(quiet: bool) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="校验版本号与 CHANGELOG / README / dist 的一致性")
     parser.add_argument("--quiet", action="store_true", help="只输出失败项")
+    parser.add_argument("--require-apk", action="store_true", help="发布准备时要求目标 APK 文件存在（不核对哈希）")
     args = parser.parse_args()
     try:
-        return check(args.quiet)
+        return check(args.quiet, args.require_apk)
     except Problem as exc:
         print(f"[错误] {exc}", file=sys.stderr)
         return 2

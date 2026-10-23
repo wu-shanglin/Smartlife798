@@ -30,8 +30,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
+      # Gradle User Home 只由 setup-gradle 缓存，避免与 setup-java 重复恢复。
       - uses: gradle/actions/setup-gradle@v4
 
       - uses: actions/setup-python@v5
@@ -47,7 +47,7 @@ jobs:
         run: python3 -m unittest discover -s tools/tests
 
       # 版本真值与副本是否一致（发布流程见 docs/06）。
-      # CI 里没有 dist/（不入库），脚本会跳过 SHA-256 比对。
+      # 日常 CI 只核对版本与链接，不读取 APK 或核对哈希。
       - name: Check version consistency
         working-directory: ${{ github.workspace }}
         run: python3 tools/check-version.py
@@ -92,6 +92,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
-          path: SmartLife798/app/build/reports/lint-results-debug.html
+          path: |
+            SmartLife798/app/build/reports/lint-results-*.html
+            SmartLife798/app/build/reports/lint-results-*.xml
           if-no-files-found: ignore
           retention-days: 7
