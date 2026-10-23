@@ -100,7 +100,12 @@ fun AppUpdatePrompt(
                         (if (required) "当前版本已停止支持，请安装新版后继续使用。"
                         else "下载后将打开系统安装界面，也可以稍后更新。") +
                             "安装需您确认，首次可能需要允许安装未知来源应用。" +
-                            if (policy.notes.isBlank()) "" else "\n\n${policy.notes}",
+                            policy.notesSince(BuildConfig.VERSION_NAME).let {
+                                if (it.isBlank()) "" else "\n\n" +
+                                    (if (policy.releases.isNotEmpty()) "" else if (policy.historyAvailable)
+                                        "跨版本日志暂不可用，以下为最新版本说明。\n\n"
+                                    else "本次发布未提供跨版本日志，以下为最新版本说明。\n\n") + it
+                            },
                     )
                 }
                 item {

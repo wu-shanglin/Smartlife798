@@ -64,6 +64,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val gson = Gson()
 
+    val protocolVersion = com.smartlife798.app.core.OriginalAppVersion.current
+    private var protocolJob: Job? = null
+    private var lastProtocolCheck = 0L
+    private var protocolCheckInterval = 300_000L
+
+    private fun refreshProtocolVersion(manual: Boolean) {
+        if (Preview.enabled || protocolJob?.isActive == true) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!manual && lastProtocolCheck != 0L && now - lastProtocolCheck < protocolCheckInterval) return
+        lastProtocolCheck = now
+        protocolCheckInterval = 300_000L
+        protocolJob = viewModelScope.launch {
+            try {
+                val version = withContext(Dispatchers.IO) { com.smartlife798.app.core.OriginalAppVersion.fetch() }
+                if (Preview.enabled) return@launch
+                com.smartlife798.app.core.OriginalAppVersion.accept(version)
+                protocolCheckInterval = 21_600_000L
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: java.io.IOException) {
+                // Keep the last valid installation cache / bundled fallback.
+            } catch (_: RuntimeException) {
+                // Store layout changes and invalid versions are not protocol compatibility proof.
+            }
+        }
+    }
+
     private val _updatePolicy = MutableStateFlow(com.smartlife798.app.core.UpdatePolicy.cached(Store.updatePolicyJson))
     val updatePolicy = _updatePolicy.asStateFlow()
     private val _checkingUpdate = MutableStateFlow(false)
@@ -138,6 +165,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (manual) notify("演示模式下不检查更新")
             return
         }
+        refreshProtocolVersion(manual)
         if (updateJob?.isActive == true || downloadJob?.isActive == true) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (!manual && lastUpdateCheck != 0L && now - lastUpdateCheck < 300_000L) return
@@ -149,8 +177,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         updateJob = viewModelScope.launch {
             _checkingUpdate.value = true
             try {
-                val json = withContext(Dispatchers.IO) { com.smartlife798.app.core.AppUpdate.fetch() }
+                val fetched = withContext(Dispatchers.IO) { com.smartlife798.app.core.AppUpdate.fetch() }
                 if (Preview.enabled) return@launch
+                val json = com.smartlife798.app.core.AppUpdate.retainHistory(fetched, Store.updatePolicyJson)
                 val policy = com.smartlife798.app.core.UpdatePolicy.parse(json)
                 if (policy != _updatePolicy.value) _updateDownload.value = UpdateDownload()
                 Store.updatePolicyJson = json
@@ -720,6 +749,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Enables the clearly-labelled UI preview (static sample data, no network). */
     fun startPreview() {
+        protocolJob?.cancel()
         updateJob?.cancel()
         downloadJob?.cancel()
         _updateDownload.value = UpdateDownload()

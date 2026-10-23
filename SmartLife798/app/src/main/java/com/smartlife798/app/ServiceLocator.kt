@@ -12,6 +12,7 @@ object ServiceLocator {
         if (initialized) return
         initialized = true
         Store.init(context)
+        com.smartlife798.app.core.OriginalAppVersion.restore(Store.originalAppVersion)
         session.restore()
         Appearance.restore()
     }

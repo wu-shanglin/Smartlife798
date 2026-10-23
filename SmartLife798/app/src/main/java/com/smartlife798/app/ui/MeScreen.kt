@@ -77,6 +77,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     val themeMode by Appearance.mode.collectAsState()
     val dynamicColor by Appearance.dynamicColor.collectAsState()
     val checkingUpdate by vm.checkingUpdate.collectAsState()
+    val protocolVersion by vm.protocolVersion.collectAsState()
 
     LaunchedEffect(refreshTick) { vm.refreshMaster() }
     val coroutineScope = rememberCoroutineScope()
@@ -251,7 +252,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("服务端连接", style = MaterialTheme.typography.titleSmall)
                         InfoRow("接口地址", Api.BASE_URL)
-                        InfoRow("客户端标识", "Android_ilife798_${Api.CLIENT_VERSION}")
+                        InfoRow("客户端标识", "Android_ilife798_$protocolVersion")
                         InfoRow("登录令牌", if (session.isLoggedIn) "已持有" else "无")
                         InfoRow("本机最近设备", "${recents.size} 台")
                         Spacer(Modifier.height(6.dp))

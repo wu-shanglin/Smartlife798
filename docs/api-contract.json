@@ -8,6 +8,16 @@
     "user-agent": "Android_ilife798_3.1.9",
     "Authorization": "<login token>"
   },
+  "headerVersionPolicy": {
+    "source": "https://app.mi.com/details?id=com.cloudora.android",
+    "packageName": "com.cloudora.android",
+    "developer": "长沙云多啦信息技术有限公司",
+    "selection": "fresh distribution version >= current valid cache >= bundled headers fallback; compare numeric version components",
+    "scope": "VersionCode, matching user-agent and original sys/app/upt version query only",
+    "verification": "distribution metadata discovery only; not APK signature or business compatibility proof",
+    "storage": "installation-wide originalAppVersion; retained on logout; no preview writes",
+    "refresh": "first foreground, then 6h on success or 5min on failure per process; manual bypass"
+  },
   "envelope": {
     "code": "int, >=0 success",
     "msg": "string",

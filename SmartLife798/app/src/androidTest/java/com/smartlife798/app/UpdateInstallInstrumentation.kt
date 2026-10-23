@@ -11,14 +11,20 @@ import java.io.File
 /** Platform checks without accounts, network, payment or installation side effects. */
 class UpdateInstallInstrumentation : Instrumentation() {
     private var expectedHash = ""
+    private var mode = ""
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         expectedHash = arguments?.getString("sha256").orEmpty()
+        mode = arguments?.getString("mode").orEmpty()
         start()
     }
 
     override fun onStart() {
+        if (mode.isNotEmpty()) {
+            UpdateFlowChecks.run(this, mode)
+            return
+        }
         val result = Bundle()
         var stage = "valid APK"
         try {

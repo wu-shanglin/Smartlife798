@@ -54,6 +54,13 @@ object Store {
             if (!Preview.enabled) prefs.edit { putString("updatePolicy", value) }
         }
 
+    /** Public original-app version; installation-wide and retained on logout. */
+    var originalAppVersion: String?
+        get() = prefs.getString("originalAppVersion", null)
+        set(value) {
+            if (!Preview.enabled) prefs.edit { putString("originalAppVersion", value) }
+        }
+
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences(PREF, Context.MODE_PRIVATE)
     }
@@ -204,7 +211,7 @@ object session {
     /** Incremented whenever the server rejects the token; the UI logs out. */
     val tokenRejected = kotlinx.coroutines.flow.MutableStateFlow(0)
 
-    fun versionHeader(): String = Api.CLIENT_VERSION
+    fun versionHeader(): String = OriginalAppVersion.current.value
 
     fun restore() {
         token = Store.token

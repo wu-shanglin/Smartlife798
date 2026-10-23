@@ -10,6 +10,23 @@ import org.junit.Test
 
 class ApiProfileTest {
     @Test
+    fun `dynamic original version applies atomically to both headers and original update query`() {
+        OriginalAppVersion.restore("3.1.10")
+        try {
+            val client = Api.client.newBuilder().addInterceptor { chain ->
+                val request = chain.request()
+                assertEquals("3.1.10", request.header("VersionCode"))
+                assertEquals("Android_ilife798_3.1.10", request.header("user-agent"))
+                assertEquals("3.1.10", request.url.queryParameter("version"))
+                Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                    .code(200).message("OK").body("{}".toResponseBody()).build()
+            }.build()
+            client.newCall(Request.Builder().url(Api.BASE_URL + "/api/v1/sys/app/upt?version=3.1.5").build()).execute().close()
+            assertEquals("3.1.10", Api.appUpdateQuery()["version"])
+        } finally { OriginalAppVersion.restore(null) }
+    }
+
+    @Test
     fun `wire headers use verified original version instead of release or stale request headers`() {
         val requests = mutableListOf<Request>()
         // A terminal application interceptor captures the actual production headers without IO.
