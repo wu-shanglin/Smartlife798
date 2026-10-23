@@ -23,7 +23,7 @@
 
 - 启动及返回前台自动检查更新，登录页与「我的」可手动检查；普通更新允许暂缓，强制更新按最低支持版本码限制旧版。
 - 点击更新直接下载 GitHub APK，显示进度；校验哈希、包名、版本和签名后自动打开系统安装界面。Android 需要用户确认，首次可能需要允许安装未知来源应用。
-- [GitHub 仓库](https://github.com/wu-shanglin/Smartlife798) · [下载最新版本](https://github.com/wu-shanglin/Smartlife798/releases/latest)；更新发布配置见 [工程规范](docs/06-工程规范与路线图.md#github-更新发布)。
+- [直接下载 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.7.0/SmartLife798-1.7.0-debug.apk) · [GitHub 仓库](https://github.com/wu-shanglin/Smartlife798) · [下载最新版本](https://github.com/wu-shanglin/Smartlife798/releases/latest)；更新发布配置见 [工程规范](docs/06-工程规范与路线图.md#github-更新发布)。
 - 旧版必须先手动安装一次本版；已知强制策略离线仍保留，未收到策略的离线客户端不能被远程拦截。演示模式不检查、不下载、不安装。
 
 详情过渡与校园生活图标继续保留：
@@ -33,7 +33,7 @@
 - 设备文字随容器统一缩放，移除独立标题层和重复整页淡变；导航刷新移到进场结束后，避免退场列表同时更新。不使用固定延时，保留系统动画倍率与取消等待。
 - 官方协议标识保持 3.1.9。历史版本门禁、启停及账单验证范围见 [docs/04](docs/04-接口契约与变更检测.md)、[docs/05](docs/05-真实支付与计费实测.md)。
 
-本次验证为模拟器演示模式，真机帧率与 Android 13+ 预测性返回仍需复验。物理出水、非零计费、真实支付及签约仍各自待验；下面截图为历史页面示意。
+更新流程已在 API 36 模拟器使用公开 GitHub Release 完成下载、校验、取消安装、重试安装与版本确认；其余页面的既有验证为演示模式，真机帧率与 Android 13+ 预测性返回仍需复验。物理出水、非零计费、真实支付及签约仍各自待验；下面截图为历史页面示意。
 
 ## 文档
 
