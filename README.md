@@ -2,7 +2,7 @@
 
 > 基于对原 APK（`com.cloudora.android` v3.1.5）的完整逆向分析，**直接对接官方服务端 `https://i.ilife798.com`** 的全新 Android 客户端。
 > 界面、交互、信息架构完全重做（Material 3 Expressive 风格）；登录、扫码/手输编号、设备状态、启停、计费与账单均走原服务端真实接口。
-> 内置协议标识保底为 **3.1.9**；运行时优先发现原应用分发页最新版本，缓存有效结果；静态路径基线仍保留 3.1.5。新原包签名、加固限制与更新渠道见 docs/04，不代表已完整恢复 3.1.9 全部协议。
+> 当前构建内置协议标识保底为 **3.1.9**，后续可随核验结果提高；运行时优先发现原应用分发页最新版本，缓存有效结果；静态路径基线仍保留 3.1.5。新原包签名、加固限制与更新渠道见 docs/04，不代表已完整恢复 3.1.9 全部协议。
 
 | | |
 |---|---|
@@ -10,7 +10,7 @@
 | 当前版本 | `1.8.0`（`versionCode 30`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 产物 | [`dist/SmartLife798-1.8.0-debug.apk`](dist/SmartLife798-1.8.0-debug.apk) |
+| 正式下载 | [1.8.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.8.0/SmartLife798-1.8.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.8.0) |
 
 > **首次参与开发请先读 [`AGENTS.md`](AGENTS.md)**（分层规则、硬性约束、常见任务手册、已知陷阱、完成标准），
 > 变更记录见 [`CHANGELOG.md`](CHANGELOG.md)，长期路线见 [`docs/06-工程规范与路线图.md`](docs/06-工程规范与路线图.md)。
@@ -22,14 +22,14 @@
 - 首次进入前台自动检查更新，历史附件展示当前安装之后至目标版本的全部已有日志，旧客户端更新入口保持兼容。
 - 协议标识优先读取原版小米分发信息，获取失败保留缓存与内置保底；仅版本标识变化无需重新安装本客户端。
 - 深海蓝主题、「我的」指标等宽布局和共享过渡继续保留，完整配色见 [视觉系统](docs/02-功能设计与UI方案.md#6-视觉系统)。
-- 上方 APK 为本地构建；以下远端链接仍指向既有 1.7.0 发布。
+- 正式 Release 同时提供 APK、更新策略与完整日志附件；下方 11 张截图均已由 1.8.0 重新采集。
 
 ## 客户端更新与安装
 
 - 首次启动（无需登录）及返回前台自动检查更新，登录页与「我的」可手动检查；普通更新允许暂缓，强制更新按最低支持版本码限制旧版。新发布附带 CHANGELOG 历史附件，弹窗按版本分段展示当前安装至最新版之间的全部已有日志；旧元数据只展示最新说明并提示历史缺失。
 - 点击更新直接下载 GitHub APK，显示进度；校验哈希、包名、版本和签名后自动打开系统安装界面。Android 需要用户确认，首次可能需要允许安装未知来源应用。
-- [直接下载 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.7.0/SmartLife798-1.7.0-debug.apk) · [GitHub 仓库](https://github.com/wu-shanglin/Smartlife798) · [下载最新版本](https://github.com/wu-shanglin/Smartlife798/releases/latest)；更新发布配置见 [工程规范](docs/06-工程规范与路线图.md#github-更新发布)。
-- 旧版必须先手动安装一次本版；已知强制策略离线仍保留，未收到策略的离线客户端不能被远程拦截。演示模式不检查、不下载、不安装。
+- [直接下载 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.8.0/SmartLife798-1.8.0-debug.apk) · [GitHub 仓库](https://github.com/wu-shanglin/Smartlife798) · [下载最新版本](https://github.com/wu-shanglin/Smartlife798/releases/latest)；更新发布配置见 [工程规范](docs/06-工程规范与路线图.md#github-更新发布)。
+- 已支持应用内更新的旧版可直接升级；更早未集成更新功能的版本需先手动安装。本次为普通更新，最低支持版本码沿用 1。已知强制策略离线仍保留；演示模式不检查、不下载、不安装。
 
 详情过渡与校园生活图标继续保留：
 
@@ -38,7 +38,7 @@
 - 设备文字随容器统一缩放，移除独立标题层和重复整页淡变；导航刷新移到进场结束后，避免退场列表同时更新。不使用固定延时，保留系统动画倍率与取消等待。
 - 官方协议请求头优先采用原应用分发页最新版本，获取失败使用有效缓存与内置保底；不会下载或安装原 APK。仅版本头变化无需重新安装本客户端，字段或业务变化仍须修复。历史版本门禁、启停及账单验证范围见 [docs/04](docs/04-接口契约与变更检测.md)、[docs/05](docs/05-真实支付与计费实测.md)。
 
-本次在独立无账号 API 36 模拟器验证分发页 3.1.10 发现与缓存恢复、首次更新提示、三个跨版本日志及暂缓/手动重开、演示隔离。历史 1.7.0 更新流程曾使用公开 GitHub Release 完成下载、校验、取消安装、重试安装与版本确认；其余页面的既有验证为演示模式，真机帧率与 Android 13+ 预测性返回仍需复验。物理出水、非零计费、真实支付及签约仍各自待验；下面截图为历史页面示意。
+本次在独立无账号 API 36 模拟器验证分发页 3.1.10 发现与缓存恢复、首次更新提示、三个跨版本日志及暂缓/手动重开、演示隔离。历史 1.7.0 更新流程曾使用公开 GitHub Release 完成下载、校验、取消安装、重试安装与版本确认；其余页面的既有验证为演示模式，真机帧率与 Android 13+ 预测性返回仍需复验。物理出水、非零计费、真实支付及签约仍各自待验；下面截图为 1.8.0 页面展示，均不证明真实设备或支付验收。
 
 ## 文档
 
@@ -82,25 +82,29 @@
 
 ## 截图
 
-首页、设备、详情、我的和深色截图已由 1.7.6 模拟器演示数据更新；其余为既有采集，来源与限制见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
+以下 11 张截图于 2026-10-24 使用正式发布包 **1.8.0 / versionCode 30**、独立 API 36 模拟器（720 × 1280）重新采集。登录页未登录；其余页面使用明确标识的静态演示数据，扫码页仅展示虚拟相机。深色页面跟随系统主题，不代表实体扫码、设备启停或支付已验收。详见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
 
 | 登录 | 首页 | 扫码 |
 |---|---|---|
-| ![](screenshots/login.png) | ![](screenshots/home.png) | ![](screenshots/scan.png) |
+| ![1.8.0 登录页](screenshots/login.png) | ![1.8.0 首页演示](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
 
 | 手动输入 | 设备 | 设备详情 |
 |---|---|---|
-| ![](screenshots/manual.png) | ![](screenshots/devices.png) | ![](screenshots/device.png) |
+| ![1.8.0 手动输入](screenshots/manual.png) | ![1.8.0 设备列表演示](screenshots/devices.png) | ![1.8.0 设备详情演示](screenshots/device.png) |
 
-| 云端订单 | 未付角标 | 深色模式 |
+| 消费记录 | 待付款筛选与角标 | 我的 |
 |---|---|---|
-| ![](screenshots/orders.png) | ![](screenshots/preview_bills.png) | ![](screenshots/dark.png) |
+| ![1.8.0 消费记录演示](screenshots/orders.png) | ![1.8.0 待付款演示](screenshots/preview_bills.png) | ![1.8.0 我的演示](screenshots/me.png) |
 
-| 外观设置 |
-|---|
-| ![](screenshots/appearance_dark.png) |
+| 深色首页 | 外观（跟随系统深色） |
+|---|---|
+| ![1.8.0 深色首页演示](screenshots/dark.png) | ![1.8.0 深色外观演示](screenshots/appearance_dark.png) |
 
 ## 构建与测试
+
+| 本地构建 | 文件 |
+|---|---|
+| 产物 | [`dist/SmartLife798-1.8.0-debug.apk`](dist/SmartLife798-1.8.0-debug.apk) |
 
 仓库根目录先运行 `python tools/check-repo.py`、`python -m unittest discover -s tools/tests`、`python tools/check-version.py`。
 
