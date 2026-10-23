@@ -11,8 +11,6 @@
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 产物 | [`dist/SmartLife798-1.7.6-debug.apk`](dist/SmartLife798-1.7.6-debug.apk) |
-| 产物 SHA-256 | `40c5b81ec08a8a71927193faf8dbe9e16ee276237969073bf74396232d486fd4` |
-| 原 APK SHA-256 | `7f679e506175d2aaa40791065d4100f8432d8acfdd44389e6214c2a9eb5369ed` |
 
 > **首次参与开发请先读 [`AGENTS.md`](AGENTS.md)**（分层规则、硬性约束、常见任务手册、已知陷阱、完成标准），
 > 变更记录见 [`CHANGELOG.md`](CHANGELOG.md)，长期路线见 [`docs/06-工程规范与路线图.md`](docs/06-工程规范与路线图.md)。
