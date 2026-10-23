@@ -1,0 +1,51 @@
+package com.smartlife798.app.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val Teal10 = Color(0xFF00201E)
+val Teal20 = Color(0xFF003733)
+val Teal30 = Color(0xFF00504A)
+val Teal40 = Color(0xFF0B6E6A)
+val Teal80 = Color(0xFF7DE2D1)
+val Teal90 = Color(0xFFA6F2E2)
+
+val Aqua40 = Color(0xFF2C7A8C)
+val Aqua80 = Color(0xFF90D3E4)
+val AquaContainer = Color(0xFFD3ECF3)
+val AquaOnContainer = Color(0xFF06272F)
+val DarkOnAqua = Color(0xFF00363F)
+val DarkAquaContainer = Color(0xFF1E4E58)
+val DarkOnAquaContainer = Color(0xFFC9E9F2)
+
+val Sand40 = Color(0xFF6F5B2E)
+val Sand80 = Color(0xFFE4C98A)
+val SandContainer = Color(0xFFF6E7C2)
+val SandOnContainer = Color(0xFF241A00)
+val DarkOnSand = Color(0xFF3C2F00)
+val DarkSandContainer = Color(0xFF584700)
+val DarkOnSandContainer = Color(0xFFFFE08F)
+
+val Ink = Color(0xFF101418)
+val InkSoft = Color(0xFF3F484C)
+val Mist = Color(0xFFF5F7F6)
+val MistVariant = Color(0xFFE6ECEA)
+val Outline = Color(0xFF9AA5A3)
+val OutlineVariant = Color(0xFFCFD8D6)
+
+val SurfaceDark = Color(0xFF121716)
+val SurfaceDarkAlt = Color(0xFF1B2221)
+val DarkOnSurface = Color(0xFFE2E8E6)
+val DarkSurfaceVariant = Color(0xFF2A3331)
+val DarkOnSurfaceVariant = Color(0xFFBAC6C3)
+val DarkOutline = Color(0xFF7C8886)
+val DarkOutlineVariant = Color(0xFF3F4846)
+val DarkError = Color(0xFFFFB4AB)
+val DarkOnError = Color(0xFF690005)
+
+val Success = Color(0xFF1E8E5A)
+val SuccessDark = Color(0xFF64D8A0)
+val Warning = Color(0xFFB26A00)
+val WarningDark = Color(0xFFFFB95C)
+val Danger = Color(0xFFBA1A1A)
+val Neutral = Color(0xFF6B7378)
+val NeutralDark = Color(0xFFA6AFB3)

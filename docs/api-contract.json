@@ -1,0 +1,491 @@
+{
+  "name": "慧生活798 (ilife798) client contract",
+  "baseUrl": "https://i.ilife798.com",
+  "source": "v3.1.5 static path baseline; v3.1.7 command/update signatures; verified signed v3.1.9 APK identity + scoped live probes (see docs/04 and docs/05)",
+  "headers": {
+    "ApplicationType": "1,1",
+    "VersionCode": "3.1.9",
+    "user-agent": "Android_ilife798_3.1.9",
+    "Authorization": "<login token>"
+  },
+  "envelope": {
+    "code": "int, >=0 success",
+    "msg": "string",
+    "data": "T",
+    "size": "int?",
+    "time": "long"
+  },
+  "errorCodes": {
+    "-1": "通用业务失败，按端点与 msg 判断；可为请求参数错误或请升级最新版APP，不能仅凭 code 判为版本门禁",
+    "-2": "图片验证码错误",
+    "-17": "余额不足（客户端引导充值）",
+    "-18": "余额不足（客户端引导充值）",
+    "-20": "一卡通未绑定",
+    "-28": "需要支付（客户端弹去支付）",
+    "-52": "存在付款失败账单",
+    "-87": "扣款失败/余额不足",
+    "-88": "未开通或未签约支付",
+    "-98": "需要支付宝账号补齐 oid",
+    "-99": "登录状态已过期"
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/v1/captcha/",
+      "query": [
+        "s",
+        "r"
+      ],
+      "response": "image/jpeg",
+      "use": "login-captcha",
+      "verified": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/acc/login/code",
+      "body": [
+        "un",
+        "authCode",
+        "s"
+      ],
+      "response": "BaseReq",
+      "use": "login-sms",
+      "verified": "live-error-path"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/acc/login",
+      "body": [
+        "un",
+        "authCode",
+        "openCode?"
+      ],
+      "response": "LoginData{al{oid,token,uid},ar}",
+      "use": "login",
+      "verified": "live (user account)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/acc/logout",
+      "response": "BaseReq",
+      "use": "logout",
+      "verified": "implemented"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ui/app/master",
+      "response": "MasterData{account,favos,ads,pltTotalScore}",
+      "use": "profile+favorites",
+      "verified": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/acc/upt",
+      "body": [
+        "account setting parm"
+      ],
+      "response": "BaseReq",
+      "use": "profile update",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/acc/wallet/owner",
+      "response": "WalletInfo",
+      "use": "wallet",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/qr/use",
+      "query": [
+        "id"
+      ],
+      "response": "QRCodeData{qr,dev,card,wallet}",
+      "use": "scan/manual id resolve",
+      "verified": "live (device id)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ui/app/dev/home/1",
+      "query": [
+        "did",
+        "apply=6"
+      ],
+      "response": "DeviceDetailData",
+      "use": "device detail",
+      "verified": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ui/app/dev/status",
+      "query": [
+        "did",
+        "more"
+      ],
+      "response": "DeviceDetailData",
+      "use": "device polling",
+      "verified": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dev/start",
+      "query": [
+        "did",
+        "upgrade",
+        "ptype",
+        "args",
+        "rcp",
+        "cnt"
+      ],
+      "response": "BaseReq",
+      "use": "start device",
+      "verified": "static (billing needs account)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dev/end",
+      "query": [
+        "did",
+        "rcp"
+      ],
+      "response": "BaseReq",
+      "use": "stop/settle",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dev/mode/start",
+      "query": [
+        "did",
+        "mode",
+        "args"
+      ],
+      "response": "BaseReq",
+      "use": "switch mode",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dev/favo",
+      "query": [
+        "did",
+        "remove"
+      ],
+      "response": "BaseReq",
+      "use": "favorite toggle",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ui/app/dev/dev-use-way",
+      "query": [
+        "way"
+      ],
+      "response": "BaseReq",
+      "use": "usage guide",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dev/near",
+      "query": [
+        "eid",
+        "dtype",
+        "pos",
+        "lat",
+        "size"
+      ],
+      "response": "List<NearbyDeviceData>",
+      "use": "nearby devices",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/bill/lst-owner",
+      "query": [
+        "page",
+        "size",
+        "hasCount",
+        "status"
+      ],
+      "response": "List<BillData>",
+      "use": "consumption history",
+      "verified": "live (empty list)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/bill/view-full",
+      "query": [
+        "id"
+      ],
+      "response": "BillDetailData{bill,cnt}",
+      "use": "bill detail",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/bill/pay/channels",
+      "query": [
+        "id"
+      ],
+      "response": "PayChannelData{channels[{type,name,desc}]}",
+      "use": "payment channels",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/trans/prepay/{type}",
+      "query": [
+        "id"
+      ],
+      "response": "BaseReq<order string>",
+      "use": "create payment order",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/trans/confirm",
+      "query": [
+        "id"
+      ],
+      "response": "BaseReq<Object>",
+      "use": "confirm payment",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/trans/close",
+      "query": [
+        "id"
+      ],
+      "response": "BaseReq",
+      "use": "close transaction",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/trans/errorMsg",
+      "query": [
+        "id"
+      ],
+      "response": "BaseReq<Object>",
+      "use": "payment error text",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ord/lst-owner",
+      "query": [
+        "page",
+        "size",
+        "hasCount",
+        "uid",
+        "types[]",
+        "isPos",
+        "hasBill",
+        "sort"
+      ],
+      "response": "List<WorkOrderDetailInfo>",
+      "use": "service orders",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ord/view-full",
+      "query": [
+        "id"
+      ],
+      "response": "WorkOrderDetailData{ord,bil}",
+      "use": "order detail",
+      "verified": "static"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ord/save",
+      "body": [
+        "WorkOrderDetailInfo"
+      ],
+      "response": "BaseReq",
+      "use": "submit order",
+      "verified": "static"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ord/cancel",
+      "body": [
+        "id"
+      ],
+      "response": "BaseReq",
+      "use": "cancel order",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ord/appraised",
+      "query": [
+        "id",
+        "score",
+        "desc"
+      ],
+      "response": "BaseReq",
+      "use": "rate order",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sys/app/upt",
+      "query": [
+        "appid",
+        "version",
+        "type"
+      ],
+      "response": "version payload",
+      "use": "original app update check: appid=com.cloudora.android, version=original versionName, type=1; no-update is not device-command compatibility proof",
+      "verified": "live-error-path"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sys/ticket",
+      "response": "BaseReq",
+      "use": "web ticket",
+      "verified": "static"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fs/dl",
+      "query": [
+        "q",
+        "v"
+      ],
+      "response": "binary",
+      "use": "file download",
+      "verified": "static"
+    }
+  ],
+  "outOfScopePaths": [
+    "/api/v1/ep/",
+    "/api/v1/ic/",
+    "/api/v1/cb/",
+    "/api/v1/attendance/",
+    "/api/v1/question/",
+    "/api/v1/cloud/msg/",
+    "/api/v1/pga/",
+    "/api/v1/promo/",
+    "/api/v1/prd/",
+    "/api/v1/captcha/auth"
+  ],
+  "baseline": {
+    "artifact": "慧生活798.apk",
+    "sha256": "7f679e506175d2aaa40791065d4100f8432d8acfdd44389e6214c2a9eb5369ed",
+    "version": "3.1.5",
+    "paths": [
+      "/api/v1/acc/basic/acc-attestation",
+      "/api/v1/acc/cac/code",
+      "/api/v1/acc/cancel/account",
+      "/api/v1/acc/login",
+      "/api/v1/acc/login/code",
+      "/api/v1/acc/logout",
+      "/api/v1/acc/lst-owner",
+      "/api/v1/acc/master",
+      "/api/v1/acc/save-exam",
+      "/api/v1/acc/score/mission-lst",
+      "/api/v1/acc/score/score-lst",
+      "/api/v1/acc/score/score-send",
+      "/api/v1/acc/sms/cancel",
+      "/api/v1/acc/stat",
+      "/api/v1/acc/transfer-arrear",
+      "/api/v1/acc/upt",
+      "/api/v1/acc/upt-collect",
+      "/api/v1/acc/valid/cancel",
+      "/api/v1/acc/wallet/contact",
+      "/api/v1/acc/wallet/detail",
+      "/api/v1/acc/wallet/owner",
+      "/api/v1/acc/wallet/refund",
+      "/api/v1/ad/acc-lst",
+      "/api/v1/ad/swtich",
+      "/api/v1/ad/view",
+      "/api/v1/addr/del",
+      "/api/v1/addr/lst",
+      "/api/v1/addr/save",
+      "/api/v1/ads",
+      "/api/v1/ads/batchUpload",
+      "/api/v1/ads/trace",
+      "/api/v1/attendance/apply-check",
+      "/api/v1/attendance/check-in",
+      "/api/v1/attendance/dev/id",
+      "/api/v1/attendance/my-records",
+      "/api/v1/attendance/rules",
+      "/api/v1/bill/lst-owner",
+      "/api/v1/bill/pay/channels",
+      "/api/v1/bill/save",
+      "/api/v1/bill/view-full",
+      "/api/v1/captcha/?s=",
+      "/api/v1/cb/bind",
+      "/api/v1/cb/lst-owner",
+      "/api/v1/cb/unbind",
+      "/api/v1/cb/upt",
+      "/api/v1/cb/view-owner",
+      "/api/v1/cloud/msg/internal-msg/pf/page",
+      "/api/v1/cloud/msg/internal-msg/signList",
+      "/api/v1/cloud/msg/internal-msg/signStatus/type/user",
+      "/api/v1/crashtrack/upload?chk=",
+      "/api/v1/dev/door/show-pwd",
+      "/api/v1/dev/end",
+      "/api/v1/dev/favo",
+      "/api/v1/dev/mode/start",
+      "/api/v1/dev/near",
+      "/api/v1/dev/receive",
+      "/api/v1/dev/rela/view-stat",
+      "/api/v1/dev/share/lst",
+      "/api/v1/dev/start",
+      "/api/v1/ep/attestation-view",
+      "/api/v1/ep/lst-simple",
+      "/api/v1/ep/station/lst",
+      "/api/v1/ep/station/view",
+      "/api/v1/fs/dl?q=",
+      "/api/v1/fs/up?thumb=true",
+      "/api/v1/ic/bind",
+      "/api/v1/ic/cipher/view-owner",
+      "/api/v1/ic/lst-owner",
+      "/api/v1/ic/owner-view",
+      "/api/v1/ic/unbind",
+      "/api/v1/ic/upt",
+      "/api/v1/ic/valid",
+      "/api/v1/loc/mark/lst",
+      "/api/v1/log/lst",
+      "/api/v1/mix/upload",
+      "/api/v1/ord/appraised",
+      "/api/v1/ord/cancel",
+      "/api/v1/ord/lst-owner",
+      "/api/v1/ord/save",
+      "/api/v1/ord/view-full",
+      "/api/v1/pga/unsign-owner",
+      "/api/v1/prd/lst",
+      "/api/v1/promo/apply",
+      "/api/v1/promo/lst-owner",
+      "/api/v1/qr/use",
+      "/api/v1/question/chapter-opts",
+      "/api/v1/question/exam-new",
+      "/api/v1/question/order-new",
+      "/api/v1/question/query",
+      "/api/v1/raw/upload",
+      "/api/v1/sys/app/upt",
+      "/api/v1/sys/dl?q=",
+      "/api/v1/sys/ticket",
+      "/api/v1/trans/close",
+      "/api/v1/trans/confirm",
+      "/api/v1/trans/errorMsg",
+      "/api/v1/trans/prepay/{type}",
+      "/api/v1/ui/app/acc-pgas",
+      "/api/v1/ui/app/ad/red?id=",
+      "/api/v1/ui/app/dev/command",
+      "/api/v1/ui/app/dev/dev-use-way",
+      "/api/v1/ui/app/dev/home/1",
+      "/api/v1/ui/app/dev/status",
+      "/api/v1/ui/app/master",
+      "/api/v1/ui/app/pga-check",
+      "/api/v1/ui/app/sign-pga"
+    ]
+  }
+}

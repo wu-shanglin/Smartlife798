@@ -1,0 +1,143 @@
+package com.smartlife798.app.ui
+
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.withResumed
+import com.smartlife798.app.BuildConfig
+import com.smartlife798.app.core.UpdatePackage
+import com.smartlife798.app.core.UpdatePolicy
+import com.smartlife798.app.vm.MainViewModel
+import kotlinx.coroutines.launch
+
+@Composable
+fun AppUpdatePrompt(
+    vm: MainViewModel,
+    policy: UpdatePolicy?,
+    visible: Boolean,
+    checking: Boolean,
+    download: MainViewModel.UpdateDownload,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+    onError: (String) -> Unit,
+) {
+    if (!visible || policy == null || !policy.available(BuildConfig.VERSION_CODE)) return
+    val required = policy.required(BuildConfig.VERSION_CODE)
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val scope = rememberCoroutineScope()
+    var installing by rememberSaveable { mutableStateOf(false) }
+    var autoOpened by rememberSaveable(policy.sha256) { mutableStateOf(false) }
+
+    fun install() {
+        if (installing) return
+        installing = true
+        scope.launch {
+            try {
+                val intent = vm.updateInstallIntent() ?: return@launch
+                lifecycle.withResumed { context.startActivity(intent) }
+            } catch (_: ActivityNotFoundException) {
+                onError("系统安装器不可用，请检查系统设置")
+            } catch (_: SecurityException) {
+                onError("系统拒绝安装，请允许本应用安装未知来源应用后重试")
+            } finally {
+                installing = false
+            }
+        }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (UpdatePackage.canInstall(context)) install()
+        else onError("尚未允许安装，请允许本应用安装未知来源应用后重试")
+    }
+    fun beginInstall() {
+        if (UpdatePackage.canInstall(context)) install()
+        else {
+            try {
+                permissionLauncher.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+            } catch (_: ActivityNotFoundException) {
+                onError("无法打开安装权限设置，请在系统设置中允许安装未知来源应用")
+            } catch (_: SecurityException) {
+                onError("无法打开安装权限设置，请检查系统限制")
+            }
+        }
+    }
+    LaunchedEffect(download.ready) {
+        if (download.ready != null && !autoOpened) {
+            lifecycle.withResumed { }
+            autoOpened = true
+            beginInstall()
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { if (!required && !download.busy) onDismiss() },
+        properties = DialogProperties(
+            dismissOnBackPress = !required && !download.busy,
+            dismissOnClickOutside = !required && !download.busy,
+        ),
+        title = { Text(if (required) "需要更新至 ${policy.versionName}" else "发现新版本 ${policy.versionName}") },
+        text = {
+            androidx.compose.foundation.lazy.LazyColumn {
+                item {
+                    Text(
+                        (if (required) "当前版本已停止支持，请安装新版后继续使用。"
+                        else "下载后将打开系统安装界面，也可以稍后更新。") +
+                            "安装需您确认，首次可能需要允许安装未知来源应用。" +
+                            if (policy.notes.isBlank()) "" else "\n\n${policy.notes}",
+                    )
+                }
+                item {
+                    Column {
+                        if (download.busy) {
+                            Text(if (download.percent < 0) "正在下载…" else "下载进度 ${download.percent}%")
+                            if (download.percent < 0) LinearProgressIndicator()
+                            else LinearProgressIndicator(progress = { download.percent / 100f })
+                        }
+                        if (download.ready != null) Text("安装包已校验，请完成系统安装；取消后可再次点击安装。")
+                        download.error?.let { Text(it) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !download.busy && !installing,
+                onClick = {
+                    if (download.ready != null) beginInstall()
+                    else {
+                        autoOpened = false
+                        vm.downloadAppUpdate()
+                    }
+                },
+            ) { Text(if (download.ready != null) "安装新版" else if (download.error != null) "重新下载" else "立即更新") }
+        },
+        dismissButton = {
+            if (download.busy) {
+                TextButton(onClick = vm::cancelUpdateDownload) { Text("取消下载") }
+            } else if (required) {
+                TextButton(onClick = onRetry, enabled = !checking) {
+                    Text(if (checking) "正在检查…" else "重新检查")
+                }
+            } else {
+                TextButton(onClick = onDismiss) { Text("稍后更新") }
+            }
+        },
+    )
+}

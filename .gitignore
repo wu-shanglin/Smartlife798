@@ -1,0 +1,43 @@
+# ---------- Android 构建产物 ----------
+SmartLife798/.gradle/
+SmartLife798/.kotlin/
+SmartLife798/build/
+SmartLife798/app/build/
+SmartLife798/local.properties
+SmartLife798/.idea/
+SmartLife798/captures/
+*.iml
+*.hprof
+
+# ---------- 签名材料（绝不入库）----------
+keystore.properties
+*.jks
+*.keystore
+SmartLife798/release.keystore
+
+# ---------- 逆向分析中间产物（体积大，可由 APK 重新生成）----------
+慧生活798.apk
+_extract/
+jadx_src/
+jadx_res/
+dexmeta/
+evidence/
+tools/jadx/
+tools/m3/
+tools/alipay/
+
+# ---------- 打包产物 ----------
+dist/*.apk
+dist/update.json
+*.apk
+
+# ---------- 系统/临时 ----------
+.DS_Store
+Thumbs.db
+*.log
+tools/jadx.zip
+tools/alipay.zip
+
+# ---------- Python 工具 ----------
+__pycache__/
+*.pyc

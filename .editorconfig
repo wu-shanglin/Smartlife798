@@ -1,0 +1,29 @@
+root = true
+
+# 全仓库统一 UTF-8 + LF，避免中文文档在 Windows/Linux 之间产生整文件 diff
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+indent_size = 4
+max_line_length = 120
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+
+[*.{xml,json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+# Markdown 里的行尾两个空格表示换行，不能裁剪
+trim_trailing_whitespace = false
+
+[*.{bat,cmd}]
+end_of_line = crlf
+
+[*.{png,jpg,jpeg,webp,apk,jar,zip}]
+insert_final_newline = false

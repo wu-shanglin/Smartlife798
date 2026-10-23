@@ -1,0 +1,97 @@
+name: Android CI
+
+# 仓库检查 + 工具测试 + Android 检查。真实支付与现场设备不在 CI 自动执行。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: SmartLife798
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # AGP 8.13 需要 JDK 17+；用 21 与本地开发环境保持一致。
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Check repository rules
+        working-directory: ${{ github.workspace }}
+        run: python3 tools/check-repo.py
+
+      - name: Test maintenance tools
+        working-directory: ${{ github.workspace }}
+        run: python3 -m unittest discover -s tools/tests
+
+      # 版本真值与副本是否一致（发布流程见 docs/06）。
+      # CI 里没有 dist/（不入库），脚本会跳过 SHA-256 比对。
+      - name: Check version consistency
+        working-directory: ${{ github.workspace }}
+        run: python3 tools/check-version.py
+
+      # 仓库在 Windows 上创建时 gradlew 可能没有可执行位，这里兜底。
+      - name: Make the wrapper executable
+        run: chmod +x gradlew
+
+      # 重新生成被 .gitignore 的 local.properties，CI 里没有 Android Studio。
+      - name: Point Gradle at the runner SDK
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --console=plain --stacktrace
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --console=plain --stacktrace
+
+      - name: Lint
+        run: ./gradlew :app:lint --console=plain --stacktrace
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: SmartLife798/app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: SmartLife798/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: SmartLife798/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 7
