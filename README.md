@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.9.2`（`versionCode 33`） |
+| 当前版本 | `1.9.3`（`versionCode 34`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.8.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.8.0/SmartLife798-1.8.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.8.0) |
@@ -17,7 +17,9 @@
 
 ---
 
-## v1.9.2 本地构建（精简设置展示）
+## v1.9.3 本地构建（结束设备反馈修复）
+
+- 点击结束后保持「正在结束」，确认本设备待机后直接显示「立即使用」，避免按钮短暂恢复「结束」；迟到的旧刷新不覆盖结束结果。未确认时明确提示，账单以服务端结算为准。
 
 - 「我的」启动页面、外观使用独立圆角卡片；启动页选项的图标与文字整体居中，等宽选项仅以背景色表示当前选择，不显示勾选、选中描边或加粗，动态取色放入内嵌色调容器；启动页面卡片不再显示未登录说明。
 - 「我的 → 启动页面」可选择首页或设备页，默认首页，登出保留；修改后保持当前页面，下次重新启动时生效，未登录先登录。
@@ -31,7 +33,7 @@
 - 首次启动（无需登录）及返回前台自动检查更新，登录页与「我的」可手动检查；普通更新允许暂缓，强制更新按最低支持版本码限制旧版。新发布附带 CHANGELOG 历史附件，弹窗按版本分段展示当前安装至最新版之间的全部已有日志；旧元数据只展示最新说明并提示历史缺失。
 - 点击更新直接下载 GitHub APK，显示进度；校验哈希、包名、版本和签名后自动打开系统安装界面。Android 需要用户确认，首次可能需要允许安装未知来源应用。
 - [直接下载 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.8.0/SmartLife798-1.8.0-debug.apk) · [GitHub 仓库](https://github.com/wu-shanglin/Smartlife798) · [下载最新版本](https://github.com/wu-shanglin/Smartlife798/releases/latest)；更新发布配置见 [工程规范](docs/06-工程规范与路线图.md#github-更新发布)。
-- 已支持应用内更新的旧版可直接升级；更早未集成更新功能的版本需先手动安装。线上 1.8.0 为普通更新，最低支持版本码沿用 1；1.9.2 尚未发布新策略。已知强制策略离线仍保留；演示模式不检查、不下载、不安装。
+- 已支持应用内更新的旧版可直接升级；更早未集成更新功能的版本需先手动安装。线上 1.8.0 为普通更新，最低支持版本码沿用 1；1.9.3 尚未发布新策略。已知强制策略离线仍保留；演示模式不检查、不下载、不安装。
 
 详情过渡与校园生活图标继续保留：
 
@@ -106,7 +108,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.9.2-debug.apk`](dist/SmartLife798-1.9.2-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.9.3-debug.apk`](dist/SmartLife798-1.9.3-debug.apk) |
 
 仓库根目录先运行 `python tools/check-repo.py`、`python -m unittest discover -s tools/tests`、`python tools/check-version.py`。
 
