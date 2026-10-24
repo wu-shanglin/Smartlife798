@@ -5,18 +5,23 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.9.5`（`versionCode 36`） |
+| 当前版本 | `1.9.6`（`versionCode 37`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [1.8.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.8.0/SmartLife798-1.8.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.8.0) |
+| 最新已发布 | [1.9.5 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.9.5/SmartLife798-1.9.5-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.9.5) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
-## 当前本地构建
+## 待发布构建
+
+1.9.6 修复强制更新页返回键无法退出：返回退出应用并保留更新限制，重新打开仍须更新；下载忙碌时也可退出，外部点击不能绕过。普通更新返回只关闭弹窗。此构建尚未发布，当前正式策略仍为下方 1.9.5。
+
+## 当前版本
 
 - **1.9.5：运行卡片与恢复**。返回首页继续确认启动；未知结果保留「启动待确认」入口，确认后显示运行卡片。详情、首页和刷新统一对账，避免异设备、旧响应和重复启停污染会话。
 - 支付宝回执只保留白名单状态与固定提示；工程验证已覆盖，真实支付、物理出水及非零计费仍待验，详情见 [验证记录](docs/05-真实支付与计费实测.md#9-工程验证记录)。
-- [本地 APK](dist/SmartLife798-1.9.5-debug.apk) 尚未发布 Release。已支持应用内下载、完整性/身份校验和系统安装；正式渠道以 [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest) 为准，策略及发布步骤见 [GitHub 更新发布](docs/06-工程规范与路线图.md#github-更新发布)。
+- **已正式发布并强制更新**：最新版本码与最低支持版本码均为 **36**；低于 36 且已集成更新功能的安装需升级，达到 36 后解除。可从应用内下载、校验并交系统覆盖安装，无需卸载；无更新功能或尚未获得策略的离线安装不受此客户端策略控制。
+- [正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.9.5/SmartLife798-1.9.5-debug.apk) · [本地保留](dist/SmartLife798-1.9.5-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。后续发布须保留已确认的最低支持范围，步骤见 [GitHub 更新发布](docs/06-工程规范与路线图.md#github-更新发布)。
 
 ## 功能与边界
 
@@ -44,7 +49,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.9.5-debug.apk`](dist/SmartLife798-1.9.5-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.9.6-debug.apk`](dist/SmartLife798-1.9.6-debug.apk) |
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 
