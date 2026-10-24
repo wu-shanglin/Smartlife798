@@ -185,7 +185,12 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            Text("钱包", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "钱包",
+                                modifier = Modifier.sharedCardElement(CardOrigin.WALLET),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                             MetricValue(
                                 wallet?.let { Fmt.money(it.total) } ?: "—",
                                 modifier = Modifier.sharedCardElement(CardOrigin.WALLET, part = CardPart.AMOUNT),

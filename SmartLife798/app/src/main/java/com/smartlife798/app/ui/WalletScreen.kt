@@ -84,7 +84,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("钱包") },
+                title = { Text("钱包", modifier = Modifier.sharedCardPageElement()) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
