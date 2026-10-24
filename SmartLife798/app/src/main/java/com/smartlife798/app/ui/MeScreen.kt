@@ -1,7 +1,6 @@
 package com.smartlife798.app.ui
 
 import android.os.Build
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -236,11 +234,6 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                                 )
                             }
                         }
-                        Text(
-                            "未登录时会先进入登录页",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                 }
             }
@@ -490,23 +483,21 @@ private fun SettingsChoice(
         modifier = modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         color = if (selected) colors.primaryContainer else colors.surfaceContainerLow,
-        contentColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-        border = if (selected) BorderStroke(1.dp, colors.primary.copy(alpha = 0.35f)) else null,
+        contentColor = colors.onSurface,
     ) {
         Row(
-            modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = if (icon == null) 4.dp else 10.dp, vertical = 10.dp),
+            modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (icon == null) 3.dp else 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (icon != null) Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Text(
                 label,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                fontWeight = FontWeight.Medium,
                 textAlign = if (icon == null) TextAlign.Center else TextAlign.Start,
             )
-            if (selected) Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(if (icon == null) 14.dp else 16.dp))
         }
     }
 }
