@@ -93,7 +93,7 @@ fun HomeScreen(
             var toast: String? = null
             try {
                 when (val res = vm.stopActiveDevice()) {
-                    is Res.Ok -> toast = "已结束使用，账单以服务端结算为准"
+                    is Res.Ok -> toast = "设备已恢复待机，账单以服务端结算为准"
                     is Res.Fail -> toast = "结束失败：${vm.errorText(res.code, res.msg)}"
                 }
             } finally {

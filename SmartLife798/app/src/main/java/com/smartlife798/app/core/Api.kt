@@ -339,4 +339,6 @@ object ErrorCodes {
      * code only; it is never sent to the server.
      */
     const val START_UNCONFIRMED = -1002
+    /** `dev/end` accepted, but a matching standby snapshot has not arrived. */
+    const val END_UNCONFIRMED = -1003
 }
