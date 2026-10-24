@@ -22,6 +22,7 @@ import com.smartlife798.app.core.DeviceStateKind
 import com.smartlife798.app.core.DevicesShelf
 import com.smartlife798.app.core.Diag
 import com.smartlife798.app.core.ErrorCodes
+import com.smartlife798.app.core.EndCommand
 import com.smartlife798.app.core.LoginData
 import com.smartlife798.app.core.Master
 import com.smartlife798.app.core.Paging
@@ -245,6 +246,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var detailDevice: String? = null
     private var watchJob: Job? = null
     private var masterJob: Job? = null
+    private val endCommand = EndCommand()
 
     private val _loadingMaster = MutableStateFlow(false)
     val loadingMaster: StateFlow<Boolean> = _loadingMaster.asStateFlow()
@@ -780,6 +782,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             RecentDevice(d.id, d.name, d.dtype, System.currentTimeMillis() - i * 3_600_000L, uses = 3 - i)
         }
         _active.value = null
+        _liveStatus.value = null
+        _liveUpdatedAt.value = 0L
         _masterError.value = null
         _unpaidCount.value = Preview.bills().count(::isUnpaidBill)
     }
@@ -812,7 +816,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     suspend fun loadDevice(did: String): Res<DeviceDetail> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) Res.Ok(Preview.detail(did)) else Api.deviceDetail(did)
+        if (Preview.enabled) {
+            val detail = Preview.detail(did)
+            Res.Ok(detail.copy(device = _liveStatus.value?.takeIf { it.id == did } ?: detail.device))
+        } else Api.deviceDetail(did)
     }
 
     /**
@@ -869,7 +876,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     suspend fun pollDevice(did: String, base: Device): Res<Device> = withContext(Dispatchers.IO) {
         if (Preview.enabled) {
-            return@withContext Res.Ok(Preview.detail(did).device ?: base)
+            return@withContext Res.Ok(_liveStatus.value?.takeIf { it.id == did } ?: base)
         }
         when (val res = Api.deviceStatus(did, false)) {
             is Res.Ok -> Res.Ok(base.mergeStatus(res.data?.device))
@@ -934,10 +941,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // machine every 2s and never learn anything new.
         val blockedByState = usage != null &&
             _liveStatus.value?.takeIf { it.id == usage.deviceId }?.isAbnormal == true
-        if (usage == null || !appResumed || detailDevice == usage.deviceId || Preview.enabled || blockedByState) {
+        if (usage == null || !appResumed || detailDevice == usage.deviceId || Preview.enabled ||
+            endCommand.isBusy || blockedByState
+        ) {
             watchJob?.cancel()
             watchJob = null
-            if (usage == null) {
+            if (usage == null && !Preview.enabled) {
                 _liveStatus.value = null
                 _liveUpdatedAt.value = 0L
             }
@@ -1016,25 +1025,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Re-reads one device a few times after a state change the server settles
-     * asynchronously (`dev/end`), so cached lists (Home tiles) catch up without
-     * waiting for the next `master` refresh. Runs in the background: the caller's
-     * success message must not wait for the machine to report standby.
-     */
-    private fun scheduleSnapshotRefresh(device: Device) {
-        viewModelScope.launch {
-            repeat(4) { attempt ->
-                delay(if (attempt == 0) 1_500L else 1_200L)
-                val res = withContext(Dispatchers.IO) { Api.deviceStatus(device.id, false) }
-                val fresh = (res as? Res.Ok)?.data?.device ?: return@launch
-                val merged = device.mergeStatus(fresh)
-                publishLive(merged)
-                if (merged.isStandby) return@launch
-            }
-        }
-    }
-
-    /**
      * The device a `dev/status` snapshot is merged onto.
      *
      * Prefers the last published snapshot; otherwise rebuilds from the saved
@@ -1081,6 +1071,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun startDevice(device: Device, payType: Int, args: String): Res<Unit> = withContext(Dispatchers.IO) {
+        if (endCommand.isBusy) return@withContext Res.Fail(-1, "正在结束使用，请稍候再启动")
         if (Preview.enabled) {
             // 预览模式只在内存里模拟，不落盘：避免演示设备的“进行中”记录
             // 在退出预览后继续出现在真实界面里。预览不轮询，所以这里直接给出
@@ -1261,15 +1252,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Ends the usage recorded on this install without requiring the detail
-     * screen. The local pointer is only cleared after the server accepts
-     * `dev/end`, so the settlement is never faked.
+     * screen. Only a matching standby snapshot confirms completion.
      */
-    suspend fun stopActiveDevice(): Res<Unit> {
+    suspend fun stopActiveDevice(): Res<Device> {
         val usage = _active.value ?: return Res.Fail(-1, "当前没有进行中的使用")
-        if (Preview.enabled) {
-            _active.value = null
-            return Res.Ok(Unit)
-        }
         val live = _liveStatus.value?.takeIf { it.id == usage.deviceId }
         val device = live ?: Device(
             id = usage.deviceId,
@@ -1279,38 +1265,69 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return stopDevice(device)
     }
 
-    suspend fun stopDevice(device: Device): Res<Unit> = withContext(Dispatchers.IO) {
+    suspend fun stopDevice(device: Device): Res<Device> = withContext(Dispatchers.IO) {
         if (Preview.enabled) {
             // 预览模式只在内存里结束，不写任何本地状态。
-            _active.value = null
-            return@withContext Res.Ok(Unit)
+            val standby = device.copy(gene = (device.gene ?: com.smartlife798.app.core.Gene())
+                .copy(status = com.smartlife798.app.core.DeviceType.Status.LOCKED))
+            if (activeBelongsTo(_active.value?.deviceId, device.id)) _active.value = null
+            publishLive(standby)
+            return@withContext Res.Ok(standby)
         }
-        val res = Api.deviceEnd(device.id)
-        when (res) {
-            is Res.Ok -> {
-                Diag.event("dev.end.ok", "did" to device.id)
-                // Only drop the bookmark for the device that was actually ended:
-                // ending device B must not orphan a running session on A.
-                if (activeBelongsTo(_active.value?.deviceId, device.id)) {
-                    Store.setActive(null)
-                    _active.value = null
-                }
-                // Refresh the snapshot after settlement so the Home tile does not
-                // keep showing 「启动中」 for a machine that is now back to 99. The
-                // server settles asynchronously, so this runs in the background
-                // instead of delaying the success message.
-                scheduleSnapshotRefresh(device)
-                // The settled bill appears in the cloud list; refresh the badge now.
-                refreshOrderBadge()
+        if (!session.isLoggedIn) return@withContext Res.Fail(ErrorCodes.TOKEN_EXPIRED, "请先登录")
+        val token = session.token
+        fun checkSession() {
+            if (session.token != token || !session.isLoggedIn || Preview.enabled) {
+                throw CancellationException("Device end session changed")
             }
-            is Res.Fail -> Diag.event(
-                "dev.end.fail",
-                "did" to device.id,
-                "code" to res.code,
-                "msg" to res.msg,
-            )
         }
-        res
+        watchJob?.cancel()
+        try {
+            val res = endCommand.execute(
+                device = device,
+                send = {
+                    checkSession()
+                    Api.deviceEnd(device.id).also {
+                        checkSession()
+                        if (it is Res.Ok) Diag.event("dev.end.accepted", "did" to device.id)
+                    }
+                },
+                read = {
+                    checkSession()
+                    when (val status = Api.deviceStatus(device.id, false)) {
+                        is Res.Ok -> Res.Ok(status.data?.device)
+                        is Res.Fail -> status
+                    }.also { checkSession() }
+                },
+                observed = {
+                    checkSession()
+                    publishLive(it)
+                },
+            )
+            checkSession()
+            when (res) {
+                is Res.Ok -> {
+                    Diag.event("dev.end.ok", "did" to device.id)
+                    // Only drop the bookmark for the device that was actually ended:
+                    // ending device B must not orphan a running session on A.
+                    if (activeBelongsTo(_active.value?.deviceId, device.id)) {
+                        Store.setActive(null)
+                        _active.value = null
+                    }
+                    // A badge failure must not turn confirmed completion into failure.
+                    viewModelScope.launch { if (session.token == token) refreshOrderBadge() }
+                }
+                is Res.Fail -> Diag.event(
+                    "dev.end.fail",
+                    "did" to device.id,
+                    "code" to res.code,
+                    "msg" to res.msg,
+                )
+            }
+            res
+        } finally {
+            ensureWatch()
+        }
     }
 
     suspend fun changeMode(device: Device, mode: Int, args: String): Res<Unit> = withContext(Dispatchers.IO) {
