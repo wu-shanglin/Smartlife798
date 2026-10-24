@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.smartlife798.app.core.OriginalAppVersion
 import com.smartlife798.app.core.Preview
@@ -37,13 +38,13 @@ object UpdateFlowChecks {
                 }
                 "update-ui" -> {
                     stage = "cached startup policy"
-                    val latest = "1.8.3"
+                    val latest = nextVersion(3)
                     val policy = UpdatePolicy(BuildConfig.VERSION_CODE + 3, latest, 1, "最新说明", "a".repeat(64),
                         listOf(
-                            com.smartlife798.app.core.UpdateRelease("1.8.1", "FIRST-SKIPPED-RELEASE"),
-                            com.smartlife798.app.core.UpdateRelease("1.8.3", "THIRD-SKIPPED-RELEASE"),
+                            com.smartlife798.app.core.UpdateRelease(nextVersion(1), "FIRST-SKIPPED-RELEASE"),
+                            com.smartlife798.app.core.UpdateRelease(latest, "THIRD-SKIPPED-RELEASE"),
                             com.smartlife798.app.core.UpdateRelease(BuildConfig.VERSION_NAME, "ALREADY-INSTALLED"),
-                            com.smartlife798.app.core.UpdateRelease("1.8.2", "SECOND-SKIPPED-RELEASE"),
+                            com.smartlife798.app.core.UpdateRelease(nextVersion(2), "SECOND-SKIPPED-RELEASE"),
                         ))
                     Store.updatePolicyJson = Gson().toJson(policy)
                     activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
@@ -57,7 +58,7 @@ object UpdateFlowChecks {
                         if (text.contains("THIRD-SKIPPED-RELEASE")) break
                         Thread.sleep(100)
                     }
-                    check(text.contains("1.8.3") && text.contains("1.8.2") && text.contains("1.8.1"))
+                    check((1..3).all { text.contains(nextVersion(it)) })
                     check(text.contains("FIRST-SKIPPED-RELEASE") && text.contains("SECOND-SKIPPED-RELEASE"))
                     check(!text.contains("ALREADY-INSTALLED"))
                     instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
@@ -75,7 +76,69 @@ object UpdateFlowChecks {
                     check(clickText(instrumentation.uiAutomation.rootInActiveWindow, "检查客户端更新"))
                     stage = "manual prompt reopen"
                     awaitText(instrumentation, "THIRD-SKIPPED-RELEASE", true)
-                    result.putString("stream", "PASS: first-resume cached update prompt, all three skipped release notes, installed-version exclusion, dismiss and manual reopen\n")
+                    stage = "ordinary back dismisses without leaving app"
+                    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                    awaitText(instrumentation, "THIRD-SKIPPED-RELEASE", false)
+                    check(activity?.isFinishing == false)
+                    result.putString("stream", "PASS: first-resume cached update prompt, dynamic cross-version notes, installed-version exclusion, dismiss/manual reopen and ordinary back stays in app\n")
+                }
+                "forced-exit" -> {
+                    check(Store.active() == null && Store.pendingStart() == null)
+                    val latest = nextVersion(1)
+                    val policy = UpdatePolicy(BuildConfig.VERSION_CODE + 1, latest,
+                        BuildConfig.VERSION_CODE + 1, "离线强制更新退出测试", "a".repeat(64))
+                    val json = Gson().toJson(policy)
+                    Store.updatePolicyJson = json
+                    fun launch(preview: Boolean = false): MainActivity =
+                        instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                            .putExtra("preview", preview)) as MainActivity
+                    fun awaitRemoved(screen: MainActivity) {
+                        val manager = instrumentation.targetContext.getSystemService(android.app.ActivityManager::class.java)
+                        val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
+                        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                            val removed = manager.appTasks.none {
+                                it.taskInfo.baseIntent.component?.className == MainActivity::class.java.name
+                            }
+                            if ((screen.isFinishing || screen.isDestroyed) && removed) return
+                            Thread.sleep(100)
+                        }
+                        error("Mandatory back did not remove the app task")
+                    }
+                    stage = "mandatory outside tap keeps restriction"
+                    val first = launch().also { activity = it }
+                    awaitText(instrumentation, "需要更新至 $latest", true)
+                    check(!nodeText(instrumentation.uiAutomation.rootInActiveWindow).contains("稍后更新"))
+                    instrumentation.uiAutomation.executeShellCommand("input tap 2 400").use { fd ->
+                        android.os.ParcelFileDescriptor.AutoCloseInputStream(fd).readBytes()
+                    }
+                    awaitText(instrumentation, "需要更新至 $latest", true)
+                    check(!first.isFinishing)
+                    stage = "mandatory back exits and preserves cached policy"
+                    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                    awaitRemoved(first)
+                    check(Store.updatePolicyJson == json)
+                    stage = "relaunch remains mandatory and busy back also exits"
+                    val second = launch().also { activity = it }
+                    awaitText(instrumentation, "需要更新至 $latest", true)
+                    instrumentation.runOnMainSync {
+                        val vm = androidx.lifecycle.ViewModelProvider(second)[MainViewModel::class.java]
+                        // Busy UI fixture only: no download, network or account side effect.
+                        val field = MainViewModel::class.java.getDeclaredField("_updateDownload").apply { isAccessible = true }
+                        @Suppress("UNCHECKED_CAST")
+                        val flow = field.get(vm) as kotlinx.coroutines.flow.MutableStateFlow<MainViewModel.UpdateDownload>
+                        flow.value = MainViewModel.UpdateDownload(busy = true, percent = 33)
+                    }
+                    awaitText(instrumentation, "下载进度 33%", true)
+                    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                    awaitRemoved(second)
+                    check(Store.updatePolicyJson == json)
+                    stage = "preview ignores mandatory policy without modifying cache"
+                    activity = launch(preview = true)
+                    awaitText(instrumentation, "演示模式", true)
+                    check(!nodeText(instrumentation.uiAutomation.rootInActiveWindow).contains("需要更新至 $latest"))
+                    check(Store.updatePolicyJson == json)
+                    result.putString("stream", "PASS: outside tap stays mandatory, back removes task, relaunch preserves restriction, busy back exits, ordinary policy cache and preview isolation\n")
                 }
                 "preview" -> {
                     stage = "preview refresh isolation"
@@ -105,6 +168,9 @@ object UpdateFlowChecks {
         }
         instrumentation.finish(resultCode, result)
     }
+
+    private fun nextVersion(offset: Int): String = BuildConfig.VERSION_NAME.split('.').map(String::toInt)
+        .let { "${it[0]}.${it[1]}.${it[2] + offset}" }
 
     private fun nodeText(node: AccessibilityNodeInfo?): String {
         if (node == null) return ""

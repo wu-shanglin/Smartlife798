@@ -36,6 +36,7 @@ fun AppUpdatePrompt(
     checking: Boolean,
     download: MainViewModel.UpdateDownload,
     onDismiss: () -> Unit,
+    onExit: () -> Unit,
     onRetry: () -> Unit,
     onError: (String) -> Unit,
 ) {
@@ -87,9 +88,14 @@ fun AppUpdatePrompt(
         }
     }
     AlertDialog(
-        onDismissRequest = { if (!required && !download.busy) onDismiss() },
+        onDismissRequest = {
+            if (required) onExit()
+            else if (!download.busy) onDismiss()
+        },
         properties = DialogProperties(
-            dismissOnBackPress = !required && !download.busy,
+            // Mandatory updates block business access, not leaving the app.
+            // Finishing the task also cancels its ViewModel-owned download.
+            dismissOnBackPress = required || !download.busy,
             dismissOnClickOutside = !required && !download.busy,
         ),
         title = { Text(if (required) "需要更新至 ${policy.versionName}" else "发现新版本 ${policy.versionName}") },

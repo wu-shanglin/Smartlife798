@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
                 AppRoot(
                     forcePreview = BuildConfig.DEBUG &&
                         intent?.getBooleanExtra("preview", false) == true,
+                    onExitApp = ::finishAndRemoveTask,
                 )
             }
         }
@@ -133,7 +134,7 @@ private data class Tab(val route: String, val label: String, val icon: @Composab
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun AppRoot(forcePreview: Boolean = false) {
+private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
     val vm: MainViewModel = viewModel()
     val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
     val unpaidCount by vm.unpaidCount.collectAsStateWithLifecycle()
@@ -174,6 +175,7 @@ private fun AppRoot(forcePreview: Boolean = false) {
             checking = checkingUpdate,
             download = updateDownload,
             onDismiss = vm::dismissAppUpdate,
+            onExit = onExitApp,
             onRetry = { vm.checkAppUpdate(manual = true) },
             onError = vm::notify,
         )
