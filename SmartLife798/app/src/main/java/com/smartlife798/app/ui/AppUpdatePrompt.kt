@@ -7,8 +7,16 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -18,7 +26,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.withResumed
@@ -100,31 +110,24 @@ fun AppUpdatePrompt(
         ),
         title = { Text(if (required) "需要更新至 ${policy.versionName}" else "发现新版本 ${policy.versionName}") },
         text = {
-            androidx.compose.foundation.lazy.LazyColumn {
-                item {
-                    Text(
-                        (if (required) "当前版本已停止支持，请安装新版后继续使用。"
-                        else "下载后将打开系统安装界面，也可以稍后更新。") +
-                            "安装需您确认，首次可能需要允许安装未知来源应用。" +
-                            policy.notesSince(BuildConfig.VERSION_NAME).let {
-                                if (it.isBlank()) "" else "\n\n" +
-                                    (if (policy.releases.isNotEmpty()) "" else if (policy.historyAvailable)
-                                        "跨版本日志暂不可用，以下为最新版本说明。\n\n"
-                                    else "本次发布未提供跨版本日志，以下为最新版本说明。\n\n") + it
-                            },
-                    )
-                }
-                item {
-                    Column {
-                        if (download.busy) {
-                            Text(if (download.percent < 0) "正在下载…" else "下载进度 ${download.percent}%")
-                            if (download.percent < 0) LinearProgressIndicator()
-                            else LinearProgressIndicator(progress = { download.percent / 100f })
-                        }
-                        if (download.ready != null) Text("安装包已校验，请完成系统安装；取消后可再次点击安装。")
-                        download.error?.let { Text(it) }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Only release notes scroll; download status stays above the actions.
+                LazyColumn(Modifier.weight(1f, fill = false)) {
+                    item {
+                        Text(
+                            (if (required) "当前版本已停止支持，请安装新版后继续使用。"
+                            else "下载后将打开系统安装界面，也可以稍后更新。") +
+                                "安装需您确认，首次可能需要允许安装未知来源应用。" +
+                                policy.notesSince(BuildConfig.VERSION_NAME).let {
+                                    if (it.isBlank()) "" else "\n\n" +
+                                        (if (policy.releases.isNotEmpty()) "" else if (policy.historyAvailable)
+                                            "跨版本日志暂不可用，以下为最新版本说明。\n\n"
+                                        else "本次发布未提供跨版本日志，以下为最新版本说明。\n\n") + it
+                                },
+                        )
                     }
                 }
+                UpdateDownloadStatus(download)
             }
         },
         confirmButton = {
@@ -151,4 +154,34 @@ fun AppUpdatePrompt(
             }
         },
     )
+}
+
+@Composable
+private fun UpdateDownloadStatus(download: MainViewModel.UpdateDownload) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                download.busy -> {
+                    Text(
+                        if (download.percent < 0) "正在下载…" else "下载进度 ${download.percent}%",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    val progressModifier = Modifier.fillMaxWidth().height(8.dp)
+                    if (download.percent < 0) LinearProgressIndicator(modifier = progressModifier)
+                    else LinearProgressIndicator(
+                        progress = { download.percent / 100f },
+                        modifier = progressModifier,
+                    )
+                }
+                download.ready != null -> Text("安装包已校验，请完成系统安装；取消后可再次点击安装。")
+                download.error != null -> Text(download.error, color = MaterialTheme.colorScheme.error)
+                else -> Text("点击「立即更新」开始下载")
+            }
+        }
+    }
 }
