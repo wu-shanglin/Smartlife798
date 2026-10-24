@@ -54,6 +54,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -144,8 +146,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: CancellationException) {
                 throw e
             } catch (_: java.io.IOException) {
+                currentCoroutineContext().ensureActive()
                 _updateDownload.value = UpdateDownload(error = "下载失败，请检查网络和存储空间后重试")
             } catch (_: RuntimeException) {
+                currentCoroutineContext().ensureActive()
                 _updateDownload.value = UpdateDownload(error = "安装包校验失败，请重试；仍失败时请联系发布者核对签名与版本")
             } finally {
                 if (_updateDownload.value.busy) _updateDownload.value = UpdateDownload()

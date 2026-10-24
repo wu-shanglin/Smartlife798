@@ -21,6 +21,14 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "update-progress") {
+            UpdateProgressChecks.run(this)
+            return
+        }
+        if (mode == "detail-load") {
+            DetailLoadingChecks.run(this)
+            return
+        }
         if (mode == "start") {
             StartFlowChecks.run(this)
             return

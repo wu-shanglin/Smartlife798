@@ -58,6 +58,7 @@ import com.smartlife798.app.core.ErrorCodes
 import com.smartlife798.app.core.PayType
 import com.smartlife798.app.core.PrimaryAction
 import com.smartlife798.app.core.Res
+import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.core.isInUse
 import com.smartlife798.app.core.StartWatch
 import com.smartlife798.app.core.StartCommandLock
@@ -173,8 +174,11 @@ fun DeviceDetailScreen(
         vm.setDetailDeviceOpen(deviceId)
         onDispose { vm.setDetailDeviceOpen(null) }
     }
-    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
-    LaunchedEffect(refreshTick, deviceId) { reload(detail == null) }
+    LaunchedEffect(deviceId) {
+        // Navigation emits another tick after entry settles. Keep the first
+        // in-flight response instead of cancelling it and starting a second read.
+        collectRefreshRequests(vm.refreshTick) { reload(detail == null) }
+    }
 
     // 设备状态轮询：只在页面处于 RESUMED 时运行；仅“启动中/运行中”或刚启动的
     // 窗口内每 2s 一次，空闲与异常状态不轮询。
