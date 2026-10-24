@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.9.6`（`versionCode 37`） |
+| 当前版本 | `1.9.7`（`versionCode 38`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.9.6 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.9.6/SmartLife798-1.9.6-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.9.6) |
@@ -14,6 +14,7 @@
 
 ## 当前版本
 
+- **1.9.7：详情加载与更新进度**。合并详情首载期间的刷新，避免取消重发；更新进度固定在弹窗按钮上方，仅显示进度和状态，不随日志滚动。已准备普通更新，最低支持码保留 37；正式发布前线上仍为下述 1.9.6 策略。
 - **1.9.6：强制更新返回退出**。返回退出应用并保留更新限制，重新打开仍须更新；下载忙碌时也可退出，外部点击不能绕过。普通更新返回只关闭弹窗。旧 APK 的返回行为需升级后才能修复。
 - **1.9.5：运行卡片与恢复**。返回首页继续确认启动；未知结果保留「启动待确认」入口，确认后显示运行卡片。详情、首页和刷新统一对账，避免异设备、旧响应和重复启停污染会话。
 - 支付宝回执只保留白名单状态与固定提示；工程验证已覆盖，真实支付、物理出水及非零计费仍待验，详情见 [验证记录](docs/05-真实支付与计费实测.md#9-工程验证记录)。
@@ -46,7 +47,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.9.6-debug.apk`](dist/SmartLife798-1.9.6-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.9.7-debug.apk`](dist/SmartLife798-1.9.7-debug.apk) |
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 
