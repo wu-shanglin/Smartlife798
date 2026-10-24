@@ -95,11 +95,22 @@ private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
     val scene = LocalCardScene.current ?: return this
     if (key == null) return this
     return with(scene.shared) {
-        this@cardElement.sharedElement(
-            sharedContentState = rememberSharedContentState(key),
-            animatedVisibilityScope = scene.visibility,
-            zIndexInOverlay = 2f,
-        )
+        val state = rememberSharedContentState(key)
+        if (key.part == CardPart.TITLE) {
+            // Labels and app-bar titles have different typography. Scale their complete
+            // layouts within shared bounds instead of reflowing/clipping individual glyphs.
+            this@cardElement.sharedBounds(
+                sharedContentState = state,
+                animatedVisibilityScope = scene.visibility,
+                zIndexInOverlay = 2f,
+            )
+        } else {
+            this@cardElement.sharedElement(
+                sharedContentState = state,
+                animatedVisibilityScope = scene.visibility,
+                zIndexInOverlay = 2f,
+            )
+        }
     }
 }
 

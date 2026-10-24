@@ -56,6 +56,13 @@ object UxFlowChecks {
                 }
                 check(Store.startupPage() == page) // preview choice is in-memory only
                 if (!settingsOnly) {
+                    stage = "wallet open and return"
+                    click(test, "钱包")
+                    await(test, "钱包余额")
+                    await(test, "充值金额")
+                    click(test, "返回")
+                    await(test, "启动页面")
+                    await(test, "36.50")
                     stage = "tab navigation and detail return"
                     click(test, "设备")
                     await(test, "我的设备")
@@ -145,7 +152,7 @@ object UxFlowChecks {
             check(Store.updatePolicyJson == policy && Store.originalAppVersion == protocol)
             result.putString("stream", if (settingsOnly)
                 "PASS: settings-only startup choices, retention, background/recreation, appearance selection/toggle and preview/cache isolation\n"
-            else "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
+            else "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, wallet open/back, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             if (accountFree) test.uiAutomation.takeScreenshot()?.let { bitmap ->
