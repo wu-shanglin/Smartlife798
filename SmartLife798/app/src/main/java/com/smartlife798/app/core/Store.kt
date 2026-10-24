@@ -154,6 +154,15 @@ object Store {
         activeUsageJson = a?.let { gson.toJson(it) }
     }
 
+    /** Accepted command awaiting state confirmation; never a confirmed usage. */
+    fun pendingStart(): ActiveUsage? = prefs.getString("pendingStart", null)?.let {
+        runCatching { gson.fromJson(it, ActiveUsage::class.java) }.getOrNull()
+    }
+
+    fun setPendingStart(usage: ActiveUsage?) {
+        if (!Preview.enabled) prefs.edit { putString("pendingStart", usage?.let(gson::toJson)) }
+    }
+
     fun favoritesCacheJson(): String? = prefs.getString("favcache", null)
 
     fun saveFavoritesCache(v: String?) {
@@ -201,6 +210,7 @@ object Store {
             remove("phone")
             remove("profile")
             remove("active")
+            remove("pendingStart")
             remove("favcache")
             remove("recents")
             remove("pinned")

@@ -21,6 +21,10 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "start") {
+            StartFlowChecks.run(this)
+            return
+        }
         if (mode == "end") {
             EndFlowChecks.run(this)
             return

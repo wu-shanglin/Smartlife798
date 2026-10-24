@@ -19,18 +19,27 @@ object AlipaySdk {
     suspend fun pay(activity: Activity, orderInfo: String): Result = withContext(Dispatchers.IO) {
         try {
             val raw: Map<String, String> = PayTask(activity).payV2(orderInfo, true)
-            val status = raw["resultStatus"].orEmpty()
-            val memo = raw["memo"] ?: raw["result"].orEmpty()
-            Diag.event("alipay.result", "resultStatus" to status, "memo" to memo)
-            Result(
-                success = status == "9000",
-                status = status,
-                memo = memo,
-            )
-        } catch (e: Throwable) {
-            Diag.event("alipay.exception", "message" to (e.message ?: e.javaClass.simpleName))
-            Result(false, "error", e.message ?: "支付宝调用失败")
+            fromRaw(raw).also { Diag.event("alipay.result", "resultStatus" to it.status) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Diag.event("alipay.exception")
+            Result(false, "error", "支付宝调用失败，请核对账单状态")
         }
+    }
+
+    /** SDK memo/result and exception text may contain signed receipts or account data. */
+    fun fromRaw(raw: Map<String, String>): Result {
+        val status = raw["resultStatus"].takeIf { it in setOf("9000", "8000", "4000", "5000", "6001", "6002", "6004") }
+            ?: "unknown"
+        val memo = when (status) {
+            "9000" -> "请以服务端账单确认为准"
+            "8000", "6004" -> "支付结果待确认，请核对账单状态"
+            "6001" -> "用户已取消"
+            "6002" -> "网络异常，请核对账单状态"
+            else -> "支付未完成，请核对账单状态"
+        }
+        return Result(status == "9000", status, memo)
     }
 
     fun isInstalled(context: android.content.Context): Boolean =

@@ -96,12 +96,14 @@ object Api {
                     else -> Res.Fail(envelope.code, envelope.msg ?: "请求失败（${envelope.code}）")
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: IOException) {
             Res.Fail(ErrorCodes.NETWORK, "网络不可用，请检查网络连接")
         } catch (e: JsonParseException) {
             Res.Fail(-1, "响应解析失败")
         } catch (e: Exception) {
-            Res.Fail(ErrorCodes.UNKNOWN, e.message ?: "未知错误")
+            Res.Fail(ErrorCodes.UNKNOWN, "请求处理失败，请稍后重试")
         }
     }
 

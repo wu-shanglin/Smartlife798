@@ -43,4 +43,18 @@ class PaymentFlowTest {
             (PaymentFlow.Outcome.Unavailable("later") as PaymentFlow.Outcome.Unavailable).message,
         )
     }
+    @org.junit.Test
+    fun `sdk receipts and untrusted status never reach messages or diagnostics`() {
+        val receipt = "fixture-private-signed-receipt"
+        val raw = mapOf("resultStatus" to receipt, "memo" to receipt, "result" to receipt)
+        val unknown = AlipaySdk.fromRaw(raw)
+        org.junit.Assert.assertEquals("unknown", unknown.status)
+        org.junit.Assert.assertFalse(unknown.success)
+        org.junit.Assert.assertFalse(unknown.toString().contains(receipt))
+        for (status in listOf("9000", "8000", "4000", "5000", "6001", "6002", "6004")) {
+            val parsed = AlipaySdk.fromRaw(raw + ("resultStatus" to status))
+            org.junit.Assert.assertEquals(status == "9000", parsed.success)
+            org.junit.Assert.assertFalse(parsed.toString().contains(receipt))
+        }
+    }
 }
