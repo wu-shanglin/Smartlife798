@@ -97,6 +97,8 @@ fun DeviceDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var busyText by remember { mutableStateOf("") }
+    // Invalidate reads started before a command; old responses cannot undo its result.
+    var statusRevision by remember(deviceId) { mutableStateOf(0) }
     var autoStarted by rememberSaveable(deviceId) { mutableStateOf(false) }
     var payType by remember { mutableStateOf(0) }
     var signingAli by remember(deviceId) { mutableStateOf(false) }
@@ -124,12 +126,18 @@ fun DeviceDetailScreen(
     val shownDevice = device ?: initialDevice
     val favorite = favorites.any { it.id == deviceId }
 
-    suspend fun reload(showLoading: Boolean) {
+    suspend fun reload(showLoading: Boolean, duringCommand: Boolean = false) {
+        if (busy && !duringCommand) return
+        val revision = statusRevision
         if (showLoading) loading = true
         val res = vm.loadDevice(deviceId)
         // Preserve the already rendered seed and shared title throughout entry.
         // Also hold refresh results during a return/cancelled return transition.
         awaitCardEntry()
+        if (revision != statusRevision || (busy && !duringCommand)) {
+            loading = false
+            return
+        }
         when (res) {
             is Res.Ok -> {
                 detail = res.data
@@ -171,10 +179,13 @@ fun DeviceDetailScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     suspend fun pollOnce() {
+        if (busy) return
+        val revision = statusRevision
         val current = detail ?: return
         val device = current.device ?: return
         when (val res = vm.pollDevice(deviceId, device)) {
             is Res.Ok -> {
+                if (revision != statusRevision || busy) return
                 // The VM merged the partial `dev/status` into `device`; this page
                 // never receives a dtype-less object.
                 detail = current.copy(device = res.data)
@@ -251,6 +262,7 @@ fun DeviceDetailScreen(
         // both would otherwise call dev/start (or dev/end) and be billed twice.
         if (busy || !entryReady) return
         val dev = detail?.device ?: return
+        statusRevision += 1
         busy = true
         scope.launch {
             error = null
@@ -269,7 +281,7 @@ fun DeviceDetailScreen(
                                 } else {
                                     "服务端已确认设备启动，请按设备提示使用"
                                 }
-                                reload(false)
+                                reload(false, duringCommand = true)
                             }
                             is Res.Fail -> {
                                 // No pending window on failure: the command did
@@ -278,7 +290,7 @@ fun DeviceDetailScreen(
                                     // The device may have started late; show
                                     // whatever the server reports now, then keep
                                     // the explanation on screen (reload clears it).
-                                    reload(false)
+                                    reload(false, duringCommand = true)
                                     error = vm.errorText(res.code, res.msg)
                                     toast = res.msg
                                 } else {
@@ -298,8 +310,11 @@ fun DeviceDetailScreen(
                             is Res.Ok -> {
                                 seenInUseSinceStart = false
                                 pendingStartUntil = 0L
-                                toast = "已结束使用，可在订单页查看消费记录"
-                                reload(false)
+                                // Use the confirmed snapshot, not an immediate full
+                                // reload that may still carry the pre-end state.
+                                detail = detail?.copy(device = res.data)
+                                lastUpdate = System.currentTimeMillis()
+                                toast = "设备已恢复待机，账单以服务端结算为准"
                             }
                             is Res.Fail -> error = vm.errorText(res.code, res.msg)
                         }
