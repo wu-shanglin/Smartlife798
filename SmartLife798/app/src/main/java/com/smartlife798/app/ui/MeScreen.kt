@@ -486,17 +486,16 @@ private fun SettingsChoice(
         contentColor = colors.onSurface,
     ) {
         Row(
-            modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
             if (icon != null) Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
             Text(
                 label,
-                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Medium,
-                textAlign = if (icon == null) TextAlign.Center else TextAlign.Start,
+                textAlign = TextAlign.Center,
             )
         }
     }
