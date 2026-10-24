@@ -43,6 +43,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.smartlife798.app.core.ActiveUsage
+import com.smartlife798.app.core.DeviceState
+import com.smartlife798.app.core.DeviceStateKind
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceType
@@ -75,6 +78,7 @@ fun HomeScreen(
     val recents by vm.recents.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
     val active by vm.active.collectAsStateWithLifecycle()
+    val pending by vm.pendingStart.collectAsStateWithLifecycle()
     val live by vm.liveStatus.collectAsStateWithLifecycle()
     val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
     val loading by vm.loadingMaster.collectAsStateWithLifecycle()
@@ -106,9 +110,9 @@ fun HomeScreen(
     // Keep the card on screen while the end request is in flight: the session
     // clears as soon as the server answers, and an instantly vanishing card
     // gives no visual confirmation that the tap was received.
-    var lastActive by remember { mutableStateOf<com.smartlife798.app.core.ActiveUsage?>(null) }
-    LaunchedEffect(active) { if (active != null) lastActive = active }
-    val cardActive = active ?: lastActive?.takeIf { ending }
+    var lastActive by remember { mutableStateOf<ActiveUsage?>(null) }
+    LaunchedEffect(active, pending) { (active ?: pending)?.let { lastActive = it } }
+    val cardActive = active ?: pending ?: lastActive?.takeIf { ending }
 
     val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
     val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
@@ -182,6 +186,7 @@ fun HomeScreen(
             item {
                 ActiveUsageCard(
                     active = cardActive,
+                    pending = active == null && pending != null,
                     live = liveForActive,
                     liveAt = if (liveForActive != null) liveAt else 0L,
                     ending = ending,
@@ -358,15 +363,15 @@ private fun ScanHeroCard(onScan: () -> Unit) {
 
 @Composable
 private fun ActiveUsageCard(
-    active: com.smartlife798.app.core.ActiveUsage?,
-    live: com.smartlife798.app.core.Device?,
+    active: ActiveUsage,
+    live: Device?,
     liveAt: Long,
+    pending: Boolean,
     ending: Boolean,
     onOpenDevice: (String) -> Unit,
     onOpenOrders: () -> Unit,
     onEnd: () -> Unit,
 ) {
-    if (active == null) return
     Card(
         onClick = { onOpenDevice(active.deviceId) },
         modifier = Modifier.sharedCard(CardOrigin.HOME_ACTIVE, active.deviceId).fillMaxWidth(),
@@ -375,7 +380,9 @@ private fun ActiveUsageCard(
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusPill(usagePillState(live))
+                StatusPill(if (pending) DeviceState(
+                    DeviceStateKind.ONLINE, "启动待确认",
+                ) else usagePillState(live))
                 Spacer(Modifier.width(10.dp))
                 Text(
                     active.name,
@@ -391,7 +398,7 @@ private fun ActiveUsageCard(
                     modifier = Modifier.size(16.dp),
                 )
             }
-            Row(verticalAlignment = Alignment.Bottom) {
+            if (!pending) Row(verticalAlignment = Alignment.Bottom) {
                 UsageDuration(
                     startedAt = active.startedAt,
                     style = MaterialTheme.typography.headlineMedium,
@@ -434,7 +441,7 @@ private fun ActiveUsageCard(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (live == null) "正在向服务端确认状态，尚未确认「使用中」"
+                    if (pending || live == null) "正在向服务端确认状态，尚未确认「使用中」"
                     else if (DeviceType.isWaterLike(active.dtype)) {
                         "已授权取水 · 请在设备上按「启动」键；用完按「结算」或下方结束"
                     } else "每 2 秒同步服务端状态 · 计费以服务端为准",

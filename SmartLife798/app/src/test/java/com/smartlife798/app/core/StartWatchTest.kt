@@ -80,11 +80,11 @@ class StartWatchTest {
 
     @Test
     fun `a recorded session survives only while the server reports it running`() {
-        assertFalse(activeSessionOver(device(geneStatus = 10)))
-        assertFalse(activeSessionOver(device(geneStatus = 30)))
-        assertTrue(activeSessionOver(device(geneStatus = 99)))
-        assertTrue(activeSessionOver(device(status = 0)))
-        assertTrue(activeSessionOver(device(geneStatus = 98)))
+        assertEquals(StartSignal.STARTED, StartWatch.classify(device(geneStatus = 10)))
+        assertEquals(StartSignal.STARTED, StartWatch.classify(device(geneStatus = 30)))
+        assertEquals(StartSignal.STANDBY, StartWatch.classify(device(geneStatus = 99)))
+        assertEquals(StartSignal.ABNORMAL, StartWatch.classify(device(status = 0)))
+        assertEquals(StartSignal.ABNORMAL, StartWatch.classify(device(geneStatus = 98)))
     }
 
     @Test
@@ -122,5 +122,25 @@ class StartWatchTest {
         val merged = known.mergeStatus(known.statusOnly())
         assertEquals(known, merged)
         assertEquals(DeviceType.WATER_PURIFIER, merged.dtype)
+    }
+    @Test
+    fun `foreign and unidentified snapshots never alter the known device`() {
+        val known = device(geneStatus = 10)
+        for (id in listOf("other", "", null)) {
+            val foreign = DeviceStatus(id = id, status = 1, gene = Gene(status = 99))
+            assertEquals(known, known.mergeStatus(foreign))
+            assertEquals(StartSignal.UNKNOWN, StartWatch.classify(known, foreign))
+        }
+    }
+
+    @Test
+    fun `incomplete state cannot confirm or erase a usage from cached fields`() {
+        val known = device(geneStatus = 99)
+        for (partial in listOf(null, DeviceStatus(id = "d1"),
+            DeviceStatus(id = "d1", status = 1), DeviceStatus(id = "d1", gene = Gene(status = 10)))) {
+            assertEquals(StartSignal.UNKNOWN, StartWatch.classify(known, partial))
+        }
+        assertEquals(StartSignal.STARTED, StartWatch.classify(known,
+            DeviceStatus(id = "d1", status = 1, gene = Gene(status = 10))))
     }
 }

@@ -38,7 +38,6 @@ import com.smartlife798.app.core.StoredProfile
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.activeBelongsTo
-import com.smartlife798.app.core.activeSessionOver
 import com.smartlife798.app.core.blockedByOtherSession
 import com.smartlife798.app.core.isAbnormal
 import com.smartlife798.app.core.isInUse
@@ -50,6 +49,9 @@ import com.smartlife798.app.core.session
 import com.smartlife798.app.core.stateLabel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -236,6 +238,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _active = MutableStateFlow(Store.active())
     val active: StateFlow<ActiveUsage?> = _active.asStateFlow()
 
+    private val _pendingStart: MutableStateFlow<ActiveUsage?> = MutableStateFlow(Store.pendingStart())
+    val pendingStart: StateFlow<ActiveUsage?> = _pendingStart.asStateFlow()
+    private val deviceCommand = Mutex()
+    private var startJob: Job? = null
+    private var deviceRevision = 0L
+
+    private fun checkDeviceSession(token: String?) {
+        if (Preview.enabled || !session.isLoggedIn || session.token != token) {
+            throw CancellationException("Device session changed")
+        }
+    }
+
     private val _liveStatus = MutableStateFlow<Device?>(null)
     val liveStatus: StateFlow<Device?> = _liveStatus.asStateFlow()
 
@@ -313,7 +327,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // A record restored from disk is a bookmark, not a fact: the machine or
         // another client may have ended it while the app was closed, and a start
         // that never took effect must not keep showing 「使用中」.
-        viewModelScope.launch { syncActiveStatus() }
+        viewModelScope.launch { _pendingStart.collect { ensureWatch() } }
         viewModelScope.launch {
             session.tokenRejected.collect { count ->
                 if (count > 0) {
@@ -370,6 +384,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun resetAccountState() {
+        startJob?.cancel()
+        watchJob?.cancel()
+        masterJob?.cancel()
+        deviceRevision += 1
+        _pendingStart.value = null
+        _wallet.value = null
         _loggedIn.value = false
         _profile.value = null
         _favorites.value = emptyList()
@@ -766,6 +786,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Enables the clearly-labelled UI preview (static sample data, no network). */
     fun startPreview() {
+        startJob?.cancel()
+        watchJob?.cancel()
+        masterJob?.cancel()
+        deviceRevision += 1
+        _pendingStart.value = null
         protocolJob?.cancel()
         updateJob?.cancel()
         downloadJob?.cancel()
@@ -819,7 +844,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (Preview.enabled) {
             val detail = Preview.detail(did)
             Res.Ok(detail.copy(device = _liveStatus.value?.takeIf { it.id == did } ?: detail.device))
-        } else Api.deviceDetail(did)
+        } else {
+            val token = session.token
+            val result = Api.deviceDetail(did)
+            checkDeviceSession(token)
+            // Full detail can lag behind command/status reads. Reconciliation
+            // only consumes dev/status; a cached detail must not erase a start.
+            result
+        }
     }
 
     /**
@@ -878,8 +910,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (Preview.enabled) {
             return@withContext Res.Ok(_liveStatus.value?.takeIf { it.id == did } ?: base)
         }
+        val token = session.token
+        val revision = deviceRevision
         when (val res = Api.deviceStatus(did, false)) {
-            is Res.Ok -> Res.Ok(base.mergeStatus(res.data?.device))
+            is Res.Ok -> {
+                checkDeviceSession(token)
+                val merged = base.mergeStatus(res.data?.device)
+                if (revision == deviceRevision && !deviceCommand.isLocked) {
+                    reconcileDevice(merged, StartWatch.classify(base, res.data?.device), token, revision)
+                }
+                Res.Ok(merged)
+            }
             is Res.Fail -> res
         }
     }
@@ -916,13 +957,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _recents.value = Store.recents()
     }
 
-    // ------------------------------------------------------------ 进行中轮询
-    // 存在“进行中的使用”且 App 在前台时，每 2s 查一次该设备状态；
-    // 切到后台立即停止，回到前台立刻补一次。运行/启动中之后连续两次空闲判定为
-    // 已结束；从未见过运行态（本机记录是上次启动的残留）时给 3 次宽限后同样清理，
-    // 保证循环一定会退出。故障/离线/蓝牙状态直接终止轮询并清掉本机指针。
-    // （状态字段声明在类顶部，保证 init 里的收集器不会访问到未初始化的字段。）
-
+    // One foreground watch for this install's confirmed usage or unresolved start.
+    // The detail page yields no duplicate reads, and command confirmation owns its reads.
     fun setAppResumed(value: Boolean) {
         appResumed = value
         ensureWatch()
@@ -935,75 +971,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun ensureWatch() {
-        val usage = _active.value
-        // If the last observed state of the recorded device is already abnormal,
-        // there is nothing to poll: starting a loop here would hit a dead
-        // machine every 2s and never learn anything new.
-        val blockedByState = usage != null &&
-            _liveStatus.value?.takeIf { it.id == usage.deviceId }?.isAbnormal == true
+        val usage = _active.value ?: _pendingStart.value
         if (usage == null || !appResumed || detailDevice == usage.deviceId || Preview.enabled ||
-            endCommand.isBusy || blockedByState
+            deviceCommand.isLocked
         ) {
             watchJob?.cancel()
             watchJob = null
-            if (usage == null && !Preview.enabled) {
-                _liveStatus.value = null
-                _liveUpdatedAt.value = 0L
-            }
             return
         }
         if (watchJob?.isActive == true) return
         watchJob = viewModelScope.launch {
-            var seenRunning = false
-            var idlePolls = 0
-            while (isActive) {
-                val current = _active.value ?: break
-                if (!appResumed) {
-                    delay(500)
-                    continue
-                }
-                val res = withContext(Dispatchers.IO) { Api.deviceStatus(current.deviceId, false) }
-                if (BuildConfig.DEBUG) Diag.event("watch.poll", "did" to current.deviceId)
-                if (res is Res.Ok) {
-                    val fresh = res.data?.device
-                    if (fresh != null) {
-                        // Partial status payload: keep the dtype we already know.
-                        val base = baseDeviceFor(current.deviceId, current.name, current.dtype)
-                        val device = base.mergeStatus(fresh)
-                        publishLive(device)
-                        when (device.stateLabel().kind) {
-                            DeviceStateKind.RUNNING, DeviceStateKind.STARTING -> {
-                                seenRunning = true
-                                idlePolls = 0
-                            }
-                            // Fault / disabled / offline is terminal: stop the
-                            // loop instead of polling a machine that cannot run.
-                            DeviceStateKind.DISABLED,
-                            DeviceStateKind.OFFLINE,
-                            DeviceStateKind.BLUETOOTH,
-                            -> {
-                                clearActiveByServer(device, ended = false)
-                                break
-                            }
-                            else -> {
-                                idlePolls += 1
-                                // A start is confirmed before the record is
-                                // written, so "never seen running" only means the
-                                // record was restored from disk (app restart) or
-                                // the device bounced back. Three idle reads are
-                                // enough to clear it; six kept a phantom session
-                                // alive for twelve seconds.
-                                val limit = if (seenRunning) 2 else 3
-                                if (idlePolls >= limit) {
-                                    clearActiveByServer(device, ended = true)
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
+            while (isActive && (_active.value != null || _pendingStart.value != null)) {
+                syncActiveStatus()
                 delay(2_000L)
             }
+        }
+    }
+
+    /** A public device state alone cannot establish that this account started it. */
+    private suspend fun reconcileDevice(
+        device: Device, signal: StartSignal, token: String?, revision: Long? = null,
+    ) = withContext(Dispatchers.Main.immediate) {
+        checkDeviceSession(token)
+        if (revision != null && (revision != deviceRevision || deviceCommand.isLocked)) return@withContext
+        val usage = _active.value ?: _pendingStart.value ?: return@withContext
+        if (usage.deviceId != device.id || signal == StartSignal.UNKNOWN) return@withContext
+        publishLive(device)
+        when (signal) {
+            StartSignal.STARTED -> if (_active.value == null) {
+                Store.setActive(usage)
+                _active.value = usage
+                Store.setPendingStart(null)
+                _pendingStart.value = null
+                rememberUse(device)
+            }
+            StartSignal.STANDBY, StartSignal.ABNORMAL -> clearActiveByServer(device, device.isStandby)
+            StartSignal.UNKNOWN -> Unit
         }
     }
 
@@ -1042,6 +1045,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun clearActiveByServer(device: Device, ended: Boolean) {
+        if ((_active.value ?: _pendingStart.value)?.deviceId != device.id) return
+        Store.setPendingStart(null)
+        _pendingStart.value = null
         Store.setActive(null)
         _active.value = null
         publishLive(device)
@@ -1070,8 +1076,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _recents.value = emptyList()
     }
 
-    suspend fun startDevice(device: Device, payType: Int, args: String): Res<Unit> = withContext(Dispatchers.IO) {
-        if (endCommand.isBusy) return@withContext Res.Fail(-1, "正在结束使用，请稍候再启动")
+    /** Confirmation survives navigation; account reset or ViewModel disposal cancels it. */
+    suspend fun startDevice(device: Device, payType: Int, args: String): Res<Unit> = withContext(Dispatchers.Main.immediate) {
+        if (!deviceCommand.tryLock()) return@withContext Res.Fail(-1, "设备操作处理中，请勿重复操作")
+        val task = viewModelScope.async(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                deviceRevision += 1
+                watchJob?.cancel()
+                startDeviceInternal(device, payType, args)
+            } finally {
+                deviceCommand.unlock()
+                ensureWatch()
+            }
+        }
+        startJob = task
+        task.await()
+    }
+
+    private suspend fun startDeviceInternal(device: Device, payType: Int, args: String): Res<Unit> = withContext(Dispatchers.Main.immediate) {
         if (Preview.enabled) {
             // 预览模式只在内存里模拟，不落盘：避免演示设备的“进行中”记录
             // 在退出预览后继续出现在真实界面里。预览不轮询，所以这里直接给出
@@ -1096,18 +1118,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // This install keeps a single session bookmark; starting another machine
         // would silently orphan the still-running one (it would keep billing with
         // no card left to stop it).
+        if (!session.isLoggedIn) return@withContext Res.Fail(ErrorCodes.TOKEN_EXPIRED, "请先登录")
+        if (_pendingStart.value != null) return@withContext Res.Fail(-1, "上次启动结果待确认，请先刷新首页设备状态")
+        val token = session.token
         val running = _active.value
-        if (running != null && blockedByOtherSession(running.deviceId, device.id)) {
-            return@withContext Res.Fail(-1, "「${running.name}」正在使用中，请先在首页结束它再开始新设备")
+        if (running != null) {
+            val message = if (blockedByOtherSession(running.deviceId, device.id)) {
+                "「${running.name}」正在使用中，请先在首页结束它再开始新设备"
+            } else "本设备已有进行中记录，请先刷新状态，勿重复启动"
+            return@withContext Res.Fail(-1, message)
         }
         val accepted = Api.deviceStart(device.id, payType, args, count = 1)
+        checkDeviceSession(token)
         if (accepted is Res.Fail) {
             Diag.event(
                 "dev.start.fail",
                 "did" to device.id,
                 "ptype" to payType,
                 "code" to accepted.code,
-                "msg" to accepted.msg,
             )
             return@withContext accepted
         }
@@ -1119,8 +1147,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             "did" to device.id,
             "ptype" to payType,
             "dtype" to device.dtype,
-            "args" to args,
-            "data" to serverNote.take(160),
+            "hasData" to serverNote.isNotBlank(),
         )
         // Water / washing style machines can prove the start through the state
         // machine, so their session is recorded only after `dev/status` leaves
@@ -1134,15 +1161,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             rememberUse(device)
             return@withContext Res.Ok(Unit)
         }
-        val signal = awaitStartSignal(device)
+        val pending = ActiveUsage(device.id, device.name, device.dtype, System.currentTimeMillis(), payType)
+        Store.setPendingStart(pending)
+        _pendingStart.value = pending
+        val signal = awaitStartSignal(device, token)
         val snapshot = _liveStatus.value?.takeIf { it.id == device.id }
         val label = snapshot?.stateLabel()?.label ?: "未知"
         if (signal == StartSignal.STARTED) {
             Diag.event("dev.start.confirmed", "did" to device.id, "state" to label)
-            val usage = ActiveUsage(device.id, device.name, device.dtype, System.currentTimeMillis(), payType)
-            Store.setActive(usage)
-            _active.value = usage
-            rememberUse(device)
+            reconcileDevice(snapshot ?: device, signal, token)
             return@withContext Res.Ok(Unit)
         }
         Diag.event(
@@ -1151,8 +1178,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             "signal" to signal.name,
             "state" to label,
             "geneStatus" to (snapshot?.geneStatus ?: -1),
-            "data" to serverNote.take(160),
+            "hasData" to serverNote.isNotBlank(),
         )
+        if (signal == StartSignal.STANDBY || signal == StartSignal.ABNORMAL) {
+            snapshot?.let { reconcileDevice(it, signal, token) }
+        }
         // The server may still have opened a session that will be settled even
         // though the machine stayed idle, so surface a new bill on the badge.
         // Cancellation must propagate: swallowing it would keep this coroutine
@@ -1172,7 +1202,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * state, or [StartWatch] runs out of attempts. Every snapshot is published so
      * the detail page and the Home card show what the server actually says.
      */
-    private suspend fun awaitStartSignal(device: Device): StartSignal {
+    private suspend fun awaitStartSignal(device: Device, token: String?): StartSignal {
         var signal = StartSignal.UNKNOWN
         var failures = 0
         delay(StartWatch.FIRST_DELAY_MS)
@@ -1185,17 +1215,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     null
                 }
             }
-            if (snapshot != null) {
+            checkDeviceSession(token)
+            if (snapshot != null && snapshot.id == device.id) {
                 failures = 0
                 // `dev/status` is a partial DeviceStatus: merge it onto the
                 // started device, otherwise dtype 0 turns `gene.status = 1`
                 // into 「在线」 and a running machine looks idle.
                 val merged = device.mergeStatus(snapshot)
                 publishLive(merged)
-                signal = StartWatch.classify(merged)
+                signal = StartWatch.classify(device, snapshot)
                 if (signal != StartSignal.UNKNOWN && signal != StartSignal.STANDBY) return signal
-            } else if (failures >= 2) {
-                return StartSignal.UNKNOWN
+            } else {
+                signal = StartSignal.UNKNOWN
+                if (failures >= 2) return signal
             }
         }
         return signal
@@ -1221,7 +1253,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 "服务端已受理启动，但设备回报「$label」，本次启动未生效。账单以服务端为准。$note"
             else ->
                 "服务端已受理启动，但暂时读不到设备状态。请下拉刷新设备页确认是否已启动，" +
-                    "不要连续重复点击；账单以服务端为准。$note"
+                    "首页会保留「启动待确认」查询入口，请勿重复启动；账单以服务端为准。$note"
         }
     }
 
@@ -1233,21 +1265,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * took effect — cannot leave a 「使用中」 card behind.
      */
     suspend fun syncActiveStatus() {
-        val usage = _active.value ?: return
-        if (Preview.enabled || !session.isLoggedIn) return
+        val usage = _active.value ?: _pendingStart.value ?: return
+        if (Preview.enabled || !session.isLoggedIn || deviceCommand.isLocked) return
+        val token = session.token
+        val revision = deviceRevision
         val res = withContext(Dispatchers.IO) { Api.deviceStatus(usage.deviceId, false) }
+        checkDeviceSession(token)
         val fresh = (res as? Res.Ok)?.data?.device ?: return
         val base = baseDeviceFor(usage.deviceId, usage.name, usage.dtype)
-        val device = base.mergeStatus(fresh)
-        publishLive(device)
-        if (!activeSessionOver(device)) return
-        Diag.event(
-            "active.reconcile",
-            "did" to usage.deviceId,
-            "state" to device.stateLabel().label,
-            "geneStatus" to device.geneStatus,
-        )
-        clearActiveByServer(device, ended = device.isStandby)
+        checkDeviceSession(token)
+        if (revision != deviceRevision || deviceCommand.isLocked ||
+            (_active.value ?: _pendingStart.value) != usage
+        ) return
+        reconcileDevice(base.mergeStatus(fresh), StartWatch.classify(base, fresh), token, revision)
     }
 
     /**
@@ -1255,7 +1285,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * screen. Only a matching standby snapshot confirms completion.
      */
     suspend fun stopActiveDevice(): Res<Device> {
-        val usage = _active.value ?: return Res.Fail(-1, "当前没有进行中的使用")
+        val usage = _active.value ?: _pendingStart.value ?: return Res.Fail(-1, "当前没有进行中的使用")
         val live = _liveStatus.value?.takeIf { it.id == usage.deviceId }
         val device = live ?: Device(
             id = usage.deviceId,
@@ -1265,7 +1295,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return stopDevice(device)
     }
 
-    suspend fun stopDevice(device: Device): Res<Device> = withContext(Dispatchers.IO) {
+    suspend fun stopDevice(device: Device): Res<Device> = withContext(Dispatchers.Main.immediate) {
+        if (!deviceCommand.tryLock()) return@withContext Res.Fail(-1, "设备操作处理中，请勿重复操作")
+        try {
+            deviceRevision += 1
+            stopDeviceInternal(device)
+        } finally {
+            deviceCommand.unlock()
+            ensureWatch()
+        }
+    }
+
+    private suspend fun stopDeviceInternal(device: Device): Res<Device> = withContext(Dispatchers.Main.immediate) {
         if (Preview.enabled) {
             // 预览模式只在内存里结束，不写任何本地状态。
             val standby = device.copy(gene = (device.gene ?: com.smartlife798.app.core.Gene())
@@ -1276,58 +1317,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!session.isLoggedIn) return@withContext Res.Fail(ErrorCodes.TOKEN_EXPIRED, "请先登录")
         val token = session.token
-        fun checkSession() {
-            if (session.token != token || !session.isLoggedIn || Preview.enabled) {
-                throw CancellationException("Device end session changed")
-            }
-        }
         watchJob?.cancel()
-        try {
-            val res = endCommand.execute(
-                device = device,
-                send = {
-                    checkSession()
-                    Api.deviceEnd(device.id).also {
-                        checkSession()
-                        if (it is Res.Ok) Diag.event("dev.end.accepted", "did" to device.id)
-                    }
-                },
-                read = {
-                    checkSession()
-                    when (val status = Api.deviceStatus(device.id, false)) {
-                        is Res.Ok -> Res.Ok(status.data?.device)
-                        is Res.Fail -> status
-                    }.also { checkSession() }
-                },
-                observed = {
-                    checkSession()
-                    publishLive(it)
-                },
-            )
-            checkSession()
-            when (res) {
-                is Res.Ok -> {
-                    Diag.event("dev.end.ok", "did" to device.id)
-                    // Only drop the bookmark for the device that was actually ended:
-                    // ending device B must not orphan a running session on A.
-                    if (activeBelongsTo(_active.value?.deviceId, device.id)) {
-                        Store.setActive(null)
-                        _active.value = null
-                    }
-                    // A badge failure must not turn confirmed completion into failure.
-                    viewModelScope.launch { if (session.token == token) refreshOrderBadge() }
+        val res = endCommand.execute(
+            device = device,
+            send = {
+                checkDeviceSession(token)
+                Api.deviceEnd(device.id).also {
+                    checkDeviceSession(token)
+                    if (it is Res.Ok) Diag.event("dev.end.accepted", "did" to device.id)
                 }
-                is Res.Fail -> Diag.event(
-                    "dev.end.fail",
-                    "did" to device.id,
-                    "code" to res.code,
-                    "msg" to res.msg,
-                )
+            },
+            read = {
+                checkDeviceSession(token)
+                when (val status = Api.deviceStatus(device.id, false)) {
+                    is Res.Ok -> Res.Ok(status.data?.device)
+                    is Res.Fail -> status
+                }.also { checkDeviceSession(token) }
+            },
+            observed = {
+                checkDeviceSession(token)
+                publishLive(it)
+            },
+        )
+        checkDeviceSession(token)
+        when (res) {
+            is Res.Ok -> {
+                Diag.event("dev.end.ok", "did" to device.id)
+                // Only drop the bookmark for the device that was actually ended:
+                // ending device B must not orphan a running session on A.
+                if (activeBelongsTo(_pendingStart.value?.deviceId, device.id)) {
+                    Store.setPendingStart(null)
+                    _pendingStart.value = null
+                }
+                if (activeBelongsTo(_active.value?.deviceId, device.id)) {
+                    Store.setActive(null)
+                    _active.value = null
+                }
+                // A badge failure must not turn confirmed completion into failure.
+                viewModelScope.launch { if (session.token == token) refreshOrderBadge() }
             }
-            res
-        } finally {
-            ensureWatch()
+            is Res.Fail -> Diag.event(
+                "dev.end.fail",
+                "did" to device.id,
+                "code" to res.code,
+                "msg" to res.msg,
+            )
         }
+        res
     }
 
     suspend fun changeMode(device: Device, mode: Int, args: String): Res<Unit> = withContext(Dispatchers.IO) {

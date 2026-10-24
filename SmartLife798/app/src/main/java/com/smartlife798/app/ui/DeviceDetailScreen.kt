@@ -58,6 +58,8 @@ import com.smartlife798.app.core.ErrorCodes
 import com.smartlife798.app.core.PayType
 import com.smartlife798.app.core.PrimaryAction
 import com.smartlife798.app.core.Res
+import com.smartlife798.app.core.isInUse
+import com.smartlife798.app.core.StartWatch
 import com.smartlife798.app.core.StartCommandLock
 import com.smartlife798.app.core.primaryAction
 import com.smartlife798.app.core.stateLabel
@@ -224,7 +226,7 @@ fun DeviceDetailScreen(
             deviceId = deviceId,
         )
 
-    LaunchedEffect(deviceId, lifecycleOwner, pendingStartUntil) {
+    LaunchedEffect(deviceId, lifecycleOwner, pendingStartUntil, detail?.device?.isInUse, busy) {
         lifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             pollOnce()
             noteObservedState()
@@ -276,7 +278,9 @@ fun DeviceDetailScreen(
                             is Res.Ok -> {
                                 seenInUseSinceStart = false
                                 pendingStartUntil = System.currentTimeMillis() + StartCommandLock.WINDOW_MS
-                                toast = if (DeviceType.isWaterLike(dev.dtype)) {
+                                toast = if (!StartWatch.isObservable(dev)) {
+                                    "启动请求已受理，执行结果以设备和服务端为准"
+                                } else if (DeviceType.isWaterLike(dev.dtype)) {
                                     "已授权取水：请在设备上按「启动」键取水，用完按「结算」或点下方按钮结束"
                                 } else {
                                     "服务端已确认设备启动，请按设备提示使用"

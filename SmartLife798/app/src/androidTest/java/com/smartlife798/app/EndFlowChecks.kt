@@ -38,13 +38,14 @@ object EndFlowChecks {
         val originalToken = session.token
         val endCalls = AtomicInteger()
         val statusReads = AtomicInteger()
+        val totalStatusReads = AtomicInteger()
         val reject = AtomicBoolean()
         val holdFull = AtomicBoolean()
         val fullEntered = CountDownLatch(1)
         val releaseFull = CountDownLatch(1)
         val device = """{"id":"end-fixture","name":"结束状态演示饮水机","status":1,"bm":{"dtype":8},"gene":{"status":10}}"""
         try {
-            check(Store.token.isNullOrBlank() && Store.active() == null && session.token.isNullOrBlank())
+            check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null && session.token.isNullOrBlank())
             val fixture = OkHttpClient.Builder().addInterceptor { chain ->
                 val path = chain.request().url.encodedPath
                 val body = when {
@@ -54,6 +55,7 @@ object EndFlowChecks {
                         else """{"code":0}"""
                     }
                     path.endsWith("/dev/status") -> {
+                        totalStatusReads.incrementAndGet()
                         val status = if (!reject.get() && endCalls.get() > 0 && statusReads.incrementAndGet() >= 3) 99 else 10
                         """{"code":0,"data":{"device":{"id":"end-fixture","status":1,"gene":{"status":$status}}}}"""
                     }
@@ -92,6 +94,8 @@ object EndFlowChecks {
             stage = "render running device"
             render()
             await(test) { enabled(test, "结束使用并结算") }
+            stage = "poll starts after asynchronous detail load"
+            await(test) { totalStatusReads.get() > 0 }
             // A full read started before the end must never overwrite its confirmed result.
             holdFull.set(true)
             test.runOnMainSync { vm.bumpRefresh() }

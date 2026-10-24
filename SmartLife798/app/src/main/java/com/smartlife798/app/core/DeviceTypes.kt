@@ -91,7 +91,9 @@ enum class DevicesShelf(val label: String) {
     FAVORITE("收藏"),
     COMMON("常用"),
     RECENT("最近"),
-}data class DeviceState(val kind: DeviceStateKind, val label: String)
+}
+
+data class DeviceState(val kind: DeviceStateKind, val label: String)
 
 fun Device.stateLabel(): DeviceState {
     if (isOffline && (ntype == 3 || ntype == 10)) return DeviceState(DeviceStateKind.BLUETOOTH, "蓝牙")
@@ -186,6 +188,12 @@ object StartWatch {
         DeviceType.isWaterLike(device.dtype) || DeviceType.isWashingLike(device.dtype) ||
             device.dtype == DeviceType.HAIR_DRIER || device.dtype == DeviceType.CHARGING_MACHINE
 
+    /** Only a complete, matching state read can confirm or terminate a session. */
+    fun classify(base: Device, snapshot: DeviceStatus?): StartSignal =
+        if (snapshot?.id != base.id || snapshot.status == null || snapshot.gene?.status == null) {
+            StartSignal.UNKNOWN
+        } else classify(base.mergeStatus(snapshot))
+
     fun classify(device: Device?): StartSignal = when {
         device == null -> StartSignal.UNKNOWN
         device.isAbnormal -> StartSignal.ABNORMAL
@@ -197,15 +205,6 @@ object StartWatch {
 }
 
 /**
- * True when the server no longer reports a recorded session as running.
- *
- * The local 「进行中」 record is only a bookmark; the machine (or another
- * client) ends a session at any time. An idle (`99`) or abnormal device means
- * the session is over — or never started — so the card must stop claiming it.
- */
-fun activeSessionOver(device: Device): Boolean = device.isAbnormal || device.isStandby
-
-/**
  * Merges a `dev/status` snapshot into the device it describes.
  *
  * `dev/status` answers with a *partial* device (see [DeviceStatus]): no `bm`,
@@ -213,7 +212,7 @@ fun activeSessionOver(device: Device): Boolean = device.isAbnormal || device.isS
  * itself to a `Device` slot: `dtype` would read as 0 and the machine type/name
  * would collapse to 「智能设备」.
  */
-fun Device.mergeStatus(snapshot: DeviceStatus?): Device = if (snapshot == null) this else copy(
+fun Device.mergeStatus(snapshot: DeviceStatus?): Device = if (snapshot == null || snapshot.id != id) this else copy(
     status = snapshot.status ?: status,
     gene = snapshot.gene ?: gene,
     subs = snapshot.subs ?: subs,
