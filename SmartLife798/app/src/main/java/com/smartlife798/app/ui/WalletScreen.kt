@@ -88,7 +88,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text("钱包", modifier = Modifier.sharedCardPageElement()) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(shapes = androidx.compose.material3.IconButtonDefaults.shapes(), onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },

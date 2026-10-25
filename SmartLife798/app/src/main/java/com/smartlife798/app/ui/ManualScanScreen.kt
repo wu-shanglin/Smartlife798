@@ -105,7 +105,7 @@ fun ManualScanScreen(
             TopAppBar(
                 title = { Text("输入设备编号") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(shapes = androidx.compose.material3.IconButtonDefaults.shapes(), onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回扫一扫")
                     }
                 },

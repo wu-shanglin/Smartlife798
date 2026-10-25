@@ -35,7 +35,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -360,7 +360,7 @@ fun DeviceDetailScreen(
             TopAppBar(
                 title = { Text(shownDevice.name.ifBlank { "设备详情" }) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(shapes = androidx.compose.material3.IconButtonDefaults.shapes(), onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
@@ -368,7 +368,7 @@ fun DeviceDetailScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        PullToRefreshBox(
+        ExpressiveRefreshBox(
             isRefreshing = refreshing,
             onRefresh = {
                 if (!refreshing) {
@@ -803,6 +803,7 @@ private fun PaySection(
                         )
                     }
                     androidx.compose.material3.TextButton(
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                         onClick = onSignAlipay,
                         enabled = !signing,
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),

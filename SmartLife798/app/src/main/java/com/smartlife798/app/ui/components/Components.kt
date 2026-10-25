@@ -93,7 +93,7 @@ fun SectionHeader(
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (action != null && onAction != null) {
-            TextButton(onClick = onAction) { Text(action, style = MaterialTheme.typography.labelLarge) }
+            TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onAction) { Text(action, style = MaterialTheme.typography.labelLarge) }
         }
     }
 }

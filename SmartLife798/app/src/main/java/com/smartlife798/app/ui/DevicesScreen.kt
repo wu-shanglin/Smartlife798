@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,7 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +39,7 @@ import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceModel
 import com.smartlife798.app.core.DeviceType
 import com.smartlife798.app.core.DevicesShelf
+import com.smartlife798.app.ui.components.ChoiceButtonGroup
 import com.smartlife798.app.ui.components.DeviceCard
 import com.smartlife798.app.ui.components.EmptyState
 import com.smartlife798.app.ui.components.ErrorState
@@ -49,7 +49,6 @@ import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
     ExperimentalMaterial3Api::class,
 )
 @Composable
@@ -109,7 +108,7 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
         (favorites + recentDevices).map { it.dtype }.filter { it != 0 }.distinct().sorted()
     }
 
-    PullToRefreshBox(
+    ExpressiveRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
             if (!refreshing) {
@@ -142,7 +141,7 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                         trailingIcon = {
                             if (query.isNotEmpty()) {
-                                IconButton(onClick = { query = "" }) {
+                                IconButton(shapes = androidx.compose.material3.IconButtonDefaults.shapes(), onClick = { query = "" }) {
                                     Icon(Icons.Filled.Close, contentDescription = "清除搜索")
                                 }
                             }
@@ -151,15 +150,11 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DevicesShelf.entries.forEach { s ->
-                            TonalToggleButton(
-                                checked = shelf == s,
-                                onCheckedChange = { shelf = s },
-                                content = { Text(s.label) },
-                            )
-                        }
-                    }
+                    ChoiceButtonGroup(
+                        labels = DevicesShelf.entries.map { it.label },
+                        selectedIndex = shelf.ordinal,
+                        onSelect = { shelf = DevicesShelf.entries[it] },
+                    )
                     if (types.isNotEmpty()) {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),

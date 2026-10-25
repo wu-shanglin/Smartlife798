@@ -21,6 +21,10 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "bill-sheets") {
+            BillSheetChecks.run(this)
+            return
+        }
         if (mode == "update-progress") {
             UpdateProgressChecks.run(this)
             return
