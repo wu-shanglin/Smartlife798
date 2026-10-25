@@ -1,6 +1,9 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +25,14 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,7 +56,13 @@ fun StatusPill(state: DeviceState) {
         DeviceStateKind.DISABLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         DeviceStateKind.BLUETOOTH -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
-    Surface(color = container, shape = RoundedCornerShape(50)) {
+    val animatedContainer by animateColorAsState(
+        container, MaterialTheme.motionScheme.fastEffectsSpec(), label = "statusContainer",
+    )
+    val animatedContent by animateColorAsState(
+        content, MaterialTheme.motionScheme.fastEffectsSpec(), label = "statusContent",
+    )
+    Surface(color = animatedContainer, shape = RoundedCornerShape(50)) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -61,9 +72,9 @@ fun StatusPill(state: DeviceState) {
                 modifier = Modifier
                     .size(6.dp)
                     .clip(CircleShape)
-                    .background(content.copy(alpha = 0.9f)),
+                    .background(animatedContent.copy(alpha = 0.9f)),
             )
-            Text(state.label, style = MaterialTheme.typography.labelMedium, color = content)
+            Text(state.label, style = MaterialTheme.typography.labelMedium, color = animatedContent)
         }
     }
 }
@@ -96,14 +107,8 @@ fun LoadingBlock(text: String = "正在加载…") {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        WavyCircularProgress(sizeDp = 34)
+        ContainedLoadingIndicator(modifier = Modifier.size(56.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        WavyLinearProgress(
-            modifier = Modifier
-                .width(132.dp)
-                .padding(top = 2.dp),
-            heightDp = 4,
-        )
     }
 }
 
@@ -122,12 +127,14 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(
-            Icons.Filled.Search,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-            modifier = Modifier.size(34.dp),
-        )
+        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.extraLarge) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(18.dp).size(30.dp),
+            )
+        }
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(
             description,
@@ -137,7 +144,7 @@ fun EmptyState(
         )
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(4.dp))
-            Button(onClick = onAction) { Text(actionLabel) }
+            Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onAction) { Text(actionLabel) }
         }
     }
 }
@@ -164,7 +171,7 @@ fun ErrorState(message: String, modifier: Modifier = Modifier, onRetry: () -> Un
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
-        Button(onClick = onRetry) {
+        Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onRetry) {
             Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("重试")
@@ -212,9 +219,9 @@ fun DeviceCard(
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
             modifier = Modifier

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import android.content.ActivityNotFoundException
@@ -14,7 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -172,8 +174,8 @@ private fun UpdateDownloadStatus(download: MainViewModel.UpdateDownload) {
                         style = MaterialTheme.typography.labelLarge,
                     )
                     val progressModifier = Modifier.fillMaxWidth().height(8.dp)
-                    if (download.percent < 0) LinearProgressIndicator(modifier = progressModifier)
-                    else LinearProgressIndicator(
+                    if (download.percent < 0) LinearWavyProgressIndicator(modifier = progressModifier)
+                    else LinearWavyProgressIndicator(
                         progress = { download.percent / 100f },
                         modifier = progressModifier,
                     )

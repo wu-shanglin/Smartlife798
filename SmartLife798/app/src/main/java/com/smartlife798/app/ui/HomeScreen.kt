@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import androidx.compose.foundation.background
@@ -22,7 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -324,19 +328,30 @@ private fun ScanHeroCard(onScan: () -> Unit) {
     Card(
         onClick = onScan,
         modifier = Modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = container),
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    // Quiet ripples echo the water-drop identity without a perpetual animation.
+                    val center = Offset(size.width, 0f)
+                    drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.64f, center)
+                    drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.40f, center)
+                }
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(
                 "扫码即刻使用",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineMedium,
                 color = onContainer,
                 fontWeight = FontWeight.Bold,
             )
             Text(
                 "扫描设备上的二维码，自动识别水控、淋浴、洗衣等设备并进入使用页",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = onContainer,
             )
             Spacer(Modifier.height(6.dp))
@@ -456,16 +471,15 @@ private fun ActiveUsageCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(46.dp),
-                shape = RoundedCornerShape(50),
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(50)),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.tertiaryContainer,
                 ),
             ) {
                 if (ending) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                     )
                     Spacer(Modifier.width(8.dp))

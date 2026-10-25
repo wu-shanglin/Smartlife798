@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,9 +25,9 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +70,6 @@ import com.smartlife798.app.core.stateLabel
 import com.smartlife798.app.ui.components.ErrorState
 import com.smartlife798.app.ui.components.HintBanner
 import com.smartlife798.app.ui.components.InfoRow
-import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.StatusPill
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.delay
@@ -134,9 +136,8 @@ fun DeviceDetailScreen(
         val revision = statusRevision
         if (showLoading) loading = true
         val res = vm.loadDevice(deviceId)
-        // Preserve the already rendered seed and shared title throughout entry.
-        // Also hold refresh results during a return/cancelled return transition.
-        awaitCardEntry()
+        // Publish immediately. The shared shell and fixed viewport isolate layout
+        // changes from the animated bounds; only command execution waits for entry.
         if (revision != statusRevision || (busy && !duringCommand)) {
             loading = false
             return
@@ -391,164 +392,157 @@ fun DeviceDetailScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 8.dp, 16.dp, 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                    item {
-                        HeroCard(
-                            device = shownDevice,
-                            confirmed = device != null,
-                            favorite = favorite,
-                            pinned = pinned.contains(deviceId),
-                            lastUpdate = lastUpdate,
-                            busy = busy,
-                            busyText = busyText,
-                            startLocked = startLocked(),
-                            onAction = { action() },
-                            onFavorite = {
-                                val confirmedDevice = detail?.device ?: return@HeroCard
-                                scope.launch {
-                                    when (val res = vm.toggleFavorite(confirmedDevice)) {
-                                        is Res.Ok -> vm.notify(if (favorite) "已取消收藏" else "已收藏")
-                                        is Res.Fail -> error = vm.errorText(res.code, res.msg)
+                item(key = "hero", contentType = "hero") {
+                    HeroCard(
+                        device = shownDevice,
+                        confirmed = device != null,
+                        loading = loading,
+                        actionsReady = entryReady,
+                        favorite = favorite,
+                        pinned = pinned.contains(deviceId),
+                        lastUpdate = lastUpdate,
+                        busy = busy,
+                        busyText = busyText,
+                        startLocked = startLocked(),
+                        onAction = { action() },
+                        onFavorite = {
+                            val confirmedDevice = detail?.device ?: return@HeroCard
+                            scope.launch {
+                                when (val res = vm.toggleFavorite(confirmedDevice)) {
+                                    is Res.Ok -> vm.notify(if (favorite) "已取消收藏" else "已收藏")
+                                    is Res.Fail -> error = vm.errorText(res.code, res.msg)
+                                }
+                            }
+                        },
+                        onPin = { vm.togglePinned(deviceId) },
+                        onOpenOrders = onOpenOrders,
+                    )
+                }
+
+                if (device == null && !loading && error != null) {
+                    item(key = "pending-detail", contentType = "loading") {
+                        ErrorState(error!!) { scope.launch { reload(true) } }
+                    }
+                }
+
+                if (error != null && device != null) {
+                    item(key = "error", contentType = "error") {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                error!!,
+                                modifier = Modifier.padding(14.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                }
+
+                val parts = (device ?: initialDevice).bm?.parts.orEmpty().filter { it.mode > 0 }
+                if ((device == null && loading) || (device != null && parts.isNotEmpty())) {
+                    item(key = "modes", contentType = "modes") {
+                        ModeSection(parts, mode, loading = device == null) { mode = it }
+                    }
+                }
+
+                val payItems = detail?.payItems.orEmpty().map { it.type }
+                if (payItems.isNotEmpty()) {
+                    item(key = "payment", contentType = "payment") {
+                        PaySection(
+                            payItems = payItems,
+                            selected = payType,
+                            onSelect = { payType = it },
+                            signing = signingAli,
+                            onSignAlipay = {
+                                if (!signingAli) {
+                                    signingAli = true
+                                    scope.launch {
+                                        try {
+                                            when (val res = vm.alipaySignPayload()) {
+                                                is Res.Ok -> {
+                                                    val payload = res.data.orEmpty()
+                                                    if (payload.startsWith("alipays://")) {
+                                                        try {
+                                                            context.startActivity(
+                                                                android.content.Intent(
+                                                                    android.content.Intent.ACTION_VIEW,
+                                                                    android.net.Uri.parse(payload),
+                                                                ),
+                                                            )
+                                                        } catch (e: android.content.ActivityNotFoundException) {
+                                                            vm.notify("未安装支付宝，无法完成签约")
+                                                        }
+                                                    } else {
+                                                        val host = context as? android.app.Activity
+                                                        if (host == null) {
+                                                            vm.notify("无法打开支付宝签约页")
+                                                        } else {
+                                                            val outcome = com.smartlife798.app.core.AlipaySdk.pay(host, payload)
+                                                            Diag.event(
+                                                                "sign.alipay",
+                                                                "success" to outcome.success,
+                                                                "resultStatus" to outcome.status,
+                                                                "memo" to outcome.memo,
+                                                            )
+                                                            vm.notify(
+                                                                if (outcome.success) "已从支付宝返回，请在支付宝页面确认签约结果"
+                                                                else "签约未完成（${outcome.status}）${outcome.memo}",
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                is Res.Fail -> vm.notify(res.msg)
+                                            }
+                                        } finally {
+                                            signingAli = false
+                                        }
                                     }
                                 }
                             },
-                            onPin = { vm.togglePinned(deviceId) },
-                            onOpenOrders = onOpenOrders,
                         )
                     }
+                }
 
-                    if (device == null) {
-                        item(key = "pending-detail") {
-                            when {
-                                !loading && error != null -> ErrorState(error!!) { scope.launch { reload(true) } }
-                                entryReady -> LoadingBlock("正在获取设备信息…")
-                                else -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    repeat(2) {
-                                        Box(Modifier.fillMaxWidth().height(88.dp).background(
-                                            MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            RoundedCornerShape(18.dp),
-                                        ))
-                                    }
-                                }
-                            }
-                        }
-                    }
+                detail?.takeIf { it.device != null }?.let { loaded ->
+                    item(key = "info", contentType = "info") { InfoCard(loaded) }
+                }
 
-                    if (error != null && device != null) {
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
+                val wallet = detail?.wallet
+                if (wallet != null && (wallet.total > 0 || wallet.ofCash > 0)) {
+                    item(key = "wallet", contentType = "wallet") {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text("账户余额", style = MaterialTheme.typography.titleSmall)
+                                Spacer(Modifier.height(6.dp))
                                 Text(
-                                    error!!,
-                                    modifier = Modifier.padding(14.dp),
+                                    Fmt.money(wallet.total),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    "现金 ${Fmt.money(wallet.ofCash)} · 赠送 ${Fmt.money(wallet.ofGift)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
+                }
 
-                    val parts = detail?.device?.bm?.parts.orEmpty().filter { it.mode > 0 }
-                    if (parts.isNotEmpty()) {
-                        item { ModeSection(parts, mode) { mode = it } }
-                    }
-
-                    val payItems = detail?.payItems.orEmpty().map { it.type }
-                    if (payItems.isNotEmpty()) {
-                item {
-                    PaySection(
-                        payItems = payItems,
-                        selected = payType,
-                        onSelect = { payType = it },
-                        signing = signingAli,
-                        onSignAlipay = {
-                            if (!signingAli) {
-                                signingAli = true
-                                scope.launch {
-                                    try {
-                                        when (val res = vm.alipaySignPayload()) {
-                                            is Res.Ok -> {
-                                                val payload = res.data.orEmpty()
-                                                if (payload.startsWith("alipays://")) {
-                                                    try {
-                                                        context.startActivity(
-                                                            android.content.Intent(
-                                                                android.content.Intent.ACTION_VIEW,
-                                                                android.net.Uri.parse(payload),
-                                                            ),
-                                                        )
-                                                    } catch (e: android.content.ActivityNotFoundException) {
-                                                        vm.notify("未安装支付宝，无法完成签约")
-                                                    }
-                                                } else {
-                                                    val host = context as? android.app.Activity
-                                                    if (host == null) {
-                                                        vm.notify("无法打开支付宝签约页")
-                                                    } else {
-                                                        val outcome = com.smartlife798.app.core.AlipaySdk.pay(host, payload)
-                                                        Diag.event(
-                                                            "sign.alipay",
-                                                            "success" to outcome.success,
-                                                            "resultStatus" to outcome.status,
-                                                            "memo" to outcome.memo,
-                                                        )
-                                                        vm.notify(
-                                                            if (outcome.success) "已从支付宝返回，请在支付宝页面确认签约结果"
-                                                            else "签约未完成（${outcome.status}）${outcome.memo}",
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            is Res.Fail -> vm.notify(res.msg)
-                                        }
-                                    } finally {
-                                        signingAli = false
-                                    }
-                                }
-                            }
-                        },
+                if (device != null) item(key = "settlement", contentType = "hint") {
+                    HintBanner(
+                        "设备状态、计费与订单均由官方服务端下发；结束使用后由服务端结算并生成消费记录。" +
+                            "如设备提示余额不足，请先在原应用中充值，本客户端不代收任何款项。",
                     )
                 }
-                    }
-
-                    detail?.takeIf { it.device != null }?.let { loaded ->
-                        item { InfoCard(loaded) }
-                    }
-
-                    val wallet = detail?.wallet
-                    if (wallet != null && (wallet.total > 0 || wallet.ofCash > 0)) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(18.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                            ) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Text("账户余额", style = MaterialTheme.typography.titleSmall)
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        Fmt.money(wallet.total),
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Text(
-                                        "现金 ${Fmt.money(wallet.ofCash)} · 赠送 ${Fmt.money(wallet.ofGift)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (device != null) item {
-                        HintBanner(
-                            "设备状态、计费与订单均由官方服务端下发；结束使用后由服务端结算并生成消费记录。" +
-                                "如设备提示余额不足，请先在原应用中充值，本客户端不代收任何款项。",
-                        )
-                    }
             }
         }
     }
@@ -558,6 +552,8 @@ fun DeviceDetailScreen(
 private fun HeroCard(
     device: Device,
     confirmed: Boolean,
+    loading: Boolean,
+    actionsReady: Boolean,
     favorite: Boolean,
     pinned: Boolean,
     lastUpdate: Long,
@@ -592,6 +588,8 @@ private fun HeroCard(
                         device.name.ifBlank { typeName },
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
                 if (confirmed) StatusPill(state)
@@ -607,40 +605,32 @@ private fun HeroCard(
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            // The cached snapshot supplies identity only. No command, payment or
-            // favourite action is exposed until the full response is published.
-            if (!confirmed) {
-                Text("正在更新设备信息…", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                return@Column
-            }
-
-            if (state.kind == DeviceStateKind.RUNNING || state.kind == DeviceStateKind.STARTING) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Column {
-                        Text("当前模式", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(modeLabel(device), style = MaterialTheme.typography.titleMedium)
-                    }
-                    Column {
-                        Text("更新时间", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(Fmt.clock(lastUpdate), style = MaterialTheme.typography.titleMedium)
-                    }
+            // Keep the same text/layout slots before and after the response. Building
+            // the entire controls/metadata block mid-flight causes a cold composition spike.
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column {
+                    Text(if (confirmed) "当前模式" else "模式信息", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (confirmed) modeLabel(device) else "等待服务端", style = MaterialTheme.typography.titleMedium)
+                }
+                Column {
+                    Text("更新时间", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (confirmed) Fmt.clock(lastUpdate) else "更新中…", style = MaterialTheme.typography.titleMedium)
                 }
             }
 
             Button(
                 onClick = onAction,
-                enabled = !busy && !startLocked &&
+                enabled = confirmed && actionsReady && !busy && !startLocked &&
                     action in setOf(PrimaryAction.START, PrimaryAction.STOP),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .heightIn(min = 56.dp),
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(16.dp)),
             ) {
                 if (busy) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(Modifier.width(10.dp))
@@ -648,6 +638,7 @@ private fun HeroCard(
                 } else {
                     Text(
                         when {
+                            !confirmed -> if (loading) "正在更新设备信息…" else "设备信息不可用"
                             startLocked -> "正在启动，请稍候…"
                             else -> when (action) {
                                 PrimaryAction.START -> "立即使用"
@@ -668,7 +659,9 @@ private fun HeroCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     onClick = onFavorite,
+                    enabled = confirmed && actionsReady,
                     modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
                 ) {
@@ -682,6 +675,7 @@ private fun HeroCard(
                     Text(if (favorite) "已收藏" else "收藏", maxLines = 1, softWrap = false)
                 }
                 OutlinedButton(
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     onClick = onPin,
                     modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
@@ -696,6 +690,7 @@ private fun HeroCard(
                     Text(if (pinned) "已置顶" else "置顶", maxLines = 1, softWrap = false)
                 }
                 OutlinedButton(
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     onClick = onOpenOrders,
                     modifier = Modifier.weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
@@ -720,28 +715,37 @@ private fun modeLabel(device: Device): String {
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun ModeSection(parts: List<com.smartlife798.app.core.DevicePart>, selected: Int?, onSelect: (Int) -> Unit) {
+private fun ModeSection(
+    parts: List<com.smartlife798.app.core.DevicePart>,
+    selected: Int?,
+    loading: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    val placeholders = remember { List(2) { com.smartlife798.app.core.DevicePart() } }
+    val options = if (parts.isEmpty() && loading) placeholders else parts
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("选择模式", style = MaterialTheme.typography.titleSmall)
+            Text(if (loading) "正在获取设备信息…" else "选择模式", style = MaterialTheme.typography.titleSmall)
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                parts.forEach { part ->
-                    FilterChip(
-                        selected = selected == part.mode,
-                        onClick = { onSelect(part.mode) },
-                        label = { Text(part.name.ifBlank { "模式 ${part.mode}" }) },
+                options.forEach { part ->
+                    TonalToggleButton(
+                        checked = !loading && selected == part.mode,
+                        enabled = !loading,
+                        onCheckedChange = { if (!loading) onSelect(part.mode) },
+                        content = { Text(if (loading) "正在获取…" else part.name.ifBlank { "模式 ${part.mode}" }) },
                     )
                 }
             }
             Text(
-                "费率来自服务端配置，实际扣费以服务端结算为准",
+                if (loading) "完整响应到达前不能选择模式或操作设备"
+                else "费率来自服务端配置，实际扣费以服务端结算为准",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -770,10 +774,10 @@ private fun PaySection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 payItems.forEach { type ->
-                    FilterChip(
-                        selected = selected == type,
-                        onClick = { onSelect(type) },
-                        label = { Text(PayType.label(type)) },
+                    TonalToggleButton(
+                        checked = selected == type,
+                        onCheckedChange = { onSelect(type) },
+                        content = { Text(PayType.label(type)) },
                     )
                 }
             }

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +38,7 @@ import com.smartlife798.app.core.QrResolution
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.core.resolveQr
 import com.smartlife798.app.ui.components.HintBanner
-import com.smartlife798.app.ui.components.WavyLinearProgress
+import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -140,10 +142,10 @@ fun ManualScanScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                shape = MaterialTheme.shapes.large,
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = MaterialTheme.shapes.large),
             ) {
                 if (resolving) {
-                    WavyLinearProgress(modifier = Modifier.width(60.dp), heightDp = 4)
+                    LinearWavyProgressIndicator(modifier = Modifier.width(60.dp))
                     Spacer(Modifier.width(10.dp))
                 }
                 Text(if (resolving) "查询中…" else "查询设备")

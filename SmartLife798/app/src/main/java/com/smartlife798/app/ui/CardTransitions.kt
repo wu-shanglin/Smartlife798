@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
-
 package com.smartlife798.app.ui
 
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -14,10 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -46,7 +47,7 @@ fun SharedCardScene(
 fun currentCardSource(origin: CardOrigin): CardSource? =
     LocalCardScene.current?.let { CardSource(it.entryId, origin) }
 
-/** Fetch immediately, but publish the first detail layout only after the entry has settled. */
+/** Only side effects wait for entry; asynchronous content is free to render during the morph. */
 @Composable
 fun rememberAwaitCardEntry(): suspend () -> Unit {
     val scene = LocalCardScene.current
@@ -75,7 +76,11 @@ fun Modifier.sharedCardPage(source: CardSource?, itemId: String = ""): Modifier 
 @Composable
 fun SharedCardPage(source: CardSource?, itemId: String = "", content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalPageCardKey provides source?.key(itemId)) {
-        Box(Modifier.sharedCardPage(source, itemId).fillMaxSize()) { content() }
+        Box(Modifier.sharedCardPage(source, itemId).fillMaxSize()) {
+            // Scale the recorded page layer, not the layout constraints. Content is
+            // measured at its final viewport and async updates do not retarget the shell.
+            Box(Modifier.fillMaxSize().graphicsLayer(), propagateMinConstraints = true) { content() }
+        }
     }
 }
 
@@ -153,6 +158,10 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
+                ContentScale.FillWidth,
+                if (page) Alignment.TopStart else Alignment.Center,
+            ),
             clipInOverlayDuringTransition = clip,
             zIndexInOverlay = if (page) 1f else 0f,
         )

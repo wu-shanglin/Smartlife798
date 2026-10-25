@@ -60,7 +60,13 @@ object DetailLoadingChecks {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 .putExtra("preview", true)) as MainActivity
             stage = "open source list in preview"
-            await(test) { click(root(test), "设备") }
+            // A selected tab no longer exposes a redundant click action in Compose 1.10.
+            // A Devices startup preference already satisfies this navigation precondition.
+            await(test) {
+                val current = root(test)
+                nodes(current).any { it.text?.toString() == "我的设备" } || click(current, "设备")
+            }
+            stage = "source device rows visible"
             await(test) { nodes(root(test)).any { it.text?.toString() == sample.name } }
             // Let source refresh settle before testing the destination's own navigation tick.
             Thread.sleep(800)

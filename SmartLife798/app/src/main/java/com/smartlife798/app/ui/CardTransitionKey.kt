@@ -7,10 +7,10 @@ enum class CardOrigin(val destination: CardDestination, val cornerDp: Int) {
     HOME_FAVORITE(CardDestination.DEVICE, 18),
     HOME_RECENT(CardDestination.DEVICE, 16),
     HOME_ACTIVE(CardDestination.DEVICE, 20),
-    DEVICES(CardDestination.DEVICE, 18),
+    DEVICES(CardDestination.DEVICE, 24),
     ORDERS_ACTIVE(CardDestination.DEVICE, 16),
-    HOME_SCAN(CardDestination.SCAN, 24),
-    NAV_SCAN(CardDestination.SCAN, 20),
+    HOME_SCAN(CardDestination.SCAN, 32),
+    NAV_SCAN(CardDestination.SCAN, 27),
     SCAN_MANUAL(CardDestination.MANUAL, 50),
     WALLET(CardDestination.WALLET, 12),
 }
