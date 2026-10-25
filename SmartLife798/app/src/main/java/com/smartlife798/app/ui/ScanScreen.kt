@@ -176,11 +176,11 @@ fun ScanScreen(
                     Text("需要相机权限才能扫码", color = Color.White)
                     Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("授予权限") }
                     if (deniedOnce) {
-                        TextButton(onClick = { openAppSettings() }) {
+                        TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { openAppSettings() }) {
                             Text("去系统设置开启相机权限", color = Color.White)
                         }
                     }
-                    TextButton(onClick = onManualInput) {
+                    TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onManualInput) {
                         Text("改为手动输入编号", color = Color.White)
                     }
                 }
@@ -214,12 +214,14 @@ fun ScanScreen(
                 .padding(top = 8.dp, end = 10.dp)
                 .sharedCard(CardOrigin.SCAN_MANUAL),
         ) {
-            TextButton(onClick = onManualInput) {
+            TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onManualInput) {
                 Text("手动输入", color = Color.White, style = MaterialTheme.typography.labelLarge)
             }
         }
 
         IconButton(
+
+            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
             onClick = onClose,
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -286,7 +288,7 @@ private fun ErrorBanner(error: String?, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onDismiss) {
+            TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onDismiss) {
                 Text("关闭", color = MaterialTheme.colorScheme.onErrorContainer)
             }
         }

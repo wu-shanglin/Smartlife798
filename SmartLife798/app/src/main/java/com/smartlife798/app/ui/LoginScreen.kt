@@ -177,10 +177,10 @@ fun LoginScreen(vm: MainViewModel) {
                                     contentDescription = "图形验证码",
                                     modifier = Modifier.size(width = 100.dp, height = 46.dp),
                                 )
-                                else -> TextButton(onClick = { scope.launch { loadCaptcha() } }) { Text("重试") }
+                                else -> TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { scope.launch { loadCaptcha() } }) { Text("重试") }
                             }
                         }
-                        IconButton(onClick = { scope.launch { loadCaptcha() } }) {
+                        IconButton(shapes = androidx.compose.material3.IconButtonDefaults.shapes(), onClick = { scope.launch { loadCaptcha() } }) {
                             Icon(Icons.Filled.Refresh, contentDescription = "换一张")
                         }
                     }
@@ -195,6 +195,7 @@ fun LoginScreen(vm: MainViewModel) {
                         )
                         Spacer(Modifier.width(10.dp))
                         TextButton(
+                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                             enabled = countdown == 0 && !sending && phone.length == 11 && captchaInput.isNotBlank(),
                             onClick = {
                                 scope.launch {
@@ -262,6 +263,8 @@ fun LoginScreen(vm: MainViewModel) {
             )
 
             TextButton(
+
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                 onClick = { vm.startPreview() },
                 modifier = Modifier.fillMaxWidth(),
             ) {

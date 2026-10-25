@@ -7,29 +7,35 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Badge
+import com.smartlife798.app.ui.components.AppBottomSheet
+import com.smartlife798.app.ui.components.ChoiceButtonGroup
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,7 +80,7 @@ private enum class OrderFilter(val label: String) {
     DONE("已完成"),
 }
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -99,6 +105,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     var page by remember { mutableIntStateOf(1) }
     var endReached by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<BillDetail?>(null) }
+    var detailLoading by remember { mutableStateOf(false) }
     var loadingMore by remember { mutableStateOf(false) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
 
@@ -153,7 +160,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
         OrderFilter.DONE -> bills.filter { it.status == BillStatus.PAID }
     }
 
-    PullToRefreshBox(
+    ExpressiveRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
             if (!refreshing) {
@@ -192,22 +199,11 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                             }
                         }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TonalToggleButton(
-                            checked = tab == 0,
-                            onCheckedChange = { tab = 0 },
-                            content = { Text("使用中") },
-                        )
-                        TonalToggleButton(
-                            checked = tab == 1,
-                            onCheckedChange = { tab = 1 },
-                            content = {
-                                Text(
-                                    if (unpaidBadge > 0) "消费记录 · $unpaidBadge 待付" else "消费记录",
-                                )
-                            },
-                        )
-                    }
+                    ChoiceButtonGroup(
+                        labels = listOf("使用中", if (unpaidBadge > 0) "消费记录 · $unpaidBadge 待付" else "消费记录"),
+                        selectedIndex = tab,
+                        onSelect = { tab = it },
+                    )
                 }
             }
 
@@ -266,20 +262,18 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 }
             } else {
                 item {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OrderFilter.entries.forEach { option ->
+                    ChoiceButtonGroup(
+                        labels = OrderFilter.entries.map { option ->
                             val count = when (option) {
                                 OrderFilter.ALL -> bills.size
                                 OrderFilter.UNPAID -> unpaid
                                 OrderFilter.DONE -> done
                             }
-                            TonalToggleButton(
-                                checked = filter == option,
-                                onCheckedChange = { filter = option },
-                                content = { Text("${option.label} $count") },
-                            )
-                        }
-                    }
+                            "${option.label} $count"
+                        },
+                        selectedIndex = filter.ordinal,
+                        onSelect = { filter = OrderFilter.entries[it] },
+                    )
                 }
 
                 when {
@@ -305,21 +299,24 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                         items(visibleBills, key = { it.id }) { bill ->
                             BillRow(
                                 bill = bill,
-                                onClick = {
+                                onClick = openDetail@{
+                                    if (detailLoading || detail != null || payTarget != null) return@openDetail
+                                    detailLoading = true
                                     scope.launch {
-                                        when (val res = vm.billDetail(bill.id)) {
-                                            is Res.Ok -> {
-                                                // `view-full` may omit the bill
-                                                // object; keep the row we already
-                                                // have so the pay CTA still works.
-                                                val loaded = res.data
-                                                detail = if (loaded?.bill != null) {
-                                                    loaded
-                                                } else {
-                                                    BillDetail(bill = bill, cnt = loaded?.cnt)
+                                        try {
+                                            when (val res = vm.billDetail(bill.id)) {
+                                                is Res.Ok -> {
+                                                    // A newer payment request takes precedence over this read.
+                                                    if (payTarget == null) {
+                                                        val loaded = res.data
+                                                        detail = if (loaded?.bill != null) loaded
+                                                        else BillDetail(bill = bill, cnt = loaded?.cnt)
+                                                    }
                                                 }
+                                                is Res.Fail -> vm.notify(res.msg)
                                             }
-                                            is Res.Fail -> vm.notify(res.msg)
+                                        } finally {
+                                            detailLoading = false
                                         }
                                     }
                                 },
@@ -339,6 +336,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                     )
                                 } else {
                                     TextButton(
+                                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                                         enabled = !loadingMore,
                                         onClick = {
                                             page += 1
@@ -372,17 +370,28 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     }
 
     val detailValue = detail
-    if (detailValue != null) {
+    if (detailValue != null && payTarget == null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(onDismissRequest = { detail = null }, sheetState = sheetState) {
+        var closing by remember(detailValue.bill?.id) { mutableStateOf(false) }
+        fun closeDetail(next: (() -> Unit)? = null) {
+            if (closing) return
+            closing = true
+            scope.launch {
+                try {
+                    sheetState.hide()
+                    detail = null
+                    next?.invoke()
+                } finally {
+                    closing = false
+                }
+            }
+        }
+        AppBottomSheet(onDismissRequest = { detail = null }, sheetState = sheetState) {
             BillDetailSheet(
                 detail = detailValue,
-                onPay = { bill ->
-                    // Close the detail sheet first: two ModalBottomSheets at once
-                    // stack their scrims and only the top one can be dismissed.
-                    detail = null
-                    payTarget = bill
-                },
+                enabled = !closing,
+                onDismiss = { closeDetail() },
+                onPay = { bill -> closeDetail { payTarget = bill } },
             )
         }
     }
@@ -458,6 +467,7 @@ private fun BillRow(bill: Bill, onClick: () -> Unit, onPay: () -> Unit) {
                 )
                 if (unpaid) {
                     TextButton(
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                         onClick = onPay,
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                     ) { Text("去支付") }
@@ -468,80 +478,93 @@ private fun BillRow(bill: Bill, onClick: () -> Unit, onPay: () -> Unit) {
 }
 
 @Composable
-private fun BillDetailSheet(detail: BillDetail, onPay: (Bill) -> Unit) {
+private fun BillDetailSheet(
+    detail: BillDetail,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onPay: (Bill) -> Unit,
+) {
     val bill = detail.bill
     val payableBill = bill?.takeIf { it.isUnpaid }
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // The sheet can be taller than the screen once goods and device
-            // rows are present; scrolling keeps the pay CTA reachable.
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("账单详情", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            if (payableBill != null) {
-                // Visible as soon as the sheet opens, before any long detail
-                // rows: paying an outstanding bill must not require scrolling.
-                Button(
-                    onClick = { onPay(payableBill) },
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-                    shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = MaterialTheme.shapes.large),
-                ) { Text("去支付") }
-            }
+            FilledTonalIconButton(
+                onClick = onDismiss,
+                enabled = enabled,
+                shapes = IconButtonDefaults.shapes(),
+            ) { Icon(Icons.Filled.Close, contentDescription = "关闭账单详情") }
         }
-        if (bill == null) {
-            Text("未获取到账单详情", style = MaterialTheme.typography.bodyMedium)
-            return@Column
-        }
-        if (payableBill != null) {
-            Text(
-                "该账单尚未支付，完成支付后服务端才会更新状态。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-        if (bill.msg?.isNotBlank() == true) {
-            Text(bill.msg!!, style = MaterialTheme.typography.bodyMedium)
-        }
-        InfoRow("账单编号", bill.id, mono = true)
-        InfoRow("创建时间", Fmt.dateTime(bill.ctime))
-        InfoRow("更新时间", Fmt.dateTime(bill.utime))
-        InfoRow("订单金额", Fmt.money(bill.payment ?: 0.0))
-        InfoRow("优惠金额", Fmt.money(bill.discount))
-        InfoRow("支付状态", bill.statusLabel)
-        if (bill.dev != null) {
-            InfoRow("设备名称", bill.dev.name.ifBlank { "-" })
-            InfoRow("设备编号", bill.dev.id, mono = true)
-            InfoRow("设备类型", DeviceType.nameOrNull(bill.dev.dtype) ?: "-")
-        }
-        if (bill.ep != null) InfoRow("服务单位", bill.ep.name)
-        if (!bill.note.isNullOrBlank()) InfoRow("备注", bill.note!!)
-        if (bill.prds.isNotEmpty()) {
-            HorizontalDivider(Modifier.padding(vertical = 6.dp))
-            Text("商品明细", style = MaterialTheme.typography.titleSmall)
-            bill.prds.forEach { p ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("${p.name} × ${p.count ?: 1}", style = MaterialTheme.typography.bodyMedium)
-                    Text(Fmt.money(p.curPrice * (p.count ?: 1)), style = MaterialTheme.typography.bodyMedium)
+        if (bill != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(bill.statusLabel, style = MaterialTheme.typography.labelLarge)
+                    Text(Fmt.money(bill.payment ?: 0.0), style = MaterialTheme.typography.headlineLarge)
                 }
             }
         }
-        Text(
-            "以上数据来自服务端 /api/v1/bill/view-full",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (bill == null) {
+                Text("未获取到账单详情", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                if (payableBill != null) {
+                    Text(
+                        "该账单尚未支付，完成支付后服务端才会更新状态。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                bill.msg?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                InfoRow("账单编号", bill.id, mono = true)
+                InfoRow("创建时间", Fmt.dateTime(bill.ctime))
+                InfoRow("更新时间", Fmt.dateTime(bill.utime))
+                InfoRow("优惠金额", Fmt.money(bill.discount))
+                InfoRow("支付状态", bill.statusLabel)
+                bill.dev?.let { device ->
+                    InfoRow("设备名称", device.name.ifBlank { "-" })
+                    InfoRow("设备编号", device.id, mono = true)
+                    InfoRow("设备类型", DeviceType.nameOrNull(device.dtype) ?: "-")
+                }
+                bill.ep?.let { InfoRow("服务单位", it.name) }
+                bill.note?.takeIf { it.isNotBlank() }?.let { InfoRow("备注", it) }
+                if (bill.prds.isNotEmpty()) {
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    Text("商品明细", style = MaterialTheme.typography.titleSmall)
+                    bill.prds.forEach { product ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                "${product.name} × ${product.count ?: 1}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(Fmt.money(product.curPrice * (product.count ?: 1)), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                Text(
+                    "账单状态与金额以服务端为准",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (payableBill != null) {
+            Button(
+                onClick = { onPay(payableBill) },
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+            ) { Text("去支付") }
+        }
     }
 }

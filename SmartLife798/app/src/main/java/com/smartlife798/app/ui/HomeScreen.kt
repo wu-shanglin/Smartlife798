@@ -30,7 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -137,7 +137,7 @@ fun HomeScreen(
     // card would attribute B's state to A's session.
     val liveForActive = live?.takeIf { it.id == cardActive?.deviceId }
 
-    PullToRefreshBox(
+    ExpressiveRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
             if (!refreshing) {

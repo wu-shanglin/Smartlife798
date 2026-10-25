@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,7 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,6 +58,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -103,7 +104,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     var refreshing by remember { mutableStateOf(false) }
     var confirmClearRecents by remember { mutableStateOf(false) }
 
-    PullToRefreshBox(
+    ExpressiveRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
             if (!refreshing) {
@@ -429,14 +430,14 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
             title = { Text("清空本机最近记录？") },
             text = { Text("只会删除本机保存的设备索引，不影响服务端账号、收藏与账单。") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = {
                     confirmClearRecents = false
                     vm.clearAllRecents()
                     checkResult = "已清除本机最近记录"
                 }) { Text("清空") }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClearRecents = false }) { Text("取消") }
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { confirmClearRecents = false }) { Text("取消") }
             },
         )
     }
@@ -487,24 +488,34 @@ private fun SettingsChoice(
     icon: ImageVector? = null,
 ) {
     val colors = MaterialTheme.colorScheme
-    Surface(
-        modifier = modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) colors.primaryContainer else colors.surfaceContainerLow,
-        contentColor = colors.onSurface,
+    androidx.compose.material3.TonalToggleButton(
+        checked = selected,
+        onCheckedChange = { onClick() },
+        modifier = modifier.heightIn(min = 52.dp).semantics {
+            this.selected = selected
+            role = Role.RadioButton
+        },
+        shapes = androidx.compose.material3.ToggleButtonDefaults.shapes(
+            shape = RoundedCornerShape(14.dp),
+            checkedShape = RoundedCornerShape(14.dp),
+        ),
+        colors = androidx.compose.material3.ToggleButtonDefaults.tonalToggleButtonColors(
+            containerColor = colors.surfaceContainerLow,
+            checkedContainerColor = colors.primaryContainer,
+            contentColor = colors.onSurface,
+            checkedContentColor = colors.onSurface,
+        ),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        ) {
-            if (icon != null) Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-            )
+        if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(6.dp))
         }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+        )
     }
 }

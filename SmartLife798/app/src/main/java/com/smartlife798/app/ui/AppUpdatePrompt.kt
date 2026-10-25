@@ -134,6 +134,7 @@ fun AppUpdatePrompt(
         },
         confirmButton = {
             TextButton(
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                 enabled = !download.busy && !installing,
                 onClick = {
                     if (download.ready != null) beginInstall()
@@ -146,13 +147,13 @@ fun AppUpdatePrompt(
         },
         dismissButton = {
             if (download.busy) {
-                TextButton(onClick = vm::cancelUpdateDownload) { Text("取消下载") }
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = vm::cancelUpdateDownload) { Text("取消下载") }
             } else if (required) {
-                TextButton(onClick = onRetry, enabled = !checking) {
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onRetry, enabled = !checking) {
                     Text(if (checking) "正在检查…" else "重新检查")
                 }
             } else {
-                TextButton(onClick = onDismiss) { Text("稍后更新") }
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onDismiss) { Text("稍后更新") }
             }
         },
     )
