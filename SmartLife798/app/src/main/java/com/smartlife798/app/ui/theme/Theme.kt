@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui.theme
 
 import android.app.Activity
@@ -7,7 +9,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -100,9 +103,7 @@ private val DarkScheme = darkColorScheme(
 )
 
 /**
- * Material 3 Expressive inspired shape scale (softer, larger radii).
- * Components stay on the stable material3 API; the expressive character comes
- * from shapes, motion and state styling rather than alpha-only APIs.
+ * Brand shape scale shared by the official Material 3 Expressive components.
  */
 val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
@@ -149,5 +150,11 @@ fun SmartLifeTheme(
             }
         }
     }
-    MaterialTheme(colorScheme = scheme, shapes = AppShapes, typography = AppTypography, content = content)
+    MaterialExpressiveTheme(
+        colorScheme = scheme,
+        motionScheme = MotionScheme.expressive(),
+        shapes = AppShapes,
+        typography = AppTypography,
+        content = content,
+    )
 }

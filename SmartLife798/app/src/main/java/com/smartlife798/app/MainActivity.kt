@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app
 
 import android.os.Bundle
@@ -5,7 +7,6 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -47,6 +48,8 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -132,7 +135,6 @@ class MainActivity : ComponentActivity() {
 
 private data class Tab(val route: String, val label: String, val icon: @Composable () -> Unit)
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
     val vm: MainViewModel = viewModel()
@@ -579,7 +581,10 @@ private fun RowScope.ScanNavButton(onClick: () -> Unit) {
             .height(60.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
+        FilledIconButton(
+            onClick = onClick,
+            shapes = IconButtonDefaults.shapes(),
+            interactionSource = interaction,
             modifier = Modifier
                 .sharedCard(CardOrigin.NAV_SCAN)
                 .size(54.dp)
@@ -587,16 +592,7 @@ private fun RowScope.ScanNavButton(onClick: () -> Unit) {
                     scaleX = scale
                     scaleY = scale
                 }
-                .clip(RoundedCornerShape(20.dp))
-                .clickable(
-                    interactionSource = interaction,
-                    indication = LocalIndication.current,
-                    role = Role.Button,
-                    onClick = onClick,
-                )
-                .semantics { contentDescription = "扫码" }
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
+                .semantics { contentDescription = "扫码" },
         ) {
             QrGlyph(
                 color = MaterialTheme.colorScheme.onPrimary,

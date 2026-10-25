@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui.components
 
 import android.app.Activity
@@ -11,7 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TonalToggleButton
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -113,10 +116,10 @@ fun PaySheet(
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         list.forEach { channel ->
-                            FilterChip(
-                                selected = selected?.type == channel.type,
-                                onClick = { selected = channel; result = null },
-                                label = {
+                            TonalToggleButton(
+                                checked = selected?.type == channel.type,
+                                onCheckedChange = { selected = channel; result = null },
+                                content = {
                                     Text(
                                         PaymentFlow.channelLabel(channel.type, channel.name) +
                                             (channel.desc?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
@@ -153,10 +156,10 @@ fun PaySheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        shape = MaterialTheme.shapes.large,
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = MaterialTheme.shapes.large),
                     ) {
                         if (paying) {
-                            WavyLinearProgress(modifier = Modifier.width(60.dp), heightDp = 4)
+                            LinearWavyProgressIndicator(modifier = Modifier.width(60.dp))
                             Spacer(Modifier.width(10.dp))
                         }
                         Text(if (paying) "正在支付…" else "确认支付")

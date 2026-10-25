@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import android.app.Activity
@@ -5,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -60,7 +63,7 @@ import com.smartlife798.app.ui.components.PaySheet
 import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
-import com.smartlife798.app.ui.components.WavyLinearProgress
+import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.ui.components.usagePillState
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
@@ -71,7 +74,7 @@ private enum class OrderFilter(val label: String) {
     DONE("已完成"),
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -189,16 +192,16 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = tab == 0,
-                            onClick = { tab = 0 },
-                            label = { Text("使用中") },
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TonalToggleButton(
+                            checked = tab == 0,
+                            onCheckedChange = { tab = 0 },
+                            content = { Text("使用中") },
                         )
-                        FilterChip(
-                            selected = tab == 1,
-                            onClick = { tab = 1 },
-                            label = {
+                        TonalToggleButton(
+                            checked = tab == 1,
+                            onCheckedChange = { tab = 1 },
+                            content = {
                                 Text(
                                     if (unpaidBadge > 0) "消费记录 · $unpaidBadge 待付" else "消费记录",
                                 )
@@ -251,7 +254,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                 )
-                                Button(onClick = { onOpenDevice(active!!.deviceId, CardOrigin.ORDERS_ACTIVE) }) { Text("打开设备") }
+                                Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { onOpenDevice(active!!.deviceId, CardOrigin.ORDERS_ACTIVE) }) { Text("打开设备") }
                             }
                         }
                     }
@@ -263,17 +266,17 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 }
             } else {
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OrderFilter.entries.forEach { option ->
                             val count = when (option) {
                                 OrderFilter.ALL -> bills.size
                                 OrderFilter.UNPAID -> unpaid
                                 OrderFilter.DONE -> done
                             }
-                            FilterChip(
-                                selected = filter == option,
-                                onClick = { filter = option },
-                                label = { Text("${option.label} $count") },
+                            TonalToggleButton(
+                                checked = filter == option,
+                                onCheckedChange = { filter = option },
+                                content = { Text("${option.label} $count") },
                             )
                         }
                     }
@@ -347,11 +350,10 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                         }
                         if (loadingMore) {
                             item {
-                                WavyLinearProgress(
+                                LinearWavyProgressIndicator(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 40.dp),
-                                    heightDp = 4,
+                                        .padding(horizontal = 40.dp)
                                 )
                             }
                         }
@@ -491,7 +493,7 @@ private fun BillDetailSheet(detail: BillDetail, onPay: (Bill) -> Unit) {
                 Button(
                     onClick = { onPay(payableBill) },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-                    shape = MaterialTheme.shapes.large,
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = MaterialTheme.shapes.large),
                 ) { Text("去支付") }
             }
         }

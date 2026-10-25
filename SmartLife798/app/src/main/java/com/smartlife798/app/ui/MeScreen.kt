@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import android.os.Build
@@ -33,7 +35,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -313,6 +315,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
+                                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                                 enabled = !checking,
                                 onClick = {
                                     if (checking) return@Button
@@ -328,9 +331,8 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                                 },
                             ) {
                                 if (checking) {
-                                    CircularProgressIndicator(
+                                    LoadingIndicator(
                                         modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
                                         color = MaterialTheme.colorScheme.onPrimary,
                                     )
                                     Spacer(Modifier.width(8.dp))
@@ -338,7 +340,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                                 Text("测试接口连通性")
                             }
                             if (recents.isNotEmpty()) {
-                                OutlinedButton(onClick = { confirmClearRecents = true }) {
+                                OutlinedButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { confirmClearRecents = true }) {
                                     Text("清空本机记录")
                                 }
                             }
@@ -365,6 +367,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                         Text("关于本客户端", style = MaterialTheme.typography.titleSmall)
                         Text("客户端版本 ${BuildConfig.VERSION_NAME}")
                         OutlinedButton(
+                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                             onClick = { vm.checkAppUpdate(manual = true) },
                             enabled = !checkingUpdate,
                         ) { Text(if (checkingUpdate) "正在检查更新…" else "检查更新") }
@@ -402,7 +405,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))

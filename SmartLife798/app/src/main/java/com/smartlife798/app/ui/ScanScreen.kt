@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import android.Manifest
@@ -61,7 +63,7 @@ import com.smartlife798.app.core.QrParser
 import com.smartlife798.app.core.QrResolution
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.core.resolveQr
-import com.smartlife798.app.ui.components.WavyLinearProgress
+import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
@@ -172,7 +174,7 @@ fun ScanScreen(
                 ) {
                     Icon(Icons.Filled.Warning, contentDescription = null, tint = Color.White)
                     Text("需要相机权限才能扫码", color = Color.White)
-                    Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("授予权限") }
+                    Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("授予权限") }
                     if (deniedOnce) {
                         TextButton(onClick = { openAppSettings() }) {
                             Text("去系统设置开启相机权限", color = Color.White)
@@ -251,7 +253,7 @@ fun ScanScreen(
                     )
                     if (resolving) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            WavyLinearProgress(modifier = Modifier.width(56.dp), heightDp = 4)
+                            LinearWavyProgressIndicator(modifier = Modifier.width(56.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("处理中…", color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }

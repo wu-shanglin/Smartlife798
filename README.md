@@ -6,13 +6,15 @@
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
 | 当前版本 | `1.9.7`（`versionCode 38`） |
-| 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
+| 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.9.7 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.9.7/SmartLife798-1.9.7-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.9.7) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
+
+- **1.10.0：Material 3 Expressive（本地交付准备，未发布）**。官方增强组件、按压形变与选择反馈、变形加载与波浪进度；详情数据在共享飞入过程中立即渲染。最新已发布版本仍为 1.9.7，以下发布策略针对该版本。
 
 - **1.9.7：详情加载与更新进度**。合并详情首载期间的刷新，避免取消重发；更新进度固定在弹窗按钮上方，仅显示进度和状态，不随日志滚动。已正式发布普通更新，最低支持码保留 37，1.9.6 用户可稍后更新。
 - **1.9.6：强制更新返回退出**。返回退出应用并保留更新限制，重新打开仍须更新；下载忙碌时也可退出，外部点击不能绕过。普通更新返回只关闭弹窗。旧 APK 的返回行为需升级后才能修复。
@@ -53,20 +55,20 @@
 
 ## 截图
 
-截图来源、版本及限制统一见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)；以下为历史演示页面，不能作为当前版本或真实业务验收。
+截图来源、版本及限制统一见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)；首页、设备、详情、订单、我的及深色页已同步 1.10.0 演示构建；登录、扫码与手输保留 1.8.0 历史图。演示截图不能作为真实业务验收。
 
 | 登录 | 首页 | 扫码 |
 |---|---|---|
-| ![1.8.0 登录页](screenshots/login.png) | ![1.8.0 首页演示](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
+| ![1.8.0 登录页](screenshots/login.png) | ![1.10.0 首页演示](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
 
 | 手动输入 | 设备 | 设备详情 |
 |---|---|---|
-| ![1.8.0 手动输入](screenshots/manual.png) | ![1.8.0 设备列表演示](screenshots/devices.png) | ![1.8.0 设备详情演示](screenshots/device.png) |
+| ![1.8.0 手动输入](screenshots/manual.png) | ![1.10.0 设备列表演示](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
 
 | 消费记录 | 待付款筛选与角标 | 我的 |
 |---|---|---|
-| ![1.8.0 消费记录演示](screenshots/orders.png) | ![1.8.0 待付款演示](screenshots/preview_bills.png) | ![1.9.2 我的设置卡片演示](screenshots/me.png) |
+| ![1.10.0 消费记录演示](screenshots/orders.png) | ![1.10.0 待付款演示](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
 
-| 深色首页 | 外观（跟随系统深色） |
+| 深色首页 | 外观（演示内深色选择） |
 |---|---|
-| ![1.8.0 深色首页演示](screenshots/dark.png) | ![1.9.2 深色设置卡片演示](screenshots/appearance_dark.png) |
+| ![1.10.0 深色首页演示](screenshots/dark.png) | ![1.10.0 深色设置卡片演示](screenshots/appearance_dark.png) |

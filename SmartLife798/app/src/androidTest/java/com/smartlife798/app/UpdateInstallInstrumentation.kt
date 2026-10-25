@@ -25,6 +25,10 @@ class UpdateInstallInstrumentation : Instrumentation() {
             UpdateProgressChecks.run(this)
             return
         }
+        if (mode == "detail-live" || mode == "detail-frames" || mode == "detail-profile") {
+            DetailRenderingChecks.run(this, measureOnly = mode != "detail-live", profile = mode == "detail-profile")
+            return
+        }
         if (mode == "detail-load") {
             DetailLoadingChecks.run(this)
             return

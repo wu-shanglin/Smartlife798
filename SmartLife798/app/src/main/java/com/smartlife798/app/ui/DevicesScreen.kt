@@ -1,9 +1,12 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.smartlife798.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -148,12 +151,12 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         DevicesShelf.entries.forEach { s ->
-                            FilterChip(
-                                selected = shelf == s,
-                                onClick = { shelf = s },
-                                label = { Text(s.label) },
+                            TonalToggleButton(
+                                checked = shelf == s,
+                                onCheckedChange = { shelf = s },
+                                content = { Text(s.label) },
                             )
                         }
                     }
@@ -163,17 +166,17 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             item {
-                                FilterChip(
-                                    selected = typeFilter == null,
-                                    onClick = { typeFilter = null },
-                                    label = { Text("全部类型") },
+                                TonalToggleButton(
+                                    checked = typeFilter == null,
+                                    onCheckedChange = { typeFilter = null },
+                                    content = { Text("全部类型") },
                                 )
                             }
                             items(types) { t ->
-                                FilterChip(
-                                    selected = typeFilter == t,
-                                    onClick = { typeFilter = if (typeFilter == t) null else t },
-                                    label = { Text(DeviceType.name(t)) },
+                                TonalToggleButton(
+                                    checked = typeFilter == t,
+                                    onCheckedChange = { typeFilter = if (typeFilter == t) null else t },
+                                    content = { Text(DeviceType.name(t)) },
                                 )
                             }
                         }
