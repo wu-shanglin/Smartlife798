@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.9.7`（`versionCode 38`） |
+| 当前版本 | `1.10.0`（`versionCode 39`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.9.7 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.9.7/SmartLife798-1.9.7-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.9.7) |
@@ -49,7 +49,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.9.7-debug.apk`](dist/SmartLife798-1.9.7-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.10.0-debug.apk`](dist/SmartLife798-1.10.0-debug.apk) |
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 
