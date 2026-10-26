@@ -31,7 +31,9 @@ data class StoredProfile(
     val phone: String,
     val no: String? = null,
     val arrear: Double? = null,
-    val score: Int? = null,
+    val totalScore: String? = null,
+    val useScore: Int? = null,
+    val img: String? = null,
 )
 
 /**
@@ -191,6 +193,28 @@ object Store {
         if (!Preview.enabled) prefs.edit { putString("startupPage", page.name) }
     }
 
+    /** Installation preference; the daily state itself always comes from the server. */
+    fun autoCheckIn(): Boolean = prefs.getBoolean("autoCheckIn", true)
+
+    fun saveAutoCheckIn(enabled: Boolean) {
+        if (!Preview.enabled) prefs.edit { putBoolean("autoCheckIn", enabled) }
+    }
+
+    /** Record before submission, so an uncertain write is never auto-replayed after a crash. */
+    fun checkInAttemptDay(): String? = prefs.getString("checkInAttemptDay", null)
+
+    @Synchronized
+    fun markCheckInAttempt(day: String, token: String): Boolean =
+        !Preview.enabled && session.token == token && prefs.getString("checkInAttemptDay", null) != day &&
+            prefs.edit().putString("checkInAttemptDay", day).commit()
+
+    @Synchronized
+    fun clearUnsentCheckInAttempt(day: String, token: String) {
+        if (!Preview.enabled && session.token == token && prefs.getString("checkInAttemptDay", null) == day) {
+            prefs.edit().remove("checkInAttemptDay").commit()
+        }
+    }
+
     fun clearAll() {
         prefs.edit { clear() }
     }
@@ -203,6 +227,7 @@ object Store {
      * Installation preferences are deliberately retained: logging out should
      * not reset the user's appearance or startup-page choice.
      */
+    @Synchronized
     fun clearAccount() {
         prefs.edit {
             remove("token")
@@ -214,13 +239,21 @@ object Store {
             remove("favcache")
             remove("recents")
             remove("pinned")
+            remove("checkInAttemptDay")
         }
     }
 }
 
 /** Process-wide session state shared by the HTTP layer and the UI. */
 object session {
-    @Volatile var token: String? = null
+    @Volatile private var currentToken: String? = null
+    @Volatile private var rejectedToken: String? = null
+    var token: String?
+        get() = currentToken
+        @Synchronized set(value) {
+            currentToken = value
+            rejectedToken = null
+        }
     @Volatile var uid: String? = null
     @Volatile var phone: String? = null
 
@@ -263,11 +296,16 @@ object session {
         phone = null
     }
 
-    fun onTokenRejected() {
-        if (token != null) {
+    @Synchronized
+    fun onTokenRejected(expectedToken: String?) {
+        if (!expectedToken.isNullOrBlank() && token == expectedToken) {
+            rejectedToken = expectedToken
             tokenRejected.value = tokenRejected.value + 1
         }
     }
+
+    /** A queued rejection must not log out a session established after its request. */
+    fun isCurrentTokenRejected(): Boolean = token != null && token == rejectedToken
 
     val isLoggedIn: Boolean get() = !token.isNullOrBlank()
 }

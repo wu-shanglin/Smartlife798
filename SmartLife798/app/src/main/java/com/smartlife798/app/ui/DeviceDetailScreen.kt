@@ -34,6 +34,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.smartlife798.app.ui.components.ChoiceButtonGroup
 import androidx.compose.material3.TopAppBar
 import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
@@ -96,6 +100,9 @@ fun DeviceDetailScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
+    val profile by vm.profile.collectAsStateWithLifecycle()
+    val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.refreshMaster() }
     var detail by remember { mutableStateOf<DeviceDetail?>(null) }
     var loading by remember { mutableStateOf(true) }
     var refreshing by remember { mutableStateOf(false) }
@@ -451,6 +458,32 @@ fun DeviceDetailScreen(
 
                 val payItems = detail?.payItems.orEmpty().map { it.type }
                 if (payItems.isNotEmpty()) {
+                    item(key = "use-score", contentType = "setting") {
+                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("使用积分", style = MaterialTheme.typography.titleSmall)
+                                    Text(if (savingProfile) "正在保存账号设置…"
+                                        else if (profile?.useScore == null) "请刷新以读取账号积分设置"
+                                        else "账号自动记住选择，抵扣规则以服务端为准",
+                                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(checked = profile?.useScore == 1,
+                                    enabled = !busy && !savingProfile && profile?.useScore != null,
+                                    modifier = Modifier.semantics { contentDescription = "使用积分开关" },
+                                    onCheckedChange = { enabled ->
+                                        scope.launch {
+                                            when (val result = vm.setUseScore(enabled)) {
+                                                is Res.Ok -> Unit
+                                                is Res.Fail -> vm.notify(result.msg)
+                                            }
+                                        }
+                                    })
+                            }
+                        }
+                    }
                     item(key = "payment", contentType = "payment") {
                         PaySection(
                             payItems = payItems,
@@ -730,19 +763,11 @@ private fun ModeSection(
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(if (loading) "正在获取设备信息…" else "选择模式", style = MaterialTheme.typography.titleSmall)
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                options.forEach { part ->
-                    TonalToggleButton(
-                        checked = !loading && selected == part.mode,
-                        enabled = !loading,
-                        onCheckedChange = { if (!loading) onSelect(part.mode) },
-                        content = { Text(if (loading) "正在获取…" else part.name.ifBlank { "模式 ${part.mode}" }) },
-                    )
-                }
-            }
+            ChoiceButtonGroup(
+                labels = options.map { if (loading) "正在获取…" else it.name.ifBlank { "模式 ${it.mode}" } },
+                selectedIndex = options.indexOfFirst { !loading && selected == it.mode },
+                onSelect = { if (!loading) onSelect(options[it].mode) }, enabled = !loading,
+            )
             Text(
                 if (loading) "完整响应到达前不能选择模式或操作设备"
                 else "费率来自服务端配置，实际扣费以服务端结算为准",
@@ -769,18 +794,8 @@ private fun PaySection(
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("支付方式", style = MaterialTheme.typography.titleSmall)
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                payItems.forEach { type ->
-                    TonalToggleButton(
-                        checked = selected == type,
-                        onCheckedChange = { onSelect(type) },
-                        content = { Text(PayType.label(type)) },
-                    )
-                }
-            }
+            ChoiceButtonGroup(labels = payItems.map { PayType.label(it) },
+                selectedIndex = payItems.indexOf(selected), onSelect = { onSelect(payItems[it]) })
             // Only warn for channels this build genuinely cannot complete; Alipay
             // (21) and the server-side wallets are integrated.
             if (selected != 0 && !PayType.isSupportedHere(selected)) {

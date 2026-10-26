@@ -155,7 +155,7 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
 
     // Every resume refreshes the visible page — no manual refresh buttons anywhere.
     LifecycleResumeEffect(Unit) {
-        vm.setAppResumed(true)
+        vm.setAppResumed(true, allowAutoCheckIn = !forcePreview)
         if (!forcePreview) vm.checkAppUpdate()
         if (loggedIn) vm.bumpRefresh()
         onPauseOrDispose { vm.setAppResumed(false) }

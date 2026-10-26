@@ -7,15 +7,24 @@ import com.google.gson.reflect.TypeToken
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okio.BufferedSink
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import java.io.IOException
 import java.lang.reflect.Type
 import java.util.concurrent.TimeUnit
 
 /** Successful or failed business response. */
 sealed interface Res<out T> {
-    data class Ok<T>(val data: T?) : Res<T>
+    data class Ok<T>(val data: T?, val serverTime: Long = 0L) : Res<T>
     data class Fail(val code: Int, val msg: String) : Res<Nothing>
 }
 
@@ -35,6 +44,7 @@ object Api {
 
     private val gson = Gson()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
+    private class RequestSession(val token: String?)
 
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -49,7 +59,9 @@ object Api {
             if (chain.request().url.encodedPath == "/api/v1/sys/app/upt") {
                 builder.url(chain.request().url.newBuilder().setQueryParameter("version", version).build())
             }
-            session.token?.takeIf { it.isNotBlank() }?.let { builder.header("Authorization", it) }
+            val snapshot = chain.request().tag(RequestSession::class.java)
+            val token = if (snapshot == null) session.token else snapshot.token
+            token?.takeIf { it.isNotBlank() }?.let { builder.header("Authorization", it) }
             chain.proceed(builder.build())
         }
         .build()
@@ -61,13 +73,15 @@ object Api {
         path: String,
         params: Map<String, String?> = emptyMap(),
         body: Any? = null,
+        allowConnectionRetry: Boolean = true,
+        accountToken: String? = session.token,
         dataType: Type,
     ): Res<T> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val url = (BASE_URL + path).toHttpUrl().newBuilder().apply {
                 params.forEach { (k, v) -> if (v != null) addQueryParameter(k, v) }
             }.build()
-            val builder = Request.Builder().url(url).method(
+            val builder = Request.Builder().url(url).tag(RequestSession::class.java, RequestSession(accountToken)).method(
                 method,
                 when {
                     body == null && method == "GET" -> null
@@ -75,22 +89,22 @@ object Api {
                     else -> gson.toJson(body).toRequestBody(jsonType)
                 },
             )
-            val resp = client.newCall(builder.build()).execute()
-            resp.use { r ->
-                val text = r.body?.string().orEmpty()
+            val request = builder.build()
+            val call = if (allowConnectionRetry) client.newCall(request) else singleAttemptWriteCall(client, request)
+            awaitCall(call) { r, text ->
                 if (!r.isSuccessful) {
-                    return@use Res.Fail(r.code, "服务异常（HTTP ${r.code}）")
+                    return@awaitCall Res.Fail(r.code, "服务异常（HTTP ${r.code}）")
                 }
                 // Envelope first, payload second: `data` is untyped for command
                 // endpoints and must never turn an accepted command into a
                 // client-side parse failure.
                 val envelope = ApiEnvelope.parse(gson, text)
-                    ?: return@use Res.Fail(-1, "响应解析失败")
+                    ?: return@awaitCall Res.Fail(-1, "响应解析失败")
                 when {
                     envelope.code >= 0 ->
-                        Res.Ok(ApiEnvelope.decode(gson, envelope.data, dataType))
+                        Res.Ok(ApiEnvelope.decode(gson, envelope.data, dataType), envelope.time)
                     envelope.code == -99 -> {
-                        session.onTokenRejected()
+                        session.onTokenRejected(accountToken)
                         Res.Fail(envelope.code, envelope.msg ?: "登录状态已过期")
                     }
                     else -> Res.Fail(envelope.code, envelope.msg ?: "请求失败（${envelope.code}）")
@@ -105,6 +119,50 @@ object Api {
         } catch (e: Exception) {
             Res.Fail(ErrorCodes.UNKNOWN, "请求处理失败，请稍后重试")
         }
+    }
+
+    /** Cancellation closes the socket; body ownership never escapes the callback. */
+    internal suspend fun <T> awaitCall(call: Call, decode: (Response, String) -> T): T =
+        suspendCancellableCoroutine { continuation ->
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        val value = response.use {
+                            continuation.context.ensureActive()
+                            val text = it.body?.string().orEmpty()
+                            continuation.context.ensureActive()
+                            decode(it, text)
+                        }
+                        continuation.context.ensureActive()
+                        if (continuation.isActive) continuation.resume(value)
+                    } catch (e: Exception) {
+                        if (continuation.isActive) continuation.resumeWithException(e)
+                    }
+                }
+            })
+        }
+
+    /** Connection retries alone do not prevent OkHttp's 503 or redirect follow-ups. */
+    internal fun singleAttemptWriteCall(transport: OkHttpClient, request: Request): Call {
+        val payload = requireNotNull(request.body) { "A single-attempt write requires a request body" }
+        val oneShot = object : RequestBody() {
+            override fun contentType() = payload.contentType()
+            override fun contentLength() = payload.contentLength()
+            override fun isOneShot() = true
+            override fun writeTo(sink: BufferedSink) = payload.writeTo(sink)
+        }
+        val prepared = request.newBuilder().method(request.method, oneShot).build()
+        return transport.newBuilder()
+            .retryOnConnectionFailure(false)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+            .newCall(prepared)
     }
 
     private inline fun <reified T> dataType(): Type = object : TypeToken<T>() {}.type
@@ -142,6 +200,18 @@ object Api {
 
     /** GET /api/v1/ui/app/master -> account + favorites + ads */
     suspend fun master(): Res<Master> = request("GET", "/api/v1/ui/app/master", dataType = dataType<Master>())
+
+    /** Original ModifyUserInfoParm: send only the field being changed. */
+    suspend fun updateProfile(patch: ProfilePatch): Res<Unit> =
+        request("POST", "/api/v1/acc/upt", body = patch, allowConnectionRetry = false, dataType = dataType<Unit>())
+
+    suspend fun checkInMissions(): Res<Missions> =
+        request("GET", "/api/v1/acc/score/mission-lst", dataType = dataType<Missions>())
+
+    /** Independent compatibility digest; never carries or impersonates the original APK identity. */
+    suspend fun checkIn(params: ScoreParams, sign: String): Res<Unit> =
+        request("POST", "/api/v1/acc/score/score-send", mapOf("sign" to sign, "s" to "1"),
+            body = params, allowConnectionRetry = false, dataType = dataType<Unit>())
 
     /** GET /api/v1/ui/app/dev/home/1?did=&apply=6 */
     suspend fun deviceDetail(did: String, apply: Int = 6): Res<DeviceDetail> =
