@@ -14,7 +14,8 @@ object Preview {
         phone = "13800000000",
         no = "P0001",
         arrear = 0.0,
-        score = 120,
+        totalScore = "120",
+        useScore = 0,
     )
 
     private fun enterprise(name: String, id: String) = Enterprise(

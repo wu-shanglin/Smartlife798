@@ -9,14 +9,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -156,25 +154,15 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                         onSelect = { shelf = DevicesShelf.entries[it] },
                     )
                     if (types.isNotEmpty()) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            item {
-                                TonalToggleButton(
-                                    checked = typeFilter == null,
-                                    onCheckedChange = { typeFilter = null },
-                                    content = { Text("全部类型") },
-                                )
-                            }
-                            items(types) { t ->
-                                TonalToggleButton(
-                                    checked = typeFilter == t,
-                                    onCheckedChange = { typeFilter = if (typeFilter == t) null else t },
-                                    content = { Text(DeviceType.name(t)) },
-                                )
-                            }
-                        }
+                        ChoiceButtonGroup(
+                            labels = listOf("全部类型") + types.map(DeviceType::name),
+                            selectedIndex = if (typeFilter == null) 0
+                                else types.indexOf(typeFilter).takeIf { it >= 0 }?.plus(1) ?: -1,
+                            onSelect = { index ->
+                                val type = types.getOrNull(index - 1)
+                                typeFilter = if (typeFilter == type) null else type
+                            },
+                        )
                     }
                 }
             }

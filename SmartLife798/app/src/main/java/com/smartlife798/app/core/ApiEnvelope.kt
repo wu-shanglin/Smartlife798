@@ -22,11 +22,11 @@ import java.lang.reflect.Type
 internal object ApiEnvelope {
     private val type: Type = object : TypeToken<ApiResp<JsonElement>>() {}.type
 
-    data class Parsed(val code: Int, val msg: String?, val data: JsonElement?)
+    data class Parsed(val code: Int, val msg: String?, val data: JsonElement?, val time: Long = 0L)
 
     /** Returns null when [text] is not a JSON envelope (HTML error page, empty body…). */
     fun parse(gson: Gson, text: String): Parsed? = try {
-        gson.fromJson<ApiResp<JsonElement>>(text, type)?.let { Parsed(it.code, it.msg, it.data) }
+        gson.fromJson<ApiResp<JsonElement>>(text, type)?.let { Parsed(it.code, it.msg, it.data, it.time) }
     } catch (_: RuntimeException) {
         // Also covers Gson's NumberFormatException on an unexpected numeric
         // field: an unreadable envelope is reported as such by the caller.

@@ -21,6 +21,22 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "expressive") {
+            ExpressiveMotionChecks.run(this)
+            return
+        }
+        if (mode == "check-in") {
+            CheckInFlowChecks.run(this)
+            return
+        }
+        if (mode == "avatar") {
+            AvatarRenderingChecks.run(this)
+            return
+        }
+        if (mode == "profile") {
+            ProfileFlowChecks.run(this)
+            return
+        }
         if (mode == "bill-sheets") {
             BillSheetChecks.run(this)
             return

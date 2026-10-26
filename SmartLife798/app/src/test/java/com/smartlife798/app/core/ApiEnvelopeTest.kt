@@ -21,6 +21,7 @@ class ApiEnvelopeTest {
     fun `envelope is read independently from the payload`() {
         val parsed = ApiEnvelope.parse(gson, """{"code":0,"data":"","time":1792512371043}""")!!
         assertEquals(0, parsed.code)
+        assertEquals(1792512371043L, parsed.time)
         assertNull(parsed.msg)
         assertTrue(parsed.data!!.isJsonPrimitive)
     }

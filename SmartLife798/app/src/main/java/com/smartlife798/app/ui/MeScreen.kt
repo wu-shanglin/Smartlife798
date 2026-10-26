@@ -40,6 +40,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -76,6 +77,9 @@ import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.components.HintBanner
 import com.smartlife798.app.ui.components.InfoRow
+import com.smartlife798.app.ui.components.NetworkAvatar
+import com.smartlife798.app.ui.components.SettingsChoiceButtonGroup
+import com.smartlife798.app.core.Res
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -93,6 +97,9 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
     val protocolVersion by vm.protocolVersion.collectAsStateWithLifecycle()
     val startupPage by vm.startupPage.collectAsStateWithLifecycle()
+    val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
+    val autoCheckIn by vm.autoCheckIn.collectAsStateWithLifecycle()
+    val checkInStatus by vm.checkInStatus.collectAsStateWithLifecycle()
 
     LaunchedEffect(refreshTick) {
         vm.refreshMaster()
@@ -103,6 +110,9 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     var checkResult by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var confirmClearRecents by remember { mutableStateOf(false) }
+    var editNickname by remember { mutableStateOf(false) }
+    var nickname by remember { mutableStateOf("") }
+    var nicknameError by remember { mutableStateOf<String?>(null) }
 
     ExpressiveRefreshBox(
         isRefreshing = refreshing,
@@ -129,23 +139,12 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            (profile?.name?.take(1) ?: "慧"),
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
+                    NetworkAvatar(image = profile?.img, name = profile?.name.orEmpty(),
+                        load = vm::loadAvatar, modifier = Modifier.size(56.dp))
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            profile?.name ?: "未登录用户",
+                            profile?.name?.takeIf { it.isNotBlank() } ?: "未设置昵称",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -167,6 +166,15 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                             )
                         }
                     }
+                    TextButton(
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                        enabled = profile != null && !savingProfile,
+                        onClick = {
+                            nickname = profile?.name.orEmpty()
+                            nicknameError = null
+                            editNickname = true
+                        },
+                    ) { Text("修改昵称") }
                 }
             }
 
@@ -206,7 +214,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            MetricValue("${profile?.score ?: 0}")
+                            MetricValue(profile?.totalScore ?: "—")
                         }
                         Column(
                             modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
@@ -226,22 +234,35 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("自动签到", style = MaterialTheme.typography.titleSmall)
+                            Text("打开应用时检查当天签到，未签则自动签到", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(checkInStatus, style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(checked = autoCheckIn, onCheckedChange = vm::setAutoCheckIn,
+                            modifier = Modifier.semantics { contentDescription = "自动签到开关" })
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SettingsHeading(Icons.Filled.Home, "启动页面", "选择下次打开时显示的页面")
-                        Row(
-                            modifier = Modifier.fillMaxWidth().selectableGroup().height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            StartupPage.entries.forEach { page ->
-                                SettingsChoice(
-                                    label = page.label,
-                                    selected = startupPage == page,
-                                    onClick = { vm.setStartupPage(page) },
-                                    icon = if (page == StartupPage.HOME) Icons.Filled.Home else Icons.AutoMirrored.Filled.List,
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                )
-                            }
-                        }
+                        SettingsChoiceButtonGroup(
+                            labels = StartupPage.entries.map { it.label },
+                            selectedIndex = StartupPage.entries.indexOf(startupPage),
+                            onSelect = { vm.setStartupPage(StartupPage.entries[it]) },
+                            icons = listOf(Icons.Filled.Home, Icons.AutoMirrored.Filled.List),
+                        )
                     }
                 }
             }
@@ -254,23 +275,9 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SettingsHeading(Icons.Filled.Settings, "外观", "选择适合你的显示方式")
-                        Row(
-                            modifier = Modifier.fillMaxWidth().selectableGroup().height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            listOf(
-                                ThemeMode.SYSTEM to "跟随系统",
-                                ThemeMode.LIGHT to "浅色",
-                                ThemeMode.DARK to "深色",
-                            ).forEach { (mode, label) ->
-                                SettingsChoice(
-                                    label = label,
-                                    selected = themeMode == mode,
-                                    onClick = { Appearance.setMode(mode) },
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                )
-                            }
-                        }
+                        SettingsChoiceButtonGroup(labels = listOf("跟随系统", "浅色", "深色"),
+                            selectedIndex = ThemeMode.entries.indexOf(themeMode),
+                            onSelect = { Appearance.setMode(ThemeMode.entries[it]) })
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
@@ -424,6 +431,34 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
         }
     }
 
+    if (editNickname) {
+        AlertDialog(
+            onDismissRequest = { if (!savingProfile) editNickname = false },
+            title = { Text("修改昵称") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = nickname, onValueChange = { nickname = it; nicknameError = null },
+                        label = { Text("昵称") }, singleLine = true, enabled = !savingProfile,
+                        isError = nicknameError != null)
+                    nicknameError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    enabled = !savingProfile && nickname.isNotBlank(), onClick = {
+                        coroutineScope.launch {
+                            when (val result = vm.changeNickname(nickname)) {
+                                is Res.Ok -> { editNickname = false; vm.notify("昵称已保存") }
+                                is Res.Fail -> nicknameError = result.msg
+                            }
+                        }
+                    }) { Text(if (savingProfile) "正在保存…" else "保存") }
+            },
+            dismissButton = { TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                enabled = !savingProfile, onClick = { editNickname = false }) { Text("取消") } },
+        )
+    }
+
     if (confirmClearRecents) {
         AlertDialog(
             onDismissRequest = { confirmClearRecents = false },
@@ -476,46 +511,5 @@ private fun SettingsHeading(icon: ImageVector, title: String, description: Strin
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-}
-
-@Composable
-private fun SettingsChoice(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-) {
-    val colors = MaterialTheme.colorScheme
-    androidx.compose.material3.TonalToggleButton(
-        checked = selected,
-        onCheckedChange = { onClick() },
-        modifier = modifier.heightIn(min = 52.dp).semantics {
-            this.selected = selected
-            role = Role.RadioButton
-        },
-        shapes = androidx.compose.material3.ToggleButtonDefaults.shapes(
-            shape = RoundedCornerShape(14.dp),
-            checkedShape = RoundedCornerShape(14.dp),
-        ),
-        colors = androidx.compose.material3.ToggleButtonDefaults.tonalToggleButtonColors(
-            containerColor = colors.surfaceContainerLow,
-            checkedContainerColor = colors.primaryContainer,
-            contentColor = colors.onSurface,
-            checkedContentColor = colors.onSurface,
-        ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp),
-    ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
-        )
     }
 }
