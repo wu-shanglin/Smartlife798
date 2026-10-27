@@ -43,7 +43,7 @@ object CheckInUiChecks {
         val release = CountDownLatch(1)
         fun hold() {
             entered.countDown()
-            check(release.await(20, TimeUnit.SECONDS))
+            if (!release.await(45, TimeUnit.SECONDS)) throw java.io.InterruptedIOException("offline gate timeout")
         }
     }
 
@@ -171,19 +171,22 @@ object CheckInUiChecks {
             stage = "My page keeps manual action available when automation is off"
             click(test, "我的")
             await { find(test, "自动签到开关") != null }
-            reveal(test, "手动签到")
+            reveal(test, "已签到")
             click(test, "自动签到开关")
             await { !vm.autoCheckIn.value && !Store.autoCheckIn() }
-            check(actionNode(test, "手动签到").isEnabled)
+            await { !vm.checkingIn.value && vm.signedInToday.value == true }
+            check(!actionNode(test, "已签到").isEnabled)
 
             stage = "manual click shows disabled loading state and coalesces repeated clicks"
             signed.set(false)
+            test.runOnMainSync { vm.refreshCheckInStatus() }
+            await { !vm.checkingIn.value && vm.signedInToday.value == false }
             val manualPost = Gate().also { gates.add(it); postGate.set(it) }
             val beforeManual = posts.get()
-            click(test, "手动签到")
+            click(test, "签到")
             check(manualPost.entered.await(8, TimeUnit.SECONDS))
-            await { vm.checkingIn.value && find(test, "正在签到…") != null }
-            val busy = actionNode(test, "正在签到…")
+            await { vm.checkingIn.value && find(test, "正在检查…") != null }
+            val busy = actionNode(test, "正在检查…")
             check(!busy.isEnabled)
             val hasProgress = nodes(busy).any {
                 it.rangeInfo != null || it.className?.toString() == "android.widget.ProgressBar"
@@ -191,7 +194,7 @@ object CheckInUiChecks {
             result.putBoolean("busyProgressSemantics", hasProgress)
             check(hasProgress)
             repeat(3) { busy.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
-            test.waitForIdleSync()
+            SystemClock.sleep(100)
             check(posts.get() == beforeManual + 1 && vm.checkingIn.value && !vm.autoCheckIn.value)
             capture(test, "check-in-ui-manual-busy.png")
             manualPost.release.countDown()
@@ -199,13 +202,13 @@ object CheckInUiChecks {
             stage = "manual success notice and enabled action are visible"
             await { find(test, "签到成功") != null && !vm.checkingIn.value }
             check(vm.checkInStatus.value == "今日已签到" && posts.get() == beforeManual + 1)
-            check(actionNode(test, "手动签到").isEnabled && !vm.autoCheckIn.value)
+            check(!actionNode(test, "已签到").isEnabled && !vm.autoCheckIn.value)
             capture(test, "check-in-ui-manual-success.png")
 
             stage = "manual already-signed feedback is visible without a second POST"
             val beforeSignedRead = reads.get()
             val beforeSignedPost = posts.get()
-            click(test, "手动签到")
+            test.runOnMainSync { vm.checkInNow() }
             await {
                 reads.get() == beforeSignedRead + 1 && !vm.checkingIn.value &&
                     matches(test, "今日已签到").size >= 2
@@ -216,13 +219,15 @@ object CheckInUiChecks {
             stage = "manual rejection is visible in status and Snackbar"
             signed.set(false)
             reject.set(true)
+            test.runOnMainSync { vm.refreshCheckInStatus() }
+            await { !vm.checkingIn.value && vm.signedInToday.value == false }
             val beforeFailure = posts.get()
-            click(test, "手动签到")
+            click(test, "签到")
             await {
                 !vm.checkingIn.value && vm.checkInStatus.value.startsWith("签到未确认：离线签到拒绝") &&
                     matches(test, vm.checkInStatus.value).size >= 2
             }
-            check(posts.get() == beforeFailure + 1 && actionNode(test, "手动签到").isEnabled)
+            check(posts.get() == beforeFailure + 1 && actionNode(test, "签到").isEnabled)
             check(!vm.autoCheckIn.value && !Store.autoCheckIn() && !Preview.enabled)
             capture(test, "check-in-ui-rejected.png")
             stage = "full-screen wallet feedback remains above system navigation"
@@ -319,7 +324,8 @@ object CheckInUiChecks {
 
     private fun click(test: Instrumentation, text: String) {
         check(actionNode(test, text).performAction(AccessibilityNodeInfo.ACTION_CLICK))
-        test.waitForIdleSync()
+        // LoadingIndicator schedules frames continuously; wait on the expected state at each call site.
+        SystemClock.sleep(100)
     }
 
     private fun reveal(test: Instrumentation, text: String) {

@@ -68,32 +68,44 @@ class CheckInTest {
 
     @Test
     fun `original absent daily fallback can prepare without inventing rewards or confirming success`() {
-        for (account in listOf(ScoreAccount(), ScoreAccount(daily = DailyCheckIn()))) {
+        for (account in listOf(null, ScoreAccount(), ScoreAccount(daily = DailyCheckIn()))) {
             val missions = Missions(account, DailyReward("manual-fixture", 5))
             assertNull(CheckIn.prepare(missions, 1))
-            assertEquals(false, CheckIn.isSignedIn(missions, 1, allowMissingDaily = true))
+            assertEquals(false, CheckIn.isSignedIn(missions, 1, allowUnsignedDefault = true))
             assertEquals(ScoreParams("manual-fixture", 1, addScore = 5),
-                CheckIn.prepare(missions, 1, allowMissingDaily = true))
+                CheckIn.prepare(missions, 1, allowUnsignedDefault = true))
         }
         for (missions in listOf(
-            Missions(null, DailyReward("manual-fixture", 5)),
             Missions(ScoreAccount()),
             Missions(ScoreAccount(), DailyReward("manual-fixture", -1)),
             Missions(ScoreAccount(daily = DailyCheckIn(week = 128)), DailyReward("manual-fixture", 5)),
             Missions(ScoreAccount(daily = DailyCheckIn(week = 1)), DailyReward("manual-fixture", 5)),
-        )) assertNull(CheckIn.prepare(missions, 1, allowMissingDaily = true))
+        )) assertNull(CheckIn.prepare(missions, 1, allowUnsignedDefault = true))
+    }
+
+    @Test
+    fun `available points defaults to zero before first reward and never uses platform totals`() {
+        assertEquals("0", Missions().pointsBalance())
+        assertEquals("0", Missions(ScoreAccount()).pointsBalance())
+        assertEquals("150", Missions(ScoreAccount(validScore = "150")).pointsBalance())
     }
 
     @Test
     fun `signature matches independent hashlib fixture and changes only at bucket boundary`() {
         // Independently computed from the static native concatenation using Python hashlib.
-        val expected = "721f57f588d250cf03184f8145f34a47"
+        val expected = "7024e17b3e0c0ca9d12f02aa4d702ae3"
         assertEquals(expected, CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh", mondayMidnightChina))
-        assertEquals(expected, CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina, 9_999))
+        assertEquals(expected, CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina, 29_999))
         assertEquals(
-            CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina + 10_000),
-            CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina, 10_000),
+            CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina + 30_000),
+            CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina, 30_000),
         )
+    }
+
+    @Test
+    fun `current native sorts ampersand arguments before hashing`() {
+        assertEquals(CheckIn.sign("a=1&b=2", "12345678", "abcdefgh", mondayMidnightChina),
+            CheckIn.sign("b=2&a=1", "12345678", "abcdefgh", mondayMidnightChina))
     }
 
     @Test

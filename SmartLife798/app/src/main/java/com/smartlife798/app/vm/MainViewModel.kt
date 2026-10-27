@@ -39,6 +39,7 @@ import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.ProfilePatch
 import com.smartlife798.app.core.CheckIn
+import com.smartlife798.app.core.pointsBalance
 import com.smartlife798.app.core.storedProfile
 import com.smartlife798.app.core.activeBelongsTo
 import com.smartlife798.app.core.blockedByOtherSession
@@ -79,6 +80,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val checkInStatus: StateFlow<String> = _checkInStatus.asStateFlow()
     private val _checkingIn = MutableStateFlow(false)
     val checkingIn: StateFlow<Boolean> = _checkingIn.asStateFlow()
+
+    private val _availableScore = MutableStateFlow<String?>(null)
+    val availableScore = _availableScore.asStateFlow()
+    private val _signedInToday = MutableStateFlow<Boolean?>(null)
+    val signedInToday = _signedInToday.asStateFlow()
+    fun refreshCheckInStatus() = requestCheckIn(manual = false, statusOnly = true)
 
     private var checkInJob: Job? = null
     private var checkInIsManual = false
@@ -141,7 +148,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .ifBlank { "服务端未确认（${failure.code}）" }
     }
 
-    private fun requestCheckIn(manual: Boolean) {
+    private fun requestCheckIn(manual: Boolean, statusOnly: Boolean = false) {
         if (Preview.enabled) {
             if (manual) publishCheckIn("演示模式下不执行签到", manual = true)
             return
@@ -150,14 +157,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (manual) publishCheckIn(if (!session.isLoggedIn) "请先登录后再签到" else "请在应用前台签到", manual = true)
             return
         }
-        if (!manual && !_autoCheckIn.value) return
+        if (!manual && !statusOnly && !_autoCheckIn.value) return
         if (_checkingIn.value || checkInJob?.isCompleted == false) {
             // Resume may arrive while a cancelled request is still releasing its durable marker.
             if (!manual && checkInJob?.isCancelled == true) checkInResumePending = true
             if (manual) showCheckInNotice("签到处理中，请稍候")
             return
         }
-        if (!manual && checkInDoneDay != null && checkInServerTime > 0L &&
+        if (!manual && !statusOnly && checkInDoneDay != null && checkInServerTime > 0L &&
             CheckIn.dayKey(checkInServerTime + android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed) == checkInDoneDay) {
             _checkInStatus.value = "今日已签到"
             return
@@ -169,7 +176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val token = session.token ?: return@launch
             val generation = accountGeneration
             fun current() = !Preview.enabled && session.token == token && accountGeneration == generation
-            fun allowed() = current() && appResumed && (manual || _autoCheckIn.value)
+            fun allowed() = current() && appResumed && (statusOnly || manual || _autoCheckIn.value)
             var locked = false
             var submitted = false
             var recorded = false
@@ -187,7 +194,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 if (!allowed()) return@launch
                 val uid = session.uid
-                if (uid.isNullOrBlank()) {
+                if (!statusOnly && uid.isNullOrBlank()) {
                     publishCheckIn("账号信息不足，暂无法签到", manual)
                     return@launch
                 }
@@ -195,23 +202,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val response = Api.checkInMissions()
                 if (!allowed()) return@launch
                 if (response is Res.Fail) {
-                    publishCheckIn("签到检查失败：${checkInFailure(response)}", manual)
+                    _signedInToday.value = null
+                    _availableScore.value = null
+                    if (statusOnly) _checkInStatus.value = "签到检查失败：${checkInFailure(response)}"
+                    else publishCheckIn("签到检查失败：${checkInFailure(response)}", manual)
                     return@launch
                 }
                 val missions = (response as? Res.Ok)?.data
                 val serverTime = (response as? Res.Ok)?.serverTime ?: 0L
                 if (missions == null || serverTime <= 0L) {
+                    _signedInToday.value = null
+                    _availableScore.value = null
                     publishCheckIn("无法确认今日签到，服务端时间或数据缺失", manual)
                     return@launch
                 }
+                _availableScore.value = missions.pointsBalance()
                 checkInServerTime = serverTime
                 checkInSnapshotElapsed = android.os.SystemClock.elapsedRealtime()
                 val day = CheckIn.dayKey(serverTime)
                 attemptDay = day
                 val weekday = CheckIn.weekday(serverTime)
-                // Original 3.1.5 treats an existing score account's absent daily/week as zero.
-                // Keep missing accounts and invalid bitmaps unknown; never use this fallback to confirm success.
-                when (CheckIn.isSignedIn(missions, weekday, allowMissingDaily = true)) {
+                // Original 3.1.5 also treats a missing score account (before its first reward) as unsigned.
+                // Invalid bitmaps stay unknown; the fallback never confirms a successful submission.
+                val signed = CheckIn.isSignedIn(missions, weekday, allowUnsignedDefault = true)
+                _signedInToday.value = signed
+                if (statusOnly) {
+                    checkInDoneDay = day.takeIf { signed == true }
+                    _checkInStatus.value = when (signed) {
+                        true -> "今日已签到"
+                        false -> "今日未签到"
+                        null -> "签到状态不完整，请刷新重试"
+                    }
+                    return@launch
+                }
+                when (signed) {
                     true -> {
                         checkInDoneDay = day
                         publishCheckIn("今日已签到", manual, day)
@@ -230,7 +254,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishCheckIn("今日签到已提交过，结果待确认；可手动检查并重试", manual, day)
                     return@launch
                 }
-                val params = CheckIn.prepare(missions, weekday, allowMissingDaily = true)
+                val params = CheckIn.prepare(missions, weekday, allowUnsignedDefault = true)
                 if (params == null) {
                     publishCheckIn("签到参数不完整，未提交", manual, day)
                     return@launch
@@ -250,31 +274,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishCheckIn("日期已变化，请重新检查签到", manual, day)
                     return@launch
                 }
-                val sign = CheckIn.sign(params.adId, token, uid, serverTime, submitElapsed)
+                val sign = CheckIn.sign(params.adId, token, requireNotNull(uid), serverTime, submitElapsed)
                 _checkInStatus.value = if (manual) "正在签到…" else "正在自动签到…"
                 submitted = true
                 checkInPostStarted = true
-                when (val result = Api.checkIn(params, sign)) {
-                    is Res.Ok -> {
-                        if (!allowed()) return@launch
-                        val confirmed = Api.checkInMissions()
-                        if (!allowed()) return@launch
-                        val state = (confirmed as? Res.Ok)?.data
-                        // The zero fallback cannot confirm success: require an actual returned signed bit.
-                        if (state != null && confirmed.serverTime > 0L && CheckIn.dayKey(confirmed.serverTime) == day &&
-                            CheckIn.isSignedIn(state, weekday) == true) {
-                            checkInDoneDay = day
-                            publishCheckIn(if (manual) "今日已签到" else "今日已自动签到", manual, day,
-                                notice = if (manual) "签到成功" else "自动签到成功")
-                        } else publishCheckIn("签到已受理，状态待确认；可手动检查结果", manual, day)
-                        refreshMasterInternal()
-                    }
-                    is Res.Fail -> if (allowed()) {
-                        publishCheckIn("${if (manual) "签到" else "自动签到"}未确认：${checkInFailure(result)}；可手动检查并重试", manual, day)
-                    }
+                val result = Api.checkIn(params, sign)
+                if (!allowed()) return@launch
+                // Reconcile even a rejection: a duplicate day or lost response can already be signed.
+                val confirmed = Api.checkInMissions()
+                if (!allowed()) return@launch
+                val state = (confirmed as? Res.Ok)?.data
+                _availableScore.value = state?.pointsBalance()
+                val confirmedSigned = if (state != null && confirmed.serverTime > 0L &&
+                    CheckIn.dayKey(confirmed.serverTime) == day) CheckIn.isSignedIn(state, weekday) else null
+                _signedInToday.value = confirmedSigned
+                if (confirmedSigned == true) {
+                    checkInDoneDay = day
+                    publishCheckIn(if (manual) "今日已签到" else "今日已自动签到", manual, day,
+                        notice = if (result is Res.Fail) "今日已签到" else if (manual) "签到成功" else "自动签到成功")
+                } else if (result is Res.Fail) {
+                    publishCheckIn("${if (manual) "签到" else "自动签到"}未确认：${checkInFailure(result)}；请刷新状态后重试", manual, day)
+                } else {
+                    publishCheckIn("签到已受理，状态待确认；请刷新状态", manual, day)
                 }
+                refreshMasterInternal()
             } catch (cancelled: CancellationException) {
-                if (current() && (manual || _autoCheckIn.value)) _checkInStatus.value =
+                if (current() && (statusOnly || manual || _autoCheckIn.value)) _checkInStatus.value =
                     if (submitted) "签到结果待确认，可手动检查" else "签到检查已暂停"
                 throw cancelled
             } catch (_: IllegalArgumentException) {
@@ -724,6 +749,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         checkInJob?.cancel()
         checkInDoneDay = null
         checkInServerTime = 0L
+        _signedInToday.value = null
+        _availableScore.value = null
         _checkInStatus.value = "登录后检查签到"
         startJob?.cancel()
         watchJob?.cancel()
@@ -1127,6 +1154,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         checkInJob?.cancel()
         checkInDoneDay = null
         checkInServerTime = 0L
+        _signedInToday.value = null
+        _availableScore.value = null
         _checkInStatus.value = "演示模式下不执行签到"
         startJob?.cancel()
         watchJob?.cancel()
@@ -1144,6 +1173,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 预览模式不携带任何真实会话：即使某条路径漏判 Preview，也不会打到真实账号。
         session.suspendForPreview()
         _loggedIn.value = true
+        _availableScore.value = Preview.profile.totalScore
         _profile.value = Preview.profile
         _favorites.value = Preview.filterFavorites()
         _recents.value = Preview.devices.mapIndexed { i, d ->

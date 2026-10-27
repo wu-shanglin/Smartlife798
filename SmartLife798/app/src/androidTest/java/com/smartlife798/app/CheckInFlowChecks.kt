@@ -30,7 +30,7 @@ import okio.Buffer
 /** Fixture identities and terminal interceptors only; no actual HTTP request is forwarded. */
 object CheckInFlowChecks {
     private const val SERVER_TIME = 1793016000000L // 2026-10-26 20:00 Asia/Shanghai, Monday.
-    private enum class Scenario { SUCCESS, ALREADY, UNCONFIRMED, REJECTED, TIMEOUT, NO_TIME, NO_WEEK, NO_REWARD, NO_ACCOUNT, READ_TIMEOUT }
+    private enum class Scenario { SUCCESS, ALREADY, DUPLICATE, UNCONFIRMED, REJECTED, TIMEOUT, NO_TIME, NO_WEEK, NO_REWARD, NO_ACCOUNT, READ_TIMEOUT }
     private class Gate {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -100,6 +100,10 @@ object CheckInFlowChecks {
                     check(params["addScoreType"].asInt == 1 && params["addScore"].asInt == 5)
                     when (activeScenario) {
                         Scenario.TIMEOUT -> throw InterruptedIOException("offline timeout fixture")
+                        Scenario.DUPLICATE -> {
+                            signed.set(true)
+                            """{"code":-1,"msg":"今日已签到"}"""
+                        }
                         Scenario.REJECTED -> """{"code":-1,"msg":"离线签到拒绝"}"""
                         else -> {
                             signed.set(activeScenario != Scenario.UNCONFIRMED)
@@ -168,10 +172,10 @@ object CheckInFlowChecks {
 
             stage = "default enabled and confirmed read-write-read"
             foreground()
-            await { vm.checkInStatus.value == "今日已自动签到" && vm.profile.value?.totalScore == "125" }
+            await { !vm.checkingIn.value && vm.checkInStatus.value == "今日已自动签到" && vm.availableScore.value == "120" }
             check(posts.get() == 1 && reads.get() == 2)
             check(events.take(3) == listOf("read", "post", "read"))
-            check(Store.checkInAttemptDay() == "2026-10-26" && vm.profile.value?.totalScore == "125")
+            check(Store.checkInAttemptDay() == "2026-10-26" && vm.availableScore.value == "120")
             repeat(5) { foreground() }
             test.waitForIdleSync()
             check(posts.get() == 1 && reads.get() == 2)
@@ -185,11 +189,24 @@ object CheckInFlowChecks {
             test.waitForIdleSync()
             check(vm.checkInStatus.value == "今日已签到" && posts.get() == 1 && reads.get() == 2)
 
+            stage = "read-only refresh works with automation disabled and exposes real balance"
+            test.runOnMainSync { vm.setAutoCheckIn(false); vm.refreshCheckInStatus() }
+            await { !vm.checkingIn.value && vm.signedInToday.value == true }
+            check(vm.availableScore.value == "120" && posts.get() == 1 && reads.get() == 3)
+            test.runOnMainSync { vm.setAutoCheckIn(true) }
+
             stage = "already signed never posts"
             reset(Scenario.ALREADY)
             foreground()
             await { vm.checkInStatus.value == "今日已签到" }
             check(posts.get() == 0 && reads.get() == 1 && Store.checkInAttemptDay() == null)
+
+            stage = "duplicate-day rejection reconciles to signed and never reports unconfirmed"
+            reset(Scenario.DUPLICATE)
+            foreground()
+            await { !vm.checkingIn.value && vm.signedInToday.value == true }
+            check(vm.checkInStatus.value == "今日已自动签到" && vm.message.value == "今日已签到")
+            check(posts.get() == 1 && reads.get() == 2)
 
             stage = "disabled preference and Preview send no requests"
             reset(Scenario.SUCCESS)
@@ -245,13 +262,20 @@ object CheckInFlowChecks {
             check(posts.get() == 0 && Store.checkInAttemptDay() == null && !Store.autoCheckIn())
             Store.saveAutoCheckIn(true)
 
-            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_ACCOUNT, Scenario.NO_REWARD)) {
+            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_REWARD)) {
                 stage = "$missing never fabricates a command"
                 reset(missing)
                 foreground()
                 await { !vm.checkInStatus.value.startsWith("正在") && vm.checkInStatus.value != "尚未检查签到" }
                 check(reads.get() == 1 && posts.get() == 0 && Store.checkInAttemptDay() == null)
             }
+
+            stage = "first reward may start without a score account but absent read-back cannot confirm"
+            reset(Scenario.NO_ACCOUNT)
+            foreground()
+            await { !vm.checkingIn.value && vm.checkInStatus.value.startsWith("签到已受理") }
+            check(posts.get() == 1 && reads.get() == 2 && vm.signedInToday.value == null)
+            check(vm.availableScore.value == "0")
 
             stage = "repeated foreground coalesces pending status request"
             reset(Scenario.SUCCESS)
@@ -469,7 +493,7 @@ object CheckInFlowChecks {
             }
             await { !vm.loggedIn.value && session.token == null }
             check(Store.checkInAttemptDay() == null && !Store.autoCheckIn())
-            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/account/reward blocks submit; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
+            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("state", "reads=${reads.get()},posts=${posts.get()},busy=${if (vmCreated) vm.checkingIn.value else false},status=${if (vmCreated) vm.checkInStatus.value else "not initialized"}")
