@@ -24,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -32,12 +34,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 
 private const val PressExpansion = 0.25f
@@ -51,24 +56,43 @@ fun ChoiceButtonGroup(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    ButtonGroup(
-        // alpha14 narrows maxWidth when measuring overflow without lowering minWidth.
-        // Keep the outer row full-width, but give the group a loose minimum width.
-        modifier = modifier.fillMaxWidth().wrapContentWidth(Alignment.Start),
-        expandedRatio = PressExpansion,
-        overflowIndicator = { menu ->
-            FilledTonalIconButton(onClick = { menu.show() }, shapes = IconButtonDefaults.shapes()) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "更多选项")
+    SubcomposeLayout(modifier.fillMaxWidth()) { constraints ->
+        // Measure the same official buttons, including font scale and content padding.
+        // alpha14 can grow a lone visible item into its overflow indicator. Keep
+        // shape feedback, but only use neighbor expansion when every item fits.
+        val naturalWidths = subcompose("measure") {
+            labels.forEachIndexed { index, label ->
+                ToggleButton(checked = selectedIndex == index, onCheckedChange = {}, enabled = false) {
+                    Text(label)
+                }
             }
-        },
-    ) {
-        labels.forEachIndexed { index, label ->
-            toggleableItem(
-                checked = selectedIndex == index,
-                label = label,
-                onCheckedChange = { if (enabled) onSelect(index) },
-                enabled = enabled,
-            )
+        }.map { it.maxIntrinsicWidth(constraints.maxHeight).toLong() }
+        val spacing = ButtonGroupDefaults.HorizontalArrangement.spacing.roundToPx()
+        val allFit = naturalWidths.sum() + spacing.toLong() * (labels.size - 1).coerceAtLeast(0) <= constraints.maxWidth
+        // Distinct slots also recreate alpha14's remembered measure policy when
+        // a size/font change switches between full and overflowing layouts.
+        val group = subcompose(if (allFit) "all-visible" else "overflowing") {
+            ButtonGroup(
+                modifier = Modifier.wrapContentWidth(Alignment.Start),
+                expandedRatio = if (allFit) PressExpansion else 0f,
+                overflowIndicator = { menu ->
+                    FilledTonalIconButton(onClick = { menu.show() }, shapes = IconButtonDefaults.shapes()) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "更多选项")
+                    }
+                },
+            ) {
+                labels.forEachIndexed { index, label ->
+                    toggleableItem(
+                        checked = selectedIndex == index,
+                        label = label,
+                        onCheckedChange = { if (enabled) onSelect(index) },
+                        enabled = enabled,
+                    )
+                }
+            }
+        }.single().measure(constraints.copy(minWidth = 0))
+        layout(constraints.constrainWidth(group.width), constraints.constrainHeight(group.height)) {
+            group.placeRelative(0, 0)
         }
     }
 }
@@ -86,6 +110,7 @@ fun SettingsChoiceButtonGroup(
     ButtonGroup(
         modifier = modifier.fillMaxWidth().wrapContentWidth(Alignment.Start),
         expandedRatio = PressExpansion,
+        verticalAlignment = Alignment.CenterVertically,
         overflowIndicator = { menu ->
             FilledTonalIconButton(onClick = { menu.show() }, shapes = IconButtonDefaults.shapes()) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "更多选项")

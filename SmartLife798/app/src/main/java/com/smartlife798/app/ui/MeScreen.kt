@@ -100,6 +100,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
     val autoCheckIn by vm.autoCheckIn.collectAsStateWithLifecycle()
     val checkInStatus by vm.checkInStatus.collectAsStateWithLifecycle()
+    val checkingIn by vm.checkingIn.collectAsStateWithLifecycle()
 
     LaunchedEffect(refreshTick) {
         vm.refreshMaster()
@@ -234,17 +235,34 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("自动签到", style = MaterialTheme.typography.titleSmall)
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("自动签到", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                            Switch(checked = autoCheckIn, onCheckedChange = vm::setAutoCheckIn,
+                                modifier = Modifier.semantics { contentDescription = "自动签到开关" })
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("打开应用时检查当天签到，未签则自动签到", style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(checkInStatus, style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Switch(checked = autoCheckIn, onCheckedChange = vm::setAutoCheckIn,
-                            modifier = Modifier.semantics { contentDescription = "自动签到开关" })
+                        Button(
+                            onClick = vm::checkInNow,
+                            enabled = !checkingIn,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                        ) {
+                            if (checkingIn) {
+                                LoadingIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = androidx.compose.material3.LocalContentColor.current,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(if (checkingIn) "正在签到…" else "手动签到")
+                        }
                     }
                 }
             }

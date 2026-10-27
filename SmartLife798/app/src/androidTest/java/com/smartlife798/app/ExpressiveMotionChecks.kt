@@ -145,6 +145,29 @@ object ExpressiveMotionChecks {
             }
             stage = "narrow layout exposes overflow indicator"
             await { find(test, "更多选项") != null }
+            stage = "narrow held button cannot cover overflow"
+            val firstVisible = longLabels.first { find(test, it) != null }
+            val narrowBefore = bounds(button(find(test, firstVisible)!!))
+            val overflowBefore = bounds(button(find(test, "更多选项")!!))
+            check(!Rect.intersects(narrowBefore, overflowBefore))
+            val narrowPoint = narrowBefore.exactCenterX() to narrowBefore.exactCenterY()
+            val narrowStarted = SystemClock.uptimeMillis()
+            downTime = narrowStarted
+            downPoint = narrowPoint
+            touch(test, MotionEvent.ACTION_DOWN, narrowStarted, narrowPoint)
+            SystemClock.sleep(350)
+            val narrowHeld = bounds(button(find(test, firstVisible)!!))
+            val overflowHeld = bounds(button(find(test, "更多选项")!!))
+            check(!Rect.intersects(narrowHeld, overflowHeld))
+            check(abs(narrowHeld.width() - narrowBefore.width()) <= 2)
+            check(selected.isEmpty())
+            capture(test, "expressive-overflow-held.png")
+            touch(test, MotionEvent.ACTION_UP, narrowStarted, narrowPoint)
+            downTime = null
+            downPoint = null
+            await { selected.size == 1 }
+            check(selected.single() == longLabels.indexOf(firstVisible))
+            selected.clear()
             for ((index, label) in longLabels.withIndex()) {
                 stage = "overflow option $index resolve visible label"
                 if (find(test, label) == null) {
@@ -163,6 +186,37 @@ object ExpressiveMotionChecks {
                 await { find(test, "更多选项") != null }
             }
             capture(test, "expressive-overflow-large-font.png")
+
+            stage = "real appearance labels stay visible and vertically centered at large font"
+            val settingsLabels = listOf("跟随系统", "浅色", "深色")
+            counts.set(0)
+            test.runOnMainSync {
+                screen.setContent {
+                    SmartLifeTheme(darkTheme = false) {
+                        val density = LocalDensity.current
+                        CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                            Column(Modifier.fillMaxSize().padding(top = 100.dp)) {
+                                Column(Modifier.width(240.dp)) {
+                                    SettingsChoiceButtonGroup(settingsLabels, 0, { counts.incrementAndGet() })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            await { settingsLabels.all { find(test, it) != null } }
+            test.waitForIdleSync()
+            val settingBounds = settingsLabels.map { bounds(button(find(test, it)!!)) }
+            val minTouch = 48 * test.targetContext.resources.displayMetrics.density
+            check(settingBounds.all { it.width() >= minTouch && it.height() >= minTouch })
+            check(settingBounds.all { abs(it.exactCenterY() - settingBounds.first().exactCenterY()) <= 1f })
+            check(settingBounds.zipWithNext().all { (left, right) -> !Rect.intersects(left, right) })
+            settingsLabels.forEachIndexed { index, label ->
+                click(test, label)
+                await { counts.get() == index + 1 }
+            }
+            capture(test, "expressive-settings-large-font.png")
+            geometry.add("settings-large-font=${settingBounds.map { "${it.width()}x${it.height()}" }}")
 
             stage = "light and dark refresh indicator captures"
             for (dark in listOf(false, true)) {
@@ -186,7 +240,7 @@ object ExpressiveMotionChecks {
                 SystemClock.sleep(500)
                 capture(test, "expressive-refresh-${if (dark) "dark" else "light"}.png")
             }
-            result.putString("stream", "PASS: real DOWN/UP expands center and compresses both neighbors in Choice/Settings groups, release restores widths within 2px and fires once, disabled zero clicks, 240dp/1.3 font overflow preserves four choices; light/dark refresh captures; ${geometry.joinToString("; ")}\n")
+            result.putString("stream", "PASS: real DOWN/UP expands center and compresses both neighbors in Choice/Settings groups, release restores widths within 2px and fires once, disabled zero clicks, 240dp/1.3 font held overflow does not overlap and preserves four choices; actual settings labels remain visible/centered/clickable at 240dp/2x font; light/dark refresh captures; ${geometry.joinToString("; ")}\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("failureFrames", failure.stackTrace.take(5).joinToString {

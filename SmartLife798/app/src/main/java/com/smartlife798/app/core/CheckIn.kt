@@ -49,16 +49,18 @@ object CheckIn {
         String.format(Locale.ROOT, "%04d-%02d-%02d", it.get(Calendar.YEAR), it.get(Calendar.MONTH) + 1, it.get(Calendar.DAY_OF_MONTH))
     }
 
-    /** Missing/invalid status is unknown, never evidence of either outcome. */
-    fun isSignedIn(missions: Missions, weekday: Int): Boolean? {
+    /** Strict by default for confirmation; original absent-daily fallback is opt-in for preparation. */
+    fun isSignedIn(missions: Missions, weekday: Int, allowMissingDaily: Boolean = false): Boolean? {
         if (weekday !in 1..7) return null
-        val week = missions.accScoreRsp?.daily?.week?.takeIf { it in 0..127 } ?: return null
+        val account = missions.accScoreRsp ?: return null
+        val supplied = account.daily?.week
+        val week = (supplied ?: if (allowMissingDaily) 0 else null)?.takeIf { it in 0..127 } ?: return null
         return week and (1 shl (weekday - 1)) != 0
     }
 
     /** Return a command only for an explicitly unsigned day and valid server reward. */
-    fun prepare(missions: Missions, weekday: Int): ScoreParams? {
-        if (isSignedIn(missions, weekday) != false) return null
+    fun prepare(missions: Missions, weekday: Int, allowMissingDaily: Boolean = false): ScoreParams? {
+        if (isSignedIn(missions, weekday, allowMissingDaily) != false) return null
         val reward = missions.dailyRSP ?: return null
         val adId = reward.adId?.takeIf { it.isNotBlank() && it.none(Char::isISOControl) } ?: return null
         val score = reward.score?.takeIf { it >= 0 } ?: return null

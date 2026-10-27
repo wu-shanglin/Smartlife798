@@ -61,11 +61,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -87,6 +90,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.smartlife798.app.core.Preview
 import com.smartlife798.app.ui.CardDestination
@@ -207,8 +211,12 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
     // must not navigate away from settings or reset a restored back stack.
     val startDestination = rememberSaveable { vm.startupPage.value.route }
     val navController = rememberNavController()
+    val currentEntry by navController.currentBackStackEntryAsState()
+    val hasBottomBar = currentEntry?.destination?.route in setOf("home", "devices", "orders", "me")
+    var bottomBarHeight by remember { mutableIntStateOf(0) }
+    val snackbarBottom = with(LocalDensity.current) { if (hasBottomBar) bottomBarHeight.toDp() else 0.dp }
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbar, modifier = Modifier.padding(bottom = snackbarBottom)) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { inner ->
         Column(
@@ -253,7 +261,7 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
                 ) {
                     composable("home") { entry ->
                         SharedCardScene(sharedScope, this, entry.id) {
-                            MainTabPage("home", navController, unpaidCount) {
+                            MainTabPage("home", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 HomeScreen(
                                     vm = vm,
                                     onScan = {
@@ -273,7 +281,7 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
                     }
                     composable("devices") { entry ->
                         SharedCardScene(sharedScope, this, entry.id) {
-                            MainTabPage("devices", navController, unpaidCount) {
+                            MainTabPage("devices", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 DevicesScreen(
                                     vm = vm,
                                     onOpenDevice = { id, origin ->
@@ -285,7 +293,7 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
                     }
                     composable("orders") { entry ->
                         SharedCardScene(sharedScope, this, entry.id) {
-                            MainTabPage("orders", navController, unpaidCount) {
+                            MainTabPage("orders", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 OrdersScreen(
                                     vm = vm,
                                     onOpenDevice = { id, origin ->
@@ -297,7 +305,7 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
                     }
                     composable("me") { entry ->
                         SharedCardScene(sharedScope, this, entry.id) {
-                            MainTabPage("me", navController, unpaidCount) {
+                            MainTabPage("me", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 MeScreen(
                                     vm = vm,
                                     onOpenWallet = {
@@ -436,6 +444,7 @@ private fun MainTabPage(
     route: String,
     nav: NavHostController,
     unpaidCount: Int,
+    onBottomBarHeight: (Int) -> Unit,
     content: @Composable () -> Unit,
 ) {
     val tabs = listOf(
@@ -449,7 +458,7 @@ private fun MainTabPage(
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.selectableGroup(),
+                modifier = Modifier.selectableGroup().onSizeChanged { onBottomBarHeight(it.height) },
             ) {
                 tabs.take(2).forEach { tab ->
                     ExpressiveNavItem(

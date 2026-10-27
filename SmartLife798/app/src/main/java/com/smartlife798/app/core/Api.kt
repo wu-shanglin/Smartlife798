@@ -196,7 +196,8 @@ object Api {
         request("POST", "/api/v1/acc/login", body = mapOf("un" to phone, "authCode" to smsCode), dataType = dataType<LoginData>())
 
     /** GET /api/v1/acc/logout */
-    suspend fun logout(): Res<Unit> = request("GET", "/api/v1/acc/logout", dataType = dataType<Unit>())
+    suspend fun logout(accountToken: String? = session.token): Res<Unit> =
+        request("GET", "/api/v1/acc/logout", accountToken = accountToken, dataType = dataType<Unit>())
 
     /** GET /api/v1/ui/app/master -> account + favorites + ads */
     suspend fun master(): Res<Master> = request("GET", "/api/v1/ui/app/master", dataType = dataType<Master>())

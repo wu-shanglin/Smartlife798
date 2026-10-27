@@ -67,6 +67,24 @@ class CheckInTest {
     }
 
     @Test
+    fun `original absent daily fallback can prepare without inventing rewards or confirming success`() {
+        for (account in listOf(ScoreAccount(), ScoreAccount(daily = DailyCheckIn()))) {
+            val missions = Missions(account, DailyReward("manual-fixture", 5))
+            assertNull(CheckIn.prepare(missions, 1))
+            assertEquals(false, CheckIn.isSignedIn(missions, 1, allowMissingDaily = true))
+            assertEquals(ScoreParams("manual-fixture", 1, addScore = 5),
+                CheckIn.prepare(missions, 1, allowMissingDaily = true))
+        }
+        for (missions in listOf(
+            Missions(null, DailyReward("manual-fixture", 5)),
+            Missions(ScoreAccount()),
+            Missions(ScoreAccount(), DailyReward("manual-fixture", -1)),
+            Missions(ScoreAccount(daily = DailyCheckIn(week = 128)), DailyReward("manual-fixture", 5)),
+            Missions(ScoreAccount(daily = DailyCheckIn(week = 1)), DailyReward("manual-fixture", 5)),
+        )) assertNull(CheckIn.prepare(missions, 1, allowMissingDaily = true))
+    }
+
+    @Test
     fun `signature matches independent hashlib fixture and changes only at bucket boundary`() {
         // Independently computed from the static native concatenation using Python hashlib.
         val expected = "721f57f588d250cf03184f8145f34a47"
