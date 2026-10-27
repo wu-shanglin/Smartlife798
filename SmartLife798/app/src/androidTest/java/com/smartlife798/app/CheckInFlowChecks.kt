@@ -262,13 +262,20 @@ object CheckInFlowChecks {
             check(posts.get() == 0 && Store.checkInAttemptDay() == null && !Store.autoCheckIn())
             Store.saveAutoCheckIn(true)
 
-            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_ACCOUNT, Scenario.NO_REWARD)) {
+            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_REWARD)) {
                 stage = "$missing never fabricates a command"
                 reset(missing)
                 foreground()
                 await { !vm.checkInStatus.value.startsWith("正在") && vm.checkInStatus.value != "尚未检查签到" }
                 check(reads.get() == 1 && posts.get() == 0 && Store.checkInAttemptDay() == null)
             }
+
+            stage = "first reward may start without a score account but absent read-back cannot confirm"
+            reset(Scenario.NO_ACCOUNT)
+            foreground()
+            await { !vm.checkingIn.value && vm.checkInStatus.value.startsWith("签到已受理") }
+            check(posts.get() == 1 && reads.get() == 2 && vm.signedInToday.value == null)
+            check(vm.availableScore.value == "0")
 
             stage = "repeated foreground coalesces pending status request"
             reset(Scenario.SUCCESS)
@@ -486,7 +493,7 @@ object CheckInFlowChecks {
             }
             await { !vm.loggedIn.value && session.token == null }
             check(Store.checkInAttemptDay() == null && !Store.autoCheckIn())
-            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/account/reward blocks submit; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
+            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("state", "reads=${reads.get()},posts=${posts.get()},busy=${if (vmCreated) vm.checkingIn.value else false},status=${if (vmCreated) vm.checkInStatus.value else "not initialized"}")

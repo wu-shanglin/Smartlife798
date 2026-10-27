@@ -39,6 +39,7 @@ import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.ProfilePatch
 import com.smartlife798.app.core.CheckIn
+import com.smartlife798.app.core.pointsBalance
 import com.smartlife798.app.core.storedProfile
 import com.smartlife798.app.core.activeBelongsTo
 import com.smartlife798.app.core.blockedByOtherSession
@@ -215,15 +216,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishCheckIn("无法确认今日签到，服务端时间或数据缺失", manual)
                     return@launch
                 }
-                _availableScore.value = missions.accScoreRsp?.validScore
+                _availableScore.value = missions.pointsBalance()
                 checkInServerTime = serverTime
                 checkInSnapshotElapsed = android.os.SystemClock.elapsedRealtime()
                 val day = CheckIn.dayKey(serverTime)
                 attemptDay = day
                 val weekday = CheckIn.weekday(serverTime)
-                // Original 3.1.5 treats an existing score account's absent daily/week as zero.
-                // Keep missing accounts and invalid bitmaps unknown; never use this fallback to confirm success.
-                val signed = CheckIn.isSignedIn(missions, weekday, allowMissingDaily = true)
+                // Original 3.1.5 also treats a missing score account (before its first reward) as unsigned.
+                // Invalid bitmaps stay unknown; the fallback never confirms a successful submission.
+                val signed = CheckIn.isSignedIn(missions, weekday, allowUnsignedDefault = true)
                 _signedInToday.value = signed
                 if (statusOnly) {
                     checkInDoneDay = day.takeIf { signed == true }
@@ -253,7 +254,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishCheckIn("今日签到已提交过，结果待确认；可手动检查并重试", manual, day)
                     return@launch
                 }
-                val params = CheckIn.prepare(missions, weekday, allowMissingDaily = true)
+                val params = CheckIn.prepare(missions, weekday, allowUnsignedDefault = true)
                 if (params == null) {
                     publishCheckIn("签到参数不完整，未提交", manual, day)
                     return@launch
@@ -283,7 +284,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val confirmed = Api.checkInMissions()
                 if (!allowed()) return@launch
                 val state = (confirmed as? Res.Ok)?.data
-                _availableScore.value = state?.accScoreRsp?.validScore
+                _availableScore.value = state?.pointsBalance()
                 val confirmedSigned = if (state != null && confirmed.serverTime > 0L &&
                     CheckIn.dayKey(confirmed.serverTime) == day) CheckIn.isSignedIn(state, weekday) else null
                 _signedInToday.value = confirmedSigned

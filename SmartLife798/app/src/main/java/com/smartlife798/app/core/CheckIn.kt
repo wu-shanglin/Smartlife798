@@ -20,6 +20,9 @@ data class DailyCheckIn(val ltime: Long? = null, val week: Int? = null)
 
 data class DailyReward(val adId: String? = null, val score: Int? = null)
 
+/** Original HomeFragment/SignInFragment use zero until the score account is created. */
+fun Missions.pointsBalance(): String = accScoreRsp?.validScore ?: "0"
+
 /** Normal check-in only: no retroactive, advertising or fabricated reward fields. */
 data class ScoreParams(
     val adId: String = "",
@@ -29,12 +32,12 @@ data class ScoreParams(
 )
 
 /**
- * Independent protocol implementation based on the original 3.1.5 client.
+ * Independent protocol implementation based on the recovered original 3.1.9 client.
  * Uses this application's own identity and the signed-in user's session. No
- * original native library, certificate impersonation, or real-account test.
+ * original native library or certificate impersonation. Real-service evidence is tracked separately.
  */
 object CheckIn {
-    private const val SIGN_SALT = "aslkdvcniu34h9tgufh278wv2"
+    private const val SIGN_SALT = "AbCdEfGhIjKlMnOpQrStUvWxYz12345"
     private val chinaZone: TimeZone get() = TimeZone.getTimeZone("Asia/Shanghai")
 
     private fun calendar(serverTimeMs: Long): Calendar {
@@ -49,18 +52,17 @@ object CheckIn {
         String.format(Locale.ROOT, "%04d-%02d-%02d", it.get(Calendar.YEAR), it.get(Calendar.MONTH) + 1, it.get(Calendar.DAY_OF_MONTH))
     }
 
-    /** Strict by default for confirmation; original absent-daily fallback is opt-in for preparation. */
-    fun isSignedIn(missions: Missions, weekday: Int, allowMissingDaily: Boolean = false): Boolean? {
+    /** Strict by default for confirmation; original absent-score-account/daily fallback is opt-in for preparation. */
+    fun isSignedIn(missions: Missions, weekday: Int, allowUnsignedDefault: Boolean = false): Boolean? {
         if (weekday !in 1..7) return null
-        val account = missions.accScoreRsp ?: return null
-        val supplied = account.daily?.week
-        val week = (supplied ?: if (allowMissingDaily) 0 else null)?.takeIf { it in 0..127 } ?: return null
+        val supplied = missions.accScoreRsp?.daily?.week
+        val week = (supplied ?: if (allowUnsignedDefault) 0 else null)?.takeIf { it in 0..127 } ?: return null
         return week and (1 shl (weekday - 1)) != 0
     }
 
     /** Return a command only for an explicitly unsigned day and valid server reward. */
-    fun prepare(missions: Missions, weekday: Int, allowMissingDaily: Boolean = false): ScoreParams? {
-        if (isSignedIn(missions, weekday, allowMissingDaily) != false) return null
+    fun prepare(missions: Missions, weekday: Int, allowUnsignedDefault: Boolean = false): ScoreParams? {
+        if (isSignedIn(missions, weekday, allowUnsignedDefault) != false) return null
         val reward = missions.dailyRSP ?: return null
         val adId = reward.adId?.takeIf { it.isNotBlank() && it.none(Char::isISOControl) } ?: return null
         val score = reward.score?.takeIf { it >= 0 } ?: return null
@@ -68,7 +70,7 @@ object CheckIn {
     }
 
     /**
-     * Original native payload: adId + ten-second bucket (seconds) + token/uid
+     * Original native payload: sorted ampersand-separated adId arguments + thirty-second bucket (seconds) + token/uid
      * suffixes + salt, then lowercase MD5. The server clock plus monotonic elapsed
      * time avoids a local wall-clock change between status query and submission.
      * Callers must not log the input, output, or URL carrying this signature.
@@ -85,8 +87,8 @@ object CheckIn {
         require(serverTimeMs > 0 && elapsedSinceSnapshotMs >= 0 && elapsedSinceSnapshotMs <= Long.MAX_VALUE - serverTimeMs) {
             "Invalid server clock"
         }
-        val bucketSeconds = ((serverTimeMs + elapsedSinceSnapshotMs) / 10_000L) * 10L
-        val input = adId + bucketSeconds + token.takeLast(8) + uid.takeLast(8) + SIGN_SALT
+        val bucketSeconds = ((serverTimeMs + elapsedSinceSnapshotMs) / 30_000L) * 30L
+        val input = adId.split('&').sorted().joinToString("&") + bucketSeconds + token.takeLast(8) + uid.takeLast(8) + SIGN_SALT
         return MessageDigest.getInstance("MD5").digest(input.toByteArray(Charsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and 0xff) }
     }

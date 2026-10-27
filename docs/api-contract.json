@@ -1,7 +1,7 @@
 {
   "name": "慧生活798 (ilife798) client contract",
   "baseUrl": "https://i.ilife798.com",
-  "source": "v3.1.5 static path baseline and REA account/check-in/avatar methods; LLVM arm64 check-in digest observations; v3.1.7 command/update signatures; verified signed v3.1.9 APK identity only for protected code + scoped historical live probes (see docs/01, docs/04 and docs/05)",
+  "source": "v3.1.5 static path baseline and REA account/check-in/avatar methods; LLVM arm64 check-in digest observations; v3.1.7 command/update signatures; recovered v3.1.9 DEX account/signing chain and isolated libwatermelon loader-memory observations + scoped historical live probes (see docs/01, docs/04 and docs/05)",
   "headers": {
     "ApplicationType": "1,1",
     "VersionCode": "3.1.9",
@@ -125,7 +125,7 @@
       "response": "BaseReq",
       "use": "normal daily check-in only; omit type, no retroactive or advertising reward",
       "verified": "static",
-      "notes": "v3.1.5 SignInFragment.q0 -> BaseTaskFragment.V -> nativeSign; independent authorized digest implementation under this app's own identity and legitimate session; no original SO/certificate reuse; persist same-account day attempt before request, never automatically retry; read mission-lst after acceptance and require same-day signed bit before success"
+      "notes": "v3.1.9 BaseTaskFragment.O -> util.t.b -> WatermelonUtil.ice; independent authorized digest implementation under this app's own identity and legitimate session; no original SO/certificate reuse; persist same-account day attempt before request, never automatically retry; read mission-lst after acceptance and require same-day signed bit before success"
     },
     {
       "method": "GET",
@@ -410,12 +410,12 @@
       "default": true,
       "trigger": "foreground signed-in session or login while foreground; default-on install preference; Me also offers explicit manual check-in with automation disabled; no Preview IO or writes",
       "clock": "positive server envelope time plus monotonic elapsed since snapshot; Asia/Shanghai day and Monday=1 weekday; do not submit a stale snapshot after midnight",
-      "prepare": "require existing accScoreRsp, positive server time and valid dailyRSP.adId/score; original v3.1.5 z0 treats absent daily/week as zero for preparation; invalid bitmap or missing score account remains unknown; never use zero fallback to confirm success",
-      "digest": "lowercase MD5(adId + decimal(floor(adjustedServerMs/10000)*10) + last8(token) + last8(uid) + fixed25ByteSalt); never log inputs, digest, or signed request URL",
+      "prepare": "require positive server time and valid dailyRSP.adId/score; original v3.1.5 z0 treats absent score account/daily/week as zero for preparation; invalid bitmap remains unknown; never use zero fallback to confirm success",
+      "digest": "lowercase MD5(sort-and-join(adId.split(&)) + decimal(floor(adjustedServerMs/30000)*30) + last8(token) + last8(uid) + currentFixed31ByteSalt); never log inputs, digest, or signed request URL",
       "identity": "original native implementation gates on its app certificate; user explicitly authorized a separate implementation with this app's own package/certificate and legitimate login; no original library, private key or official identity spoofing",
       "deduplication": "shared automatic/manual Mutex; cancellable wait for old VM cleanup; synchronously confirm current-account day attempt on every POST including explicit retry; automatic reentry/process recreation does not resubmit that day; manual first queries fresh status and may explicitly retry; cancellation removes only a newly-created unsent marker",
-      "confirmation": "after accepted POST, GET missions again and require same-day signed bitmap; timeout/cancellation/failure/unknown state is unconfirmed, with no automatic write retry or fabricated points",
-      "validation": "v3.1.5 REA Java methods + LLVM arm64 static native instructions and independent synthetic Python/JVM vectors; original native runtime equivalence, protected v3.1.9 fields, real account mutations and rewards remain unverified",
+      "confirmation": "after any POST result, GET missions again and require same-day signed bitmap; timeout/cancellation/failure/unknown state is unconfirmed, with no automatic write retry or fabricated points",
+      "validation": "v3.1.9 recovered DEX REA methods + isolated offline library loader-memory/LLVM instructions + synthetic Python/JVM vectors; no original identity bypass or native signer execution, no claim of all-current-field compatibility; real acceptance is recorded in docs/05",
       "feedback": "global Snackbar for success/already-signed/check failure/unconfirmed, plus persistent Me status and busy manual button; same automatic notice deduplicated, current-account notice cleared on session transition; Snackbar avoids actual bottom navigation height",
       "session": "logout clears local session and cancels jobs immediately, remote logout uses captured old token; Preview exit keeps disk unchanged; successful login only inherits cached account data when old and new nonblank uid match; login success is also generation-bound and cannot replace a Preview or exited session with a late result"
     },
@@ -427,7 +427,7 @@
       "checkInCalendar": "ev_7c3e8ff8352be0c6ed4775c7ae9b9388159b7abb2f1d953a297153a977f77f14",
       "javaSignatureBridge": "ev_525b21b2cad3ba53e43a0724d4de0e7edd27334555144ca7afa49d7352796393",
       "avatar": "ev_1230ddb73e18a14c2e02ee5569002a645af15326c738c2288901cb5b7445451e",
-      "newSampleBoundary": "3.1.9/31009 identity verified, only 31 protected wrapper classes; api-diff found no api/v1 paths; baseline remains the original v3.1.5 106 paths"
+      "newSampleBoundary": "3.1.9/31009 original shell had 31 wrapper classes; reconstructed nine internal DEX headers and independently matched first-4KiB masks; recovered path comparison has 104 paths (3 additions, 5 removals), intentionally retain original 106-path baseline pending separate full drift review"
     }
   },
   "outOfScopePaths": [
