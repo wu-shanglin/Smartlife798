@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -214,7 +216,10 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
     val currentEntry by navController.currentBackStackEntryAsState()
     val hasBottomBar = currentEntry?.destination?.route in setOf("home", "devices", "orders", "me")
     var bottomBarHeight by remember { mutableIntStateOf(0) }
-    val snackbarBottom = with(LocalDensity.current) { if (hasBottomBar) bottomBarHeight.toDp() else 0.dp }
+    val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val snackbarBottom = if (hasBottomBar)
+        maxOf(with(LocalDensity.current) { bottomBarHeight.toDp() }, systemBottom)
+    else systemBottom
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar, modifier = Modifier.padding(bottom = snackbarBottom)) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),

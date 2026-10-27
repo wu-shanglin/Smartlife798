@@ -108,6 +108,7 @@ object CheckInUiChecks {
                     check(request.method == "GET")
                     """{"code":0,"time":$SERVER_TIME,"data":[]}"""
                 }
+                "/api/v1/prd/lst" -> """{"code":0,"data":[]}"""
                 "/api/v1/acc/wallet/owner" -> {
                     check(request.method == "GET")
                     """{"code":0,"time":$SERVER_TIME,"data":{"aw":{"total":12.0,"ofCash":12.0,"owner":{"id":"$UID"}}}}"""
@@ -224,8 +225,29 @@ object CheckInUiChecks {
             check(posts.get() == beforeFailure + 1 && actionNode(test, "手动签到").isEnabled)
             check(!vm.autoCheckIn.value && !Store.autoCheckIn() && !Preview.enabled)
             capture(test, "check-in-ui-rejected.png")
+            stage = "full-screen wallet feedback remains above system navigation"
+            signed.set(true)
+            reject.set(false)
+            reveal(test, "钱包")
+            click(test, "钱包")
+            await { find(test, "返回") != null && find(test, "我的") == null }
+            test.runOnMainSync { vm.checkInNow() }
+            await { find(test, "今日已签到") != null && !vm.checkingIn.value }
+            val screenBitmap = test.uiAutomation.takeScreenshot() ?: error("Screenshot unavailable")
+            val displayHeight = screenBitmap.height
+            screenBitmap.recycle()
+            var systemBottom = 0
+            test.runOnMainSync {
+                val insets = screen.window.decorView.rootWindowInsets
+                systemBottom = if (android.os.Build.VERSION.SDK_INT >= 30)
+                    insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+                else insets.systemWindowInsetBottom
+            }
+            val fullNoticeBounds = android.graphics.Rect().also { find(test, "今日已签到")!!.getBoundsInScreen(it) }
+            capture(test, "check-in-ui-fullscreen-insets.png")
+            check(fullNoticeBounds.bottom <= displayHeight - systemBottom)
             check(unknown.isEmpty())
-            result.putString("stream", "PASS: real AppRoot Home automatic-success Snackbar; My manual button works with automation off; busy disabled button and progress semantics; repeated busy clicks add one POST; manual success, already-signed and rejected feedback visible in UI; all API calls terminally intercepted with production headers; reads=${reads.get()},posts=${posts.get()},calls=${calls.get()}\n")
+            result.putString("stream", "PASS: real AppRoot Home automatic-success Snackbar; My manual button works with automation off; busy disabled button and progress semantics; repeated busy clicks add one POST; manual success, already-signed and rejected feedback visible in UI; full-screen Wallet notice text stays above system navigation; all API calls terminally intercepted with production headers; reads=${reads.get()},posts=${posts.get()},calls=${calls.get()}\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; reads=${reads.get()},posts=${posts.get()},unexpected=${unknown.size}\n")
