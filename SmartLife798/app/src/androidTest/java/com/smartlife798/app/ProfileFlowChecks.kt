@@ -11,7 +11,10 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.google.gson.JsonParser
 import com.smartlife798.app.core.Api
+import com.smartlife798.app.core.ActiveUsage
+import com.smartlife798.app.core.LoginInfo
 import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.RecentDevice
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StoredProfile
@@ -62,6 +65,8 @@ object ProfileFlowChecks {
         val originalToken = session.token
         val originalUid = session.uid
         val originalPhone = session.phone
+        val preferences = test.targetContext.getSharedPreferences("smartlife798", Context.MODE_PRIVATE)
+        val originalAuto = preferences.all["autoCheckIn"] as? Boolean
         val callers = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val requests = AtomicInteger()
         val patches = Collections.synchronizedList(mutableListOf<String>())
@@ -69,11 +74,17 @@ object ProfileFlowChecks {
         val rejectMasterToken = AtomicBoolean()
         val patchGate = AtomicReference<Gate?>()
         val masterGate = AtomicReference<Gate?>()
+        val loginGate = AtomicReference<Gate?>()
         val gates = mutableListOf<Gate>()
         val fixture = OkHttpClient.Builder().addInterceptor { chain ->
             requests.incrementAndGet()
             val path = chain.request().url.encodedPath
             val body = when {
+                path.endsWith("/acc/login") -> {
+                    check(chain.request().method == "POST")
+                    loginGate.getAndSet(null)?.hold()
+                    """{"code":0,"data":{"al":{"token":"offline-late-login-token","uid":"offline-late-login-user"}}}"""
+                }
                 path.endsWith("/acc/upt") -> {
                     check(chain.request().method == "POST")
                     val buffer = Buffer()
@@ -235,7 +246,78 @@ object ProfileFlowChecks {
             }
             bitmap.recycle()
             check(requests.get() == requestsBeforePreview && Store.profileJson == storedBeforePreview)
-            result.putString("stream", "PASS: partial nickname/score POSTs, failure preservation, cached profile after VM recreation, concurrent entry guard, stale master rejection, late/queued token rejection preserves replacement session, Preview rejects late account response, Preview memory-only changes; offline profile screenshot saved; patches=${patches.size}\n")
+
+            stage = "Preview exit preserves account A disk cache until successful account B login"
+            test.runOnMainSync {
+                screen.setContent { }
+                Preview.enabled = false
+                session.saveLogin(LoginInfo(token = "offline-cache-a-token", uid = "offline-cache-a"), "13800000000")
+                Store.saveProfile(StoredProfile("offline-cache-a", "账号A缓存", "", totalScore = "11", useScore = 1))
+                Store.saveRecents(listOf(RecentDevice("offline-a-device", "账号A设备", 5, 1L)))
+                Store.setPinned("offline-a-device", true)
+                val usage = ActiveUsage("offline-a-device", "账号A设备", 5, 1L, 92)
+                Store.setActive(usage)
+                Store.setPendingStart(usage)
+                Store.saveFavoritesCache("[]")
+                check(Store.markCheckInAttempt("2026-10-26", session.token!!))
+                Store.saveAutoCheckIn(false)
+            }
+            val retainedAccountA = preferences.all
+            val requestsBeforeExit = requests.get()
+            test.runOnMainSync {
+                vm.startPreview()
+                vm.logout()
+            }
+            test.waitForIdleSync()
+            check(session.token == null && !vm.loggedIn.value && !Preview.enabled)
+            check(preferences.all == retainedAccountA && requests.get() == requestsBeforeExit)
+            session.saveLogin(LoginInfo(token = "offline-cache-b-token", uid = "offline-cache-b"), "13800000000")
+            check(Store.uid == "offline-cache-b" && Store.token == "offline-cache-b-token")
+            check(Store.profileJson == null && Store.favoritesCacheJson() == null)
+            check(Store.recents().isEmpty() && Store.pinned().isEmpty())
+            check(Store.active() == null && Store.pendingStart() == null && Store.checkInAttemptDay() == null)
+            check(!Store.autoCheckIn() && requests.get() == requestsBeforeExit)
+
+            stage = "only a proven same uid may retain account cache on successful login"
+            Store.saveProfile(StoredProfile("offline-cache-b", "账号B缓存", "", totalScore = "22"))
+            val retainedAccountB = Store.profileJson
+            session.saveLogin(LoginInfo(token = "offline-cache-b-renewed", uid = "offline-cache-b"), "13800000000")
+            check(Store.profileJson == retainedAccountB && !Store.autoCheckIn())
+            Store.uid = null
+            session.saveLogin(LoginInfo(token = "offline-cache-b-unknown-owner", uid = "offline-cache-b"), "13800000000")
+            check(Store.profileJson == null && !Store.autoCheckIn())
+            check(requests.get() == requestsBeforeExit)
+
+            for (exitPreview in listOf(false, true)) {
+                stage = "late login after Preview transition and exit=$exitPreview never publishes credentials"
+                test.runOnMainSync { if (Preview.enabled) vm.logout() }
+                val storedBeforeLateLogin = preferences.all
+                val requestsBeforeLateLogin = requests.get()
+                val heldLogin = Gate().also { gates.add(it); loginGate.set(it) }
+                val lateLogin = callers.async { vm.login("13800000000", "000000") }
+                check(heldLogin.entered.await(8, TimeUnit.SECONDS))
+                test.runOnMainSync {
+                    vm.startPreview()
+                    if (exitPreview) vm.logout()
+                }
+                heldLogin.release.countDown()
+                var loginCancelled = false
+                runBlocking {
+                    try {
+                        lateLogin.await()
+                    } catch (_: CancellationException) {
+                        loginCancelled = true
+                    }
+                }
+                test.waitForIdleSync()
+                check(loginCancelled && preferences.all == storedBeforeLateLogin)
+                check(session.token == null && Preview.enabled == !exitPreview)
+                check(vm.loggedIn.value == !exitPreview)
+                check(if (exitPreview) vm.profile.value == null else vm.profile.value?.id == Preview.profile.id)
+                // Only the intercepted login request ran; no stale-success follow-up reads.
+                check(requests.get() == requestsBeforeLateLogin + 1)
+            }
+            result.putString("stream", "PASS: partial nickname/score POSTs, failure preservation, cached profile after VM recreation, concurrent entry guard, stale master rejection, late/queued token rejection preserves replacement session, Preview rejects late account response, Preview memory-only changes, Preview exit retains A disk cache, successful B login clears account caches and preserves installation preference, only proven same uid retains caches, late login after entering or exiting Preview cannot publish credentials; offline profile screenshot saved; patches=${patches.size}\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
@@ -253,8 +335,9 @@ object ProfileFlowChecks {
             if (fixtureStarted) {
                 Store.clearAccount()
                 // Instrumentation may end the process immediately; wait for preceding apply() writes.
-                val preferences = test.targetContext.getSharedPreferences("smartlife798", Context.MODE_PRIVATE)
-                if (!preferences.edit().commit()) {
+                val editor = preferences.edit()
+                if (originalAuto == null) editor.remove("autoCheckIn") else editor.putBoolean("autoCheckIn", originalAuto)
+                if (!editor.commit()) {
                     result.putString("stream", "FAIL at fixture cleanup: preference flush failed\n")
                     code = Activity.RESULT_CANCELED
                 }

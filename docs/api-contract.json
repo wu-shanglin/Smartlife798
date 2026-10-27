@@ -107,7 +107,7 @@
       "response": "Missions{accScoreRsp{validScore,daily{ltime,week}},dailyRSP{adId,score}}",
       "use": "query daily points-check-in status and server reward",
       "verified": "static",
-      "notes": "v3.1.5 d4.g.b and SignInFragment.z0; week is Monday bit0 through Sunday bit6; use response envelope time for China day; missing or invalid bitmap/reward/time is unknown and does not authorize automatic submission"
+      "notes": "v3.1.5 d4.g.b and SignInFragment.z0; week Monday bit0 to Sunday bit6; existing score account missing daily/week defaults to zero for preparation as original, but missing account/invalid bitmap/reward/time blocks requests; read-back confirmation requires an actual signed bit"
     },
     {
       "method": "POST",
@@ -408,14 +408,16 @@
     "avatar": "account.img is a direct URL (MeFragment.M -> ImageUtils.e -> Glide.load); this client uses HTTPS without business credentials and falls back locally; no invented fs/dl key conversion",
     "autoCheckIn": {
       "default": true,
-      "trigger": "foreground signed-in session or login while foreground, configurable in Me; no Preview IO or persistent writes",
+      "trigger": "foreground signed-in session or login while foreground; default-on install preference; Me also offers explicit manual check-in with automation disabled; no Preview IO or writes",
       "clock": "positive server envelope time plus monotonic elapsed since snapshot; Asia/Shanghai day and Monday=1 weekday; do not submit a stale snapshot after midnight",
-      "prepare": "require explicit unsigned current-day bitmap plus valid server dailyRSP.adId/score; missing daily/week remains unknown even though original v3.1.5 fell back to zero",
+      "prepare": "require existing accScoreRsp, positive server time and valid dailyRSP.adId/score; original v3.1.5 z0 treats absent daily/week as zero for preparation; invalid bitmap or missing score account remains unknown; never use zero fallback to confirm success",
       "digest": "lowercase MD5(adId + decimal(floor(adjustedServerMs/10000)*10) + last8(token) + last8(uid) + fixed25ByteSalt); never log inputs, digest, or signed request URL",
       "identity": "original native implementation gates on its app certificate; user explicitly authorized a separate implementation with this app's own package/certificate and legitimate login; no original library, private key or official identity spoofing",
-      "deduplication": "synchronously persist current-account day attempt before POST; same foreground reentry/process recreation first queries state and does not resubmit that day; explicit logout clears account attempt, new login queries state again",
+      "deduplication": "shared automatic/manual Mutex; cancellable wait for old VM cleanup; synchronously confirm current-account day attempt on every POST including explicit retry; automatic reentry/process recreation does not resubmit that day; manual first queries fresh status and may explicitly retry; cancellation removes only a newly-created unsent marker",
       "confirmation": "after accepted POST, GET missions again and require same-day signed bitmap; timeout/cancellation/failure/unknown state is unconfirmed, with no automatic write retry or fabricated points",
-      "validation": "v3.1.5 REA Java methods + LLVM arm64 static native instructions and independent synthetic Python/JVM vectors; original native runtime equivalence, protected v3.1.9 fields, real account mutations and rewards remain unverified"
+      "validation": "v3.1.5 REA Java methods + LLVM arm64 static native instructions and independent synthetic Python/JVM vectors; original native runtime equivalence, protected v3.1.9 fields, real account mutations and rewards remain unverified",
+      "feedback": "global Snackbar for success/already-signed/check failure/unconfirmed, plus persistent Me status and busy manual button; same automatic notice deduplicated, current-account notice cleared on session transition; Snackbar avoids actual bottom navigation height",
+      "session": "logout clears local session and cancels jobs immediately, remote logout uses captured old token; Preview exit keeps disk unchanged; successful login only inherits cached account data when old and new nonblank uid match; login success is also generation-bound and cannot replace a Preview or exited session with a late result"
     },
     "staticEvidence": {
       "version": "3.1.5",

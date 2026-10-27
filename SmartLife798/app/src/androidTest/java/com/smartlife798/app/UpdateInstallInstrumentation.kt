@@ -21,6 +21,10 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "check-in-ui") {
+            CheckInUiChecks.run(this)
+            return
+        }
         if (mode == "expressive") {
             ExpressiveMotionChecks.run(this)
             return

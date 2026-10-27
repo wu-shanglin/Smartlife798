@@ -77,51 +77,131 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val autoCheckIn: StateFlow<Boolean> = _autoCheckIn.asStateFlow()
     private val _checkInStatus = MutableStateFlow(if (Store.autoCheckIn()) "尚未检查签到" else "自动签到已关闭")
     val checkInStatus: StateFlow<String> = _checkInStatus.asStateFlow()
+    private val _checkingIn = MutableStateFlow(false)
+    val checkingIn: StateFlow<Boolean> = _checkingIn.asStateFlow()
+
+    private var checkInJob: Job? = null
+    private var checkInIsManual = false
+    private var checkInPostStarted = false
+    private var checkInResumePending = false
+    private var checkInDoneDay: String? = null
+    private var checkInServerTime = 0L
+    private var checkInSnapshotElapsed = 0L
+    private var lastAutoCheckInNotice: String? = null
+    private var lastCheckInMessage: String? = null
 
     fun setAutoCheckIn(enabled: Boolean) {
         _autoCheckIn.value = enabled
         Store.saveAutoCheckIn(enabled)
         if (enabled) {
-            _checkInStatus.value = if (Preview.enabled) "演示模式下不执行签到" else "尚未检查签到"
+            if (!_checkingIn.value) _checkInStatus.value =
+                if (Preview.enabled) "演示模式下不执行签到" else "尚未检查签到"
             requestAutoCheckIn()
         } else {
-            checkInJob?.cancel()
-            _checkInStatus.value = "自动签到已关闭"
+            checkInResumePending = false
+            // Turning off automation must not cancel an explicit manual action.
+            if (!checkInIsManual || !_checkingIn.value) {
+                checkInJob?.cancel()
+                _checkInStatus.value = if (_checkingIn.value && checkInPostStarted)
+                    "自动签到已关闭，本次结果待确认，可手动检查" else "自动签到已关闭"
+            }
         }
     }
 
-    private var checkInJob: Job? = null
-    private var checkInDoneDay: String? = null
-    private var checkInServerTime = 0L
-    private var checkInSnapshotElapsed = 0L
+    /** Explicit user action: works with automation disabled and always reads fresh state. */
+    fun checkInNow() = requestCheckIn(manual = true)
 
-    private fun requestAutoCheckIn() {
-        if (Preview.enabled || !session.isLoggedIn || !appResumed || !_autoCheckIn.value || checkInJob?.isActive == true) return
-        if (checkInDoneDay != null && checkInServerTime > 0L &&
+    private fun requestAutoCheckIn() = requestCheckIn(manual = false)
+
+    private fun publishCheckIn(status: String, manual: Boolean, day: String? = null, notice: String = status) {
+        _checkInStatus.value = status
+        val key = "$day:$notice"
+        if (manual || lastAutoCheckInNotice != key) {
+            lastAutoCheckInNotice = key
+            showCheckInNotice(notice)
+        }
+    }
+
+    private fun showCheckInNotice(notice: String) {
+        lastCheckInMessage = notice
+        _message.value = notice
+    }
+
+    private fun clearCheckInNotice() {
+        if (_message.value == lastCheckInMessage) _message.value = null
+        lastCheckInMessage = null
+        lastAutoCheckInNotice = null
+        checkInResumePending = false
+    }
+
+    private fun checkInFailure(failure: Res.Fail): String = when (failure.code) {
+        ErrorCodes.NETWORK -> "网络不可用或请求超时"
+        ErrorCodes.TOKEN_EXPIRED -> "登录状态已过期，请重新登录"
+        else -> failure.msg.replace(Regex("[\\p{Cntrl}\\s]+"), " ").trim().take(120)
+            .ifBlank { "服务端未确认（${failure.code}）" }
+    }
+
+    private fun requestCheckIn(manual: Boolean) {
+        if (Preview.enabled) {
+            if (manual) publishCheckIn("演示模式下不执行签到", manual = true)
+            return
+        }
+        if (!session.isLoggedIn || !appResumed) {
+            if (manual) publishCheckIn(if (!session.isLoggedIn) "请先登录后再签到" else "请在应用前台签到", manual = true)
+            return
+        }
+        if (!manual && !_autoCheckIn.value) return
+        if (_checkingIn.value || checkInJob?.isCompleted == false) {
+            // Resume may arrive while a cancelled request is still releasing its durable marker.
+            if (!manual && checkInJob?.isCancelled == true) checkInResumePending = true
+            if (manual) showCheckInNotice("签到处理中，请稍候")
+            return
+        }
+        if (!manual && checkInDoneDay != null && checkInServerTime > 0L &&
             CheckIn.dayKey(checkInServerTime + android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed) == checkInDoneDay) {
             _checkInStatus.value = "今日已签到"
             return
         }
-        checkInJob = viewModelScope.launch {
+        checkInIsManual = manual
+        checkInPostStarted = false
+        _checkingIn.value = true
+        val task = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val token = session.token ?: return@launch
-            val uid = session.uid ?: run {
-                _checkInStatus.value = "账号信息不足，暂无法签到"
-                return@launch
-            }
             val generation = accountGeneration
             fun current() = !Preview.enabled && session.token == token && accountGeneration == generation
-            fun allowed() = current() && _autoCheckIn.value && appResumed
-            _checkInStatus.value = "正在检查今日签到…"
+            fun allowed() = current() && appResumed && (manual || _autoCheckIn.value)
+            var locked = false
             var submitted = false
             var recorded = false
+            var ownsNewAttempt = false
             var attemptDay: String? = null
             try {
+                if (manual) locked = CHECK_IN_COMMAND.tryLock() else {
+                    // A previous Activity may still be releasing an unsent durable attempt.
+                    CHECK_IN_COMMAND.lock()
+                    locked = true
+                }
+                if (!locked) {
+                    if (manual && current()) publishCheckIn("签到处理中，请稍候", manual = true)
+                    return@launch
+                }
+                if (!allowed()) return@launch
+                val uid = session.uid
+                if (uid.isNullOrBlank()) {
+                    publishCheckIn("账号信息不足，暂无法签到", manual)
+                    return@launch
+                }
+                _checkInStatus.value = "正在检查今日签到…"
                 val response = Api.checkInMissions()
                 if (!allowed()) return@launch
+                if (response is Res.Fail) {
+                    publishCheckIn("签到检查失败：${checkInFailure(response)}", manual)
+                    return@launch
+                }
                 val missions = (response as? Res.Ok)?.data
                 val serverTime = (response as? Res.Ok)?.serverTime ?: 0L
                 if (missions == null || serverTime <= 0L) {
-                    _checkInStatus.value = "无法确认今日签到，请稍后重新打开应用检查"
+                    publishCheckIn("无法确认今日签到，服务端时间或数据缺失", manual)
                     return@launch
                 }
                 checkInServerTime = serverTime
@@ -129,80 +209,99 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val day = CheckIn.dayKey(serverTime)
                 attemptDay = day
                 val weekday = CheckIn.weekday(serverTime)
-                when (CheckIn.isSignedIn(missions, weekday)) {
+                // Original 3.1.5 treats an existing score account's absent daily/week as zero.
+                // Keep missing accounts and invalid bitmaps unknown; never use this fallback to confirm success.
+                when (CheckIn.isSignedIn(missions, weekday, allowMissingDaily = true)) {
                     true -> {
                         checkInDoneDay = day
-                        _checkInStatus.value = "今日已签到"
+                        publishCheckIn("今日已签到", manual, day)
                         return@launch
                     }
                     null -> {
-                        _checkInStatus.value = "签到状态不完整，未自动提交"
+                        checkInDoneDay = null
+                        publishCheckIn("签到状态不完整，未提交", manual, day)
                         return@launch
                     }
                     false -> Unit
                 }
-                if (Store.checkInAttemptDay() == day) {
-                    _checkInStatus.value = "今日签到已提交过，结果待确认；不会自动重复提交"
+                checkInDoneDay = null
+                val previousAttempt = Store.checkInAttemptDay() == day
+                if (previousAttempt && !manual) {
+                    publishCheckIn("今日签到已提交过，结果待确认；可手动检查并重试", manual, day)
                     return@launch
                 }
-                val params = CheckIn.prepare(missions, weekday)
+                val params = CheckIn.prepare(missions, weekday, allowMissingDaily = true)
                 if (params == null) {
-                    _checkInStatus.value = "签到参数不完整，未自动提交"
-                    return@launch
-                }
-                val elapsed = android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed
-                // Do not submit yesterday's weekday if a slow response crossed midnight.
-                if (CheckIn.dayKey(serverTime + elapsed) != day) {
-                    _checkInStatus.value = "日期已变化，下次打开应用重新检查"
+                    publishCheckIn("签到参数不完整，未提交", manual, day)
                     return@launch
                 }
                 if (!allowed()) return@launch
-                withContext(Dispatchers.IO) { recorded = Store.markCheckInAttempt(day, token) }
+                withContext(Dispatchers.IO) {
+                    // commit(false) can still update preference memory: re-confirm durability on manual retry.
+                    recorded = Store.markCheckInAttempt(day, token, allowExisting = manual)
+                    ownsNewAttempt = recorded && !previousAttempt
+                }
                 if (!recorded || !allowed()) {
-                    if (current()) _checkInStatus.value = "未提交签到，请稍后重新检查"
+                    if (current() && appResumed) publishCheckIn("未提交签到，请稍后重新检查", manual, day)
                     return@launch
                 }
-                // Durable storage may stall across a day or digest bucket boundary.
                 val submitElapsed = android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed
                 if (CheckIn.dayKey(serverTime + submitElapsed) != day) {
-                    _checkInStatus.value = "日期已变化，下次打开应用重新检查"
+                    publishCheckIn("日期已变化，请重新检查签到", manual, day)
                     return@launch
                 }
                 val sign = CheckIn.sign(params.adId, token, uid, serverTime, submitElapsed)
-                _checkInStatus.value = "正在自动签到…"
+                _checkInStatus.value = if (manual) "正在签到…" else "正在自动签到…"
                 submitted = true
-                when (Api.checkIn(params, sign)) {
+                checkInPostStarted = true
+                when (val result = Api.checkIn(params, sign)) {
                     is Res.Ok -> {
-                        if (!current()) return@launch
-                        // A successful write still gets a read-back; never fabricate a balance.
+                        if (!allowed()) return@launch
                         val confirmed = Api.checkInMissions()
-                        if (!current()) return@launch
+                        if (!allowed()) return@launch
                         val state = (confirmed as? Res.Ok)?.data
+                        // The zero fallback cannot confirm success: require an actual returned signed bit.
                         if (state != null && confirmed.serverTime > 0L && CheckIn.dayKey(confirmed.serverTime) == day &&
                             CheckIn.isSignedIn(state, weekday) == true) {
                             checkInDoneDay = day
-                            _checkInStatus.value = "今日已自动签到"
-                        } else _checkInStatus.value = "签到已受理，状态待确认；不会自动重复提交"
+                            publishCheckIn(if (manual) "今日已签到" else "今日已自动签到", manual, day,
+                                notice = if (manual) "签到成功" else "自动签到成功")
+                        } else publishCheckIn("签到已受理，状态待确认；可手动检查结果", manual, day)
                         refreshMasterInternal()
                     }
-                    is Res.Fail -> if (current()) {
-                        _checkInStatus.value = "自动签到未确认；不会自动重复提交，可在原应用核对"
+                    is Res.Fail -> if (allowed()) {
+                        publishCheckIn("${if (manual) "签到" else "自动签到"}未确认：${checkInFailure(result)}；可手动检查并重试", manual, day)
                     }
                 }
             } catch (cancelled: CancellationException) {
-                if (current() && _autoCheckIn.value) _checkInStatus.value =
-                    if (submitted) "签到结果待确认，下次打开应用检查" else "签到检查已暂停"
+                if (current() && (manual || _autoCheckIn.value)) _checkInStatus.value =
+                    if (submitted) "签到结果待确认，可手动检查" else "签到检查已暂停"
                 throw cancelled
             } catch (_: IllegalArgumentException) {
-                if (current()) _checkInStatus.value = "签到参数无效，未自动提交"
+                if (allowed()) publishCheckIn("签到参数无效，未提交", manual, attemptDay)
             } finally {
-                // A known cancellation before calling the write must not consume the day.
-                val day = attemptDay
-                if (recorded && !submitted && day != null) withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
-                    if (current()) Store.clearUnsentCheckInAttempt(day, token)
+                if (ownsNewAttempt && recorded && !submitted) {
+                    val day = attemptDay
+                    if (day != null) withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                        if (current()) Store.clearUnsentCheckInAttempt(day, token)
+                    }
+                }
+                if (locked) CHECK_IN_COMMAND.unlock()
+            }
+        }
+        checkInJob = task
+        task.invokeOnCompletion {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                if (checkInJob === task) {
+                    _checkingIn.value = false
+                    if (checkInResumePending) {
+                        checkInResumePending = false
+                        requestAutoCheckIn()
+                    }
                 }
             }
         }
+        task.start()
     }
 
     private val _startupPage: MutableStateFlow<StartupPage> = MutableStateFlow(Store.startupPage())
@@ -563,36 +662,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun sendSmsCode(phone: String, captcha: String, seed: Double): Res<Unit> =
         withContext(Dispatchers.IO) { Api.sendSms(phone, captcha, seed) }
 
-    suspend fun login(phone: String, sms: String): Res<LoginData> = withContext(Dispatchers.IO) {
-        val res = Api.login(phone, sms)
-        if (res is Res.Ok) {
-            res.data?.al?.let { info ->
-                if (info.token.isNullOrBlank()) {
-                    return@withContext Res.Fail(-1, "登录响应缺少令牌")
+    suspend fun login(phone: String, sms: String): Res<LoginData> {
+        val loginGeneration = accountGeneration
+        val previewAtStart = Preview.enabled
+        if (previewAtStart) throw CancellationException("Login unavailable in Preview")
+        return withContext(Dispatchers.IO) {
+            val res = Api.login(phone, sms)
+            if (res is Res.Ok) {
+                res.data?.al?.let { info ->
+                    if (info.token.isNullOrBlank()) {
+                        return@withContext Res.Fail(-1, "登录响应缺少令牌")
+                    }
+                    withContext(Dispatchers.Main.immediate) {
+                        if (accountGeneration != loginGeneration || Preview.enabled) {
+                            throw CancellationException("Login session changed")
+                        }
+                        // Invalidate old-account jobs before publishing a replacement
+                        // session; saveLogin clears caches unless their uid matches.
+                        resetAccountState()
+                        session.saveLogin(info, phone)
+                        _profile.value = Store.profile()
+                        _recents.value = Store.recents()
+                        _pinned.value = Store.pinned()
+                        _active.value = Store.active()
+                        _pendingStart.value = Store.pendingStart()
+                        _loggedIn.value = true
+                    }
+                    refreshMasterInternal()
+                    refreshBillsDerived()
+                    withContext(Dispatchers.Main.immediate) { requestAutoCheckIn() }
                 }
-                session.saveLogin(info, phone)
-                _loggedIn.value = true
-                refreshMasterInternal()
-                refreshBillsDerived()
-                withContext(Dispatchers.Main.immediate) { requestAutoCheckIn() }
             }
+            res
         }
-        res
     }
 
     fun logout() {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { runCatching { Api.logout() } }
-            Preview.enabled = false
-            // session.clear() drops the account-scoped store keys; appearance
-            // preferences are intentionally kept.
+        val wasPreview = Preview.enabled
+        val oldToken = session.token
+        Preview.enabled = false
+        if (wasPreview) {
+            // Leaving a demonstration must not touch the retained real account.
+            session.suspendForPreview()
+        } else {
+            // Stop old-account work immediately, before waiting for remote logout.
             session.clear()
-            resetAccountState()
+        }
+        resetAccountState()
+        if (wasPreview || oldToken.isNullOrBlank()) return
+        viewModelScope.launch {
+            // A late response belongs to this captured token and must never
+            // clear a newer login established while this request was pending.
+            Api.logout(oldToken)
         }
     }
 
     private fun resetAccountState() {
         accountGeneration += 1
+        clearCheckInNotice()
         profileJob?.cancel()
         checkInJob?.cancel()
         checkInDoneDay = null
@@ -995,6 +1122,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Enables the clearly-labelled UI preview (static sample data, no network). */
     fun startPreview() {
         accountGeneration += 1
+        clearCheckInNotice()
         profileJob?.cancel()
         checkInJob?.cancel()
         checkInDoneDay = null
@@ -1598,6 +1726,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /** Shared by automatic/manual paths and overlapping activity ViewModels. */
+        val CHECK_IN_COMMAND = Mutex()
+
         /** Coalescing window for [bumpRefresh]; shorter than a screen transition. */
         const val REFRESH_DEBOUNCE_MS = 200L
 

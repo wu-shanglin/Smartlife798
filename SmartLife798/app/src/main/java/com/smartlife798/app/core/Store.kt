@@ -204,8 +204,8 @@ object Store {
     fun checkInAttemptDay(): String? = prefs.getString("checkInAttemptDay", null)
 
     @Synchronized
-    fun markCheckInAttempt(day: String, token: String): Boolean =
-        !Preview.enabled && session.token == token && prefs.getString("checkInAttemptDay", null) != day &&
+    fun markCheckInAttempt(day: String, token: String, allowExisting: Boolean = false): Boolean =
+        !Preview.enabled && session.token == token && (allowExisting || prefs.getString("checkInAttemptDay", null) != day) &&
             prefs.edit().putString("checkInAttemptDay", day).commit()
 
     @Synchronized
@@ -269,6 +269,12 @@ object session {
     }
 
     fun saveLogin(info: LoginInfo, phone: String) {
+        val storedUid = Store.uid
+        if (storedUid.isNullOrBlank() || info.uid.isNullOrBlank() || storedUid != info.uid) {
+            // Preview suspends memory credentials while retaining disk caches.
+            // Only a proven same-account login may inherit those account keys.
+            Store.clearAccount()
+        }
         token = info.token
         uid = info.uid
         this.phone = phone

@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import com.google.gson.JsonParser
 import com.smartlife798.app.core.Api
+import com.smartlife798.app.core.LoginInfo
 import com.smartlife798.app.core.Preview
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
@@ -21,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -30,7 +30,7 @@ import okio.Buffer
 /** Fixture identities and terminal interceptors only; no actual HTTP request is forwarded. */
 object CheckInFlowChecks {
     private const val SERVER_TIME = 1793016000000L // 2026-10-26 20:00 Asia/Shanghai, Monday.
-    private enum class Scenario { SUCCESS, ALREADY, UNCONFIRMED, REJECTED, TIMEOUT, NO_TIME, NO_WEEK, NO_REWARD }
+    private enum class Scenario { SUCCESS, ALREADY, UNCONFIRMED, REJECTED, TIMEOUT, NO_TIME, NO_WEEK, NO_REWARD, NO_ACCOUNT, READ_TIMEOUT }
     private class Gate {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -60,10 +60,13 @@ object CheckInFlowChecks {
         val reads = AtomicInteger()
         val events = Collections.synchronizedList(mutableListOf<String>())
         val missionGate = AtomicReference<Gate?>()
+        val logoutGate = AtomicReference<Gate?>()
+        val logoutTokens = Collections.synchronizedList(mutableListOf<String?>())
         val gates = mutableListOf<Gate>()
         var fixtureStarted = false
         lateinit var vm: MainViewModel
-        val fixture = OkHttpClient.Builder().addInterceptor { chain ->
+        var vmCreated = false
+        val fixture = originalClient.newBuilder().dispatcher(okhttp3.Dispatcher()).addInterceptor { chain ->
             val request = chain.request()
             val path = request.url.encodedPath
             val activeScenario = scenario.get()
@@ -72,13 +75,16 @@ object CheckInFlowChecks {
                     check(request.method == "GET")
                     reads.incrementAndGet()
                     events.add("read")
+                    if (activeScenario == Scenario.READ_TIMEOUT) throw InterruptedIOException("offline read timeout")
                     missionGate.getAndSet(null)?.hold()
                     val time = if (activeScenario == Scenario.NO_TIME) "" else ",\"time\":$SERVER_TIME"
                     val week = if (activeScenario == Scenario.NO_WEEK) "" else
                         ",\"week\":${if (activeScenario == Scenario.ALREADY || signed.get()) 1 else 0}"
                     val reward = if (activeScenario == Scenario.NO_REWARD) "" else
                         ",\"dailyRSP\":{\"adId\":\"offline-reward\",\"score\":5}"
-                    """{"code":0$time,"data":{"accScoreRsp":{"validScore":"120","daily":{"ltime":$SERVER_TIME$week}}$reward}}"""
+                    if (activeScenario == Scenario.NO_ACCOUNT)
+                        """{"code":0$time,"data":{"dailyRSP":{"adId":"offline-reward","score":5}}}"""
+                    else """{"code":0$time,"data":{"accScoreRsp":{"validScore":"120","daily":{"ltime":$SERVER_TIME$week}}$reward}}"""
                 }
                 path.endsWith("/score/score-send") -> {
                     check(request.method == "POST")
@@ -102,7 +108,11 @@ object CheckInFlowChecks {
                     }
                 }
                 path.endsWith("/master") -> """{"code":0,"time":$SERVER_TIME,"data":{"account":{"id":"offline-checkin-user","name":"离线用户","useScore":0},"pltTotalScore":"125","favos":[]}}"""
-                path.endsWith("/logout") -> """{"code":0}"""
+                path.endsWith("/logout") -> {
+                    logoutTokens.add(request.header("Authorization"))
+                    logoutGate.getAndSet(null)?.hold()
+                    """{"code":0}"""
+                }
                 else -> error("Unexpected offline check-in path")
             }
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200)
@@ -121,6 +131,7 @@ object CheckInFlowChecks {
                 vm = ViewModelProvider(viewModels,
                     ViewModelProvider.AndroidViewModelFactory(test.targetContext.applicationContext as Application))
                     .get(MainViewModel::class.java)
+                vmCreated = true
                 vm.setAppResumed(false)
             }
         }
@@ -218,6 +229,7 @@ object CheckInFlowChecks {
             foreground()
             await { vm.checkInStatus.value.startsWith("签到已受理，状态待确认") }
             check(posts.get() == 1 && reads.get() == 2)
+            await { !vm.checkingIn.value }
             foreground()
             await { vm.checkInStatus.value.startsWith("今日签到已提交过") }
             check(posts.get() == 1)
@@ -233,7 +245,7 @@ object CheckInFlowChecks {
             check(posts.get() == 0 && Store.checkInAttemptDay() == null && !Store.autoCheckIn())
             Store.saveAutoCheckIn(true)
 
-            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_WEEK, Scenario.NO_REWARD)) {
+            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_ACCOUNT, Scenario.NO_REWARD)) {
                 stage = "$missing never fabricates a command"
                 reset(missing)
                 foreground()
@@ -273,6 +285,180 @@ object CheckInFlowChecks {
             check(posts.get() == 0 && Store.checkInAttemptDay() == null)
             check(vm.checkInStatus.value == "演示模式下不执行签到")
 
+            stage = "logout immediately cancels pending check-in and late logout preserves replacement session"
+            reset(Scenario.SUCCESS)
+            val logoutRead = Gate().also { gates.add(it); missionGate.set(it) }
+            val pendingLogout = Gate().also { gates.add(it); logoutGate.set(it) }
+            foreground()
+            check(logoutRead.entered.await(8, TimeUnit.SECONDS))
+            test.runOnMainSync {
+                vm.logout()
+                check(!vm.loggedIn.value && session.token == null && Store.token == null)
+            }
+            check(pendingLogout.entered.await(8, TimeUnit.SECONDS))
+            check(logoutTokens.last() == "offline-checkin-token")
+            logoutRead.release.countDown()
+            await { readJobComplete(vm) }
+            check(posts.get() == 0 && Store.checkInAttemptDay() == null)
+            test.runOnMainSync {
+                session.saveLogin(LoginInfo(token = "offline-new-login-token", uid = "offline-new-login-user"), "13800000000")
+            }
+            pendingLogout.release.countDown()
+            await { fixture.dispatcher.runningCallsCount() == 0 }
+            test.waitForIdleSync()
+            check(session.token == "offline-new-login-token" && session.uid == "offline-new-login-user")
+            check(Store.token == "offline-new-login-token" && Store.uid == "offline-new-login-user")
+            check(posts.get() == 0)
+
+            stage = "manual check-in works with automation disabled and reports success"
+            reset(Scenario.SUCCESS)
+            test.runOnMainSync { vm.setAutoCheckIn(false) }
+            foreground()
+            val manualRead = Gate().also { gates.add(it); missionGate.set(it) }
+            test.runOnMainSync { vm.checkInNow() }
+            check(manualRead.entered.await(8, TimeUnit.SECONDS))
+            check(vm.checkingIn.value)
+            test.runOnMainSync {
+                vm.checkInNow()
+                vm.setAutoCheckIn(false)
+                vm.setAppResumed(true)
+            }
+            check(reads.get() == 1 && posts.get() == 0)
+            manualRead.release.countDown()
+            await { !vm.checkingIn.value }
+            check(vm.checkInStatus.value == "今日已签到" && vm.message.value == "签到成功")
+            check(!vm.autoCheckIn.value && !Store.autoCheckIn() && posts.get() == 1 && reads.get() == 2)
+
+            stage = "manual fresh read recognizes existing check-in without posting again"
+            test.runOnMainSync { vm.checkInNow() }
+            await { !vm.checkingIn.value }
+            check(vm.message.value == "今日已签到" && posts.get() == 1 && reads.get() == 3)
+            Store.saveAutoCheckIn(true)
+
+            stage = "explicit retry after a rejected auto post reads current state then submits once"
+            reset(Scenario.REJECTED)
+            foreground()
+            await { !vm.checkingIn.value }
+            check(posts.get() == 1 && vm.message.value?.contains("离线签到拒绝") == true)
+            foreground()
+            await { !vm.checkingIn.value }
+            check(posts.get() == 1)
+            scenario.set(Scenario.SUCCESS)
+            events.clear()
+            test.runOnMainSync { vm.checkInNow() }
+            await { !vm.checkingIn.value }
+            check(posts.get() == 2 && events.take(3) == listOf("read", "post", "read"))
+            check(vm.message.value == "签到成功")
+
+            stage = "failed status query reports a reason and leaves manual retry available"
+            reset(Scenario.READ_TIMEOUT)
+            foreground()
+            await { !vm.checkingIn.value }
+            check(posts.get() == 0 && Store.checkInAttemptDay() == null)
+            check(vm.message.value == "签到检查失败：网络不可用或请求超时")
+            scenario.set(Scenario.SUCCESS)
+            test.runOnMainSync { vm.checkInNow() }
+            await { !vm.checkingIn.value }
+            check(posts.get() == 1 && vm.message.value == "签到成功")
+
+            stage = "original absent-week fallback submits automatically once without inventing success"
+            reset(Scenario.NO_WEEK)
+            foreground()
+            await { !vm.checkingIn.value }
+            check(posts.get() == 1 && vm.checkInStatus.value.startsWith("签到已受理，状态待确认"))
+            check(vm.message.value != "签到成功")
+            foreground()
+            await { !vm.checkingIn.value }
+            check(posts.get() == 1)
+            scenario.set(Scenario.SUCCESS)
+            test.runOnMainSync { vm.checkInNow() }
+            await { !vm.checkingIn.value }
+            check(posts.get() == 1 && vm.message.value == "今日已签到")
+
+            stage = "manual action still refuses missing time or server reward"
+            for (missing in listOf(Scenario.NO_TIME, Scenario.NO_REWARD)) {
+                reset(missing)
+                test.runOnMainSync { vm.setAutoCheckIn(false) }
+                foreground()
+                test.runOnMainSync { vm.checkInNow() }
+                await { !vm.checkingIn.value }
+                check(reads.get() == 1 && posts.get() == 0 && Store.checkInAttemptDay() == null)
+                check(!vm.message.value.isNullOrBlank())
+                Store.saveAutoCheckIn(true)
+            }
+
+            stage = "rapid disable and enable resumes a cancelled check without duplicate writes"
+            reset(Scenario.SUCCESS)
+            val toggledRead = Gate().also { gates.add(it); missionGate.set(it) }
+            foreground()
+            check(toggledRead.entered.await(8, TimeUnit.SECONDS))
+            test.runOnMainSync {
+                vm.setAutoCheckIn(false)
+                vm.setAutoCheckIn(true)
+            }
+            toggledRead.release.countDown()
+            await { vm.checkInStatus.value == "今日已自动签到" && !vm.checkingIn.value }
+            check(posts.get() == 1 && vm.message.value == "自动签到成功")
+
+            stage = "failed durable write blocks both automatic and explicit retry POSTs"
+            reset(Scenario.SUCCESS)
+            val prefsField = Store::class.java.getDeclaredField("prefs").apply { isAccessible = true }
+            val realPreferences = prefsField.get(null)
+            val failedCommits = AtomicInteger()
+            val failingPreferences = object : android.content.SharedPreferences by preferences {
+                override fun edit(): android.content.SharedPreferences.Editor {
+                    val editor = preferences.edit()
+                    return object : android.content.SharedPreferences.Editor by editor {
+                        override fun putString(key: String, value: String?): android.content.SharedPreferences.Editor {
+                            editor.putString(key, value)
+                            return this
+                        }
+                        override fun commit(): Boolean {
+                            // Mirror Android's memory-before-disk behavior, then report a failed disk commit.
+                            editor.apply()
+                            failedCommits.incrementAndGet()
+                            return false
+                        }
+                    }
+                }
+            }
+            prefsField.set(null, failingPreferences)
+            try {
+                foreground()
+                await { !vm.checkingIn.value }
+                check(posts.get() == 0 && Store.checkInAttemptDay() == "2026-10-26")
+                test.runOnMainSync { vm.checkInNow() }
+                await { !vm.checkingIn.value }
+                check(posts.get() == 0 && reads.get() == 2 && failedCommits.get() == 2)
+            } finally { prefsField.set(null, realPreferences) }
+
+            stage = "new foreground waits for previous ViewModel cleanup instead of losing check-in"
+            reset(Scenario.SUCCESS)
+            val commandMutex = MainViewModel::class.java.getDeclaredField("CHECK_IN_COMMAND").apply {
+                isAccessible = true
+            }.get(null) as kotlinx.coroutines.sync.Mutex
+            check(commandMutex.tryLock())
+            var heldCommand = true
+            try {
+                foreground()
+                test.waitForIdleSync()
+                check(vm.checkingIn.value && reads.get() == 0 && posts.get() == 0)
+                commandMutex.unlock()
+                heldCommand = false
+                await { !vm.checkingIn.value && vm.checkInStatus.value == "今日已自动签到" }
+                check(posts.get() == 1 && reads.get() == 2)
+            } finally { if (heldCommand) commandMutex.unlock() }
+
+            stage = "manual Preview is explanatory and preserves every account preference"
+            reset(Scenario.SUCCESS)
+            val savedBeforePreview = preferences.all
+            test.runOnMainSync {
+                vm.startPreview()
+                vm.checkInNow()
+            }
+            check(reads.get() == 0 && posts.get() == 0 && !vm.checkingIn.value)
+            check(vm.message.value == "演示模式下不执行签到" && preferences.all == savedBeforePreview)
+
             stage = "logout clears attempt and preserves disabled installation preference"
             reset(Scenario.ALREADY)
             check(Store.markCheckInAttempt("2026-10-26", session.token!!))
@@ -283,9 +469,11 @@ object CheckInFlowChecks {
             }
             await { !vm.loggedIn.value && session.token == null }
             check(Store.checkInAttemptDay() == null && !Store.autoCheckIn())
-            result.putString("stream", "PASS: default enabled; read-post-confirm; signed/disabled/Preview zero posts; concurrent foreground coalescing; rejection/timeout never replay across VM recreation; missing time/week/reward blocks submit; old token and Preview responses rejected; logout clears account attempt and preserves preference; entirely offline fixtures\n")
+            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/account/reward blocks submit; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
+            result.putString("state", "reads=${reads.get()},posts=${posts.get()},busy=${if (vmCreated) vm.checkingIn.value else false},status=${if (vmCreated) vm.checkInStatus.value else "not initialized"}")
+            result.putString("failureFrames", failure.stackTrace.take(4).joinToString { "${it.methodName}:${it.lineNumber}" })
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}\n")
         } finally {
             gates.forEach { it.release.countDown() }
