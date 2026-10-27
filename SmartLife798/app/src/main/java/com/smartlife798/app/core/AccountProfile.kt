@@ -13,7 +13,7 @@ class ProfilePatch private constructor(val name: String? = null, val useScore: I
     }
 }
 
-/** useScore is a preference bit. The points balance is the separate master.pltTotalScore. */
+/** useScore is a preference bit. The balance comes from mission-lst.validScore. */
 fun Master.storedProfile(fallbackPhone: String?): StoredProfile? = account?.let {
     StoredProfile(
         id = it.id.orEmpty(),
@@ -21,8 +21,8 @@ fun Master.storedProfile(fallbackPhone: String?): StoredProfile? = account?.let 
         phone = it.phone.orEmpty().ifBlank { fallbackPhone.orEmpty() },
         no = it.no,
         arrear = it.arrear,
-        totalScore = pltTotalScore,
-        useScore = it.useScore?.takeIf { bit -> bit == 0 || bit == 1 },
+        totalScore = null,
+        useScore = (it.useScore ?: 0).takeIf { bit -> bit == 0 || bit == 1 },
         img = it.img,
     )
 }

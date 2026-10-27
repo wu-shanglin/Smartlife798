@@ -30,7 +30,7 @@ import okio.Buffer
 /** Fixture identities and terminal interceptors only; no actual HTTP request is forwarded. */
 object CheckInFlowChecks {
     private const val SERVER_TIME = 1793016000000L // 2026-10-26 20:00 Asia/Shanghai, Monday.
-    private enum class Scenario { SUCCESS, ALREADY, UNCONFIRMED, REJECTED, TIMEOUT, NO_TIME, NO_WEEK, NO_REWARD, NO_ACCOUNT, READ_TIMEOUT }
+    private enum class Scenario { SUCCESS, ALREADY, DUPLICATE, UNCONFIRMED, REJECTED, TIMEOUT, NO_TIME, NO_WEEK, NO_REWARD, NO_ACCOUNT, READ_TIMEOUT }
     private class Gate {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -100,6 +100,10 @@ object CheckInFlowChecks {
                     check(params["addScoreType"].asInt == 1 && params["addScore"].asInt == 5)
                     when (activeScenario) {
                         Scenario.TIMEOUT -> throw InterruptedIOException("offline timeout fixture")
+                        Scenario.DUPLICATE -> {
+                            signed.set(true)
+                            """{"code":-1,"msg":"今日已签到"}"""
+                        }
                         Scenario.REJECTED -> """{"code":-1,"msg":"离线签到拒绝"}"""
                         else -> {
                             signed.set(activeScenario != Scenario.UNCONFIRMED)
@@ -168,10 +172,10 @@ object CheckInFlowChecks {
 
             stage = "default enabled and confirmed read-write-read"
             foreground()
-            await { vm.checkInStatus.value == "今日已自动签到" && vm.profile.value?.totalScore == "125" }
+            await { !vm.checkingIn.value && vm.checkInStatus.value == "今日已自动签到" && vm.availableScore.value == "120" }
             check(posts.get() == 1 && reads.get() == 2)
             check(events.take(3) == listOf("read", "post", "read"))
-            check(Store.checkInAttemptDay() == "2026-10-26" && vm.profile.value?.totalScore == "125")
+            check(Store.checkInAttemptDay() == "2026-10-26" && vm.availableScore.value == "120")
             repeat(5) { foreground() }
             test.waitForIdleSync()
             check(posts.get() == 1 && reads.get() == 2)
@@ -185,11 +189,24 @@ object CheckInFlowChecks {
             test.waitForIdleSync()
             check(vm.checkInStatus.value == "今日已签到" && posts.get() == 1 && reads.get() == 2)
 
+            stage = "read-only refresh works with automation disabled and exposes real balance"
+            test.runOnMainSync { vm.setAutoCheckIn(false); vm.refreshCheckInStatus() }
+            await { !vm.checkingIn.value && vm.signedInToday.value == true }
+            check(vm.availableScore.value == "120" && posts.get() == 1 && reads.get() == 3)
+            test.runOnMainSync { vm.setAutoCheckIn(true) }
+
             stage = "already signed never posts"
             reset(Scenario.ALREADY)
             foreground()
             await { vm.checkInStatus.value == "今日已签到" }
             check(posts.get() == 0 && reads.get() == 1 && Store.checkInAttemptDay() == null)
+
+            stage = "duplicate-day rejection reconciles to signed and never reports unconfirmed"
+            reset(Scenario.DUPLICATE)
+            foreground()
+            await { !vm.checkingIn.value && vm.signedInToday.value == true }
+            check(vm.checkInStatus.value == "今日已自动签到" && vm.message.value == "今日已签到")
+            check(posts.get() == 1 && reads.get() == 2)
 
             stage = "disabled preference and Preview send no requests"
             reset(Scenario.SUCCESS)

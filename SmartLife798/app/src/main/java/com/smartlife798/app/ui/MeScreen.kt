@@ -102,7 +102,13 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     val checkInStatus by vm.checkInStatus.collectAsStateWithLifecycle()
     val checkingIn by vm.checkingIn.collectAsStateWithLifecycle()
 
+    val availableScore by vm.availableScore.collectAsStateWithLifecycle()
+    val signedInToday by vm.signedInToday.collectAsStateWithLifecycle()
+    // Above the lazy item: scrolling away must not dispose the decoded bitmap.
+    val avatarContent = com.smartlife798.app.ui.components.rememberAvatar(
+        profile?.id, profile?.img, vm::loadAvatar)
     LaunchedEffect(refreshTick) {
+        vm.refreshCheckInStatus()
         vm.refreshMaster()
         vm.refreshWallet()
     }
@@ -123,6 +129,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                 coroutineScope.launch {
                     try {
                         vm.refreshAll()
+                        vm.refreshCheckInStatus()
                     } finally {
                         refreshing = false
                     }
@@ -140,8 +147,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    NetworkAvatar(image = profile?.img, name = profile?.name.orEmpty(),
-                        load = vm::loadAvatar, modifier = Modifier.size(56.dp))
+                    NetworkAvatar(bitmap = avatarContent, name = profile?.name.orEmpty(), modifier = Modifier.size(56.dp))
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -215,7 +221,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            MetricValue(profile?.totalScore ?: "—")
+                            MetricValue(availableScore ?: "—")
                         }
                         Column(
                             modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
@@ -250,7 +256,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                         }
                         Button(
                             onClick = vm::checkInNow,
-                            enabled = !checkingIn,
+                            enabled = !checkingIn && signedInToday == false,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                         ) {
@@ -261,7 +267,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                                 )
                                 Spacer(Modifier.width(8.dp))
                             }
-                            Text(if (checkingIn) "正在签到…" else "手动签到")
+                            Text(if (checkingIn) "正在检查…" else if (signedInToday == true) "已签到" else if (signedInToday == false) "签到" else "等待签到状态")
                         }
                     }
                 }

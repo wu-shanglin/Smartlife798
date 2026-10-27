@@ -87,7 +87,7 @@
       "response": "MasterData{account,favos,ads,pltTotalScore}",
       "use": "profile+favorites",
       "verified": "live",
-      "notes": "account.useScore is a nullable 0/1 preference, not points balance; display points from pltTotalScore; account.img is the direct avatar URL"
+      "notes": "account.useScore is a nullable 0/1 preference, not points balance; display available points from mission-lst.accScoreRsp.validScore; pltTotalScore describes platform conversion; account.img is the direct avatar URL"
     },
     {
       "method": "POST",
@@ -404,7 +404,7 @@
   ],
   "accountBehavior": {
     "profilePatch": "POST acc/upt sends one of name or useScore only; account changes are guarded and only server success updates local state",
-    "points": "master.pltTotalScore is the points display value; account.useScore 0/1 is the persisted server preference, not a balance or dev/start parameter",
+    "points": "mission-lst.accScoreRsp.validScore is the available points display value; master.pltTotalScore describes platform conversion; account.useScore 0/1 is the persisted server preference, not a balance or dev/start parameter",
     "avatar": "account.img is a direct URL (MeFragment.M -> ImageUtils.e -> Glide.load); this client uses HTTPS without business credentials and falls back locally; no invented fs/dl key conversion",
     "autoCheckIn": {
       "default": true,

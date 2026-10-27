@@ -23,7 +23,7 @@ class AccountProfileTest {
     @Test fun `balance is separate from account score preference and avatar passes through`() {
         val master = gson.fromJson("""{"account":{"id":"fixture","name":"昵称","useScore":1,"img":"https://example.com/avatar.png"},"pltTotalScore":"120.5"}""", Master::class.java)
         val profile = master.storedProfile("fixture-phone")!!
-        assertEquals("120.5", profile.totalScore)
+        assertNull(profile.totalScore)
         assertEquals(1, profile.useScore)
         assertEquals("https://example.com/avatar.png", profile.img)
         assertEquals("fixture-phone", profile.phone)
@@ -35,6 +35,10 @@ class AccountProfileTest {
         assertNull(profile.useScore)
         assertNull(profile.totalScore)
         assertEquals("", profile.name)
+    }
+
+    @Test fun `missing score preference defaults off as in original client`() {
+        assertEquals(0, Master(account = User()).storedProfile(null)!!.useScore)
     }
 
     @Test fun `legacy cache is readable without showing the old preference as a balance`() {

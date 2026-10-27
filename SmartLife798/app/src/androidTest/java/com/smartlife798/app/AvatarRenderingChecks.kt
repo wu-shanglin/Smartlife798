@@ -103,14 +103,16 @@ object AvatarRenderingChecks {
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 vm.setAppResumed(false)
             }
+            val avatarVisible = androidx.compose.runtime.mutableStateOf(true)
             fun show() = test.runOnMainSync {
                 screen.setContent {
                     SmartLifeTheme(darkTheme = false, dynamicColor = false) {
                         val profile by vm.profile.collectAsStateWithLifecycle()
+                        val bitmap = com.smartlife798.app.ui.components.rememberAvatar(profile?.id, profile?.img, vm::loadAvatar)
                         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                             contentAlignment = Alignment.Center) {
-                            NetworkAvatar(image = profile?.img, name = profile?.name.orEmpty(),
-                                load = vm::loadAvatar, modifier = Modifier.size(96.dp))
+                            if (avatarVisible.value) NetworkAvatar(bitmap = bitmap,
+                                name = profile?.name.orEmpty(), modifier = Modifier.size(96.dp))
                         }
                     }
                 }
@@ -131,6 +133,16 @@ object AvatarRenderingChecks {
             pending.release.countDown()
             await { isMagenta(sample(test)) }
             check(Store.profileJson == savedProfile)
+
+            stage = "disposing and restoring the list item retains pixels without a new download"
+            val afterLoad = requests.get()
+            test.runOnMainSync { avatarVisible.value = false }
+            test.waitForIdleSync()
+            await { !isMagenta(sample(test)) }
+            test.runOnMainSync { avatarVisible.value = true }
+            test.waitForIdleSync()
+            await { isMagenta(sample(test)) }
+            check(requests.get() == afterLoad)
 
             stage = "failed image falls back without changing account storage"
             mode.set(1)
