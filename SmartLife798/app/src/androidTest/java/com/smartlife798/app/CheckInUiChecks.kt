@@ -169,8 +169,8 @@ object CheckInUiChecks {
 
             stage = "My page keeps manual action available when automation is off"
             click(test, "我的")
-            reveal(test, "手动签到")
             await { find(test, "自动签到开关") != null }
+            reveal(test, "手动签到")
             click(test, "自动签到开关")
             await { !vm.autoCheckIn.value && !Store.autoCheckIn() }
             check(actionNode(test, "手动签到").isEnabled)
@@ -307,6 +307,7 @@ object CheckInUiChecks {
                 ?: error("Scrollable page unavailable")
             check(scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
             test.waitForIdleSync()
+            SystemClock.sleep(150)
         }
         error("UI action not visible")
     }
