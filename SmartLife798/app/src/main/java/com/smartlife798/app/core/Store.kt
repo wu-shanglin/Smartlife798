@@ -67,6 +67,13 @@ object Store {
         prefs = context.applicationContext.getSharedPreferences(PREF, Context.MODE_PRIVATE)
     }
 
+    /** Installation preference, retained on logout; diagnostics still require an explicit foreground action. */
+    fun developerToolsEnabled(): Boolean = prefs.getBoolean("developerToolsEnabled", false)
+
+    fun saveDeveloperToolsEnabled(enabled: Boolean) {
+        if (!Preview.enabled) prefs.edit { putBoolean("developerToolsEnabled", enabled) }
+    }
+
     var token: String?
         get() = prefs.getString("token", null)
         set(v) = prefs.edit { putString("token", v) }

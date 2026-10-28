@@ -44,11 +44,15 @@ object UxFlowChecks {
                     .putExtra("preview", true)) as MainActivity
                 await(test, if (page == StartupPage.HOME) "扫码即刻使用" else "我的设备")
                 check(text(test).contains("演示模式"))
-                stage = "settings remain on screen after change"
+                stage = "open settings and retain the wallet metric"
                 click(test, "我的")
-                await(test, "启动页面")
                 await(test, "36.50")
-                click(test, if (page == StartupPage.HOME) "设备页" else "首页")
+                stage = "reveal startup-page radio option"
+                reveal(test, "启动页面")
+                val startupChoice = if (page == StartupPage.HOME) "设备页" else "首页"
+                reveal(test, startupChoice, radioOnly = true)
+                stage = "settings remain on screen after startup radio change"
+                click(test, startupChoice, radioOnly = true)
                 await(test, "启动页面")
                 test.runOnMainSync {
                     val vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
@@ -57,12 +61,13 @@ object UxFlowChecks {
                 check(Store.startupPage() == page) // preview choice is in-memory only
                 if (!settingsOnly) {
                     stage = "wallet open and return"
+                    scrollToTop(test)
                     click(test, "钱包")
                     await(test, "钱包余额")
                     await(test, "充值金额")
                     click(test, "返回")
-                    await(test, "启动页面")
                     await(test, "36.50")
+                    reveal(test, "启动页面")
                     stage = "tab navigation and detail return"
                     click(test, "设备")
                     await(test, "我的设备")
@@ -85,6 +90,7 @@ object UxFlowChecks {
                 stage = "select settings after search"
                 if (!settingsOnly) click(test, "我的")
                 stage = "settings visible after search"
+                reveal(test, "启动页面")
                 await(test, "启动页面")
                 test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
                 await(test, "启动页面", present = false)
@@ -124,13 +130,18 @@ object UxFlowChecks {
                     stage = "system selection preview isolation"
                     click(test, "跟随系统")
                     test.runOnMainSync { check(Appearance.mode.value == ThemeMode.SYSTEM) }
-                    stage = "reveal dynamic color"
-                    reveal(test, "动态取色")
-                    stage = "dynamic color preview isolation"
-                    click(test, "动态取色开关")
-                    test.runOnMainSync { check(Appearance.dynamicColor.value != dynamicColor) }
-                    check(Store.dynamicColor() == dynamicColor)
-                    test.runOnMainSync { Appearance.setDynamicColor(dynamicColor) }
+                    if (android.os.Build.VERSION.SDK_INT >= 31) {
+                        stage = "reveal dynamic color"
+                        reveal(test, "动态取色")
+                        stage = "dynamic color preview isolation"
+                        click(test, "动态取色开关")
+                        test.runOnMainSync { check(Appearance.dynamicColor.value != dynamicColor) }
+                        check(Store.dynamicColor() == dynamicColor)
+                        test.runOnMainSync { Appearance.setDynamicColor(dynamicColor) }
+                    } else {
+                        stage = "dynamic color unavailable before Android 12"
+                        check(!text(test).contains("动态取色"))
+                    }
                     test.uiAutomation.waitForIdle(1_000, 5_000)
                     val frames = java.util.concurrent.CountDownLatch(1)
                     test.runOnMainSync {
@@ -160,7 +171,8 @@ object UxFlowChecks {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                 }
             }
-            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
+            val frame = error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }
+            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; source=${frame?.fileName}:${frame?.lineNumber}\n")
         } finally {
             test.runOnMainSync { activity?.finish() }
             Preview.enabled = false
@@ -176,6 +188,7 @@ object UxFlowChecks {
     }
 
     private fun text(test: Instrumentation): String = nodes(root(test))
+        .filter { fullyVisible(test, it) }
         .joinToString(" ") { it.text?.toString().orEmpty() }
 
     private fun nodes(root: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> =
@@ -190,20 +203,62 @@ object UxFlowChecks {
         error("Expected UI absent")
     }
 
-    private fun click(test: Instrumentation, label: String) {
+    private fun clickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var target: AccessibilityNodeInfo? = node
+        while (target != null && !target.isClickable) target = target.parent
+        return target
+    }
+
+    /** Compose may retain off-screen semantics in an eagerly composed scroll container. */
+    private fun fullyVisible(test: Instrumentation, node: AccessibilityNodeInfo): Boolean {
+        if (!node.isVisibleToUser) return false
+        val area = android.graphics.Rect()
+        node.getBoundsInScreen(area)
+        if (area.isEmpty) return false
+        val viewport = android.graphics.Rect()
+        root(test)?.getBoundsInScreen(viewport) ?: return false
+        var ancestor = node.parent
+        while (ancestor != null) {
+            if (ancestor.isScrollable) {
+                val scrollArea = android.graphics.Rect()
+                ancestor.getBoundsInScreen(scrollArea)
+                if (!viewport.intersect(scrollArea)) return false
+            }
+            ancestor = ancestor.parent
+        }
+        return viewport.contains(area)
+    }
+
+    private fun isRadio(node: AccessibilityNodeInfo): Boolean = clickable(node)?.let {
+        it.isCheckable || it.className?.toString() == "android.widget.RadioButton"
+    } == true
+
+    private fun click(test: Instrumentation, label: String, radioOnly: Boolean = false) {
         val end = SystemClock.elapsedRealtime() + 10_000
         while (SystemClock.elapsedRealtime() < end) {
-            var target = nodes(root(test)).firstOrNull {
-                it.text?.toString() == label || it.contentDescription?.toString() == label
+            val node = nodes(root(test)).firstOrNull {
+                (it.text?.toString() == label || it.contentDescription?.toString() == label) &&
+                    fullyVisible(test, it) && (!radioOnly || isRadio(it))
             }
-            while (target != null && !target.isClickable) target = target.parent
-            if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) {
-                test.waitForIdleSync()
-                return
+            if (node != null) {
+                val target = clickable(node)
+                if (target != null && target.isEnabled && fullyVisible(test, target) &&
+                    target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    test.waitForIdleSync()
+                    return
+                }
             }
             Thread.sleep(100)
         }
         error("Target unavailable")
+    }
+
+    private fun scrollToTop(test: Instrumentation) {
+        repeat(12) {
+            val scroller = nodes(root(test)).firstOrNull { it.isScrollable } ?: return
+            if (!scroller.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) return
+            test.uiAutomation.waitForIdle(300, 5_000)
+        }
     }
 
     private fun setSearch(test: Instrumentation, query: String) {
@@ -214,15 +269,26 @@ object UxFlowChecks {
         test.waitForIdleSync()
     }
 
-    private fun reveal(test: Instrumentation, label: String) {
+    private fun reveal(test: Instrumentation, label: String, radioOnly: Boolean = false) {
         repeat(12) {
-            val node = nodes(root(test)).firstOrNull {
+            val matching = nodes(root(test)).filter {
                 (it.text?.toString()?.contains(label) == true ||
-                    it.contentDescription?.toString()?.contains(label) == true) && it.isVisibleToUser
+                    it.contentDescription?.toString()?.contains(label) == true) &&
+                    (!radioOnly || isRadio(it))
             }
-            if (node != null) {
+            if (matching.any { node ->
+                    fullyVisible(test, node) && (!radioOnly || clickable(node)?.let {
+                        it.isEnabled && fullyVisible(test, it)
+                    } == true)
+                }) {
                 test.uiAutomation.waitForIdle(300, 5_000)
                 return
+            }
+            val candidate = matching.firstOrNull()
+            val target = candidate?.let { if (radioOnly) clickable(it) else it }
+            if (target?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.id) == true) {
+                test.uiAutomation.waitForIdle(300, 5_000)
+                return@repeat
             }
             // Small drags avoid skipping a compact settings group with a whole-page scroll.
             val bounds = android.graphics.Rect()

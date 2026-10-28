@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModelStore
 import com.google.gson.JsonParser
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
+import com.smartlife798.app.core.OriginalAppVersion
 import com.smartlife798.app.core.Preview
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
@@ -52,6 +53,8 @@ object CheckInFlowChecks {
         val originalPhone = session.phone
         val preferences = test.targetContext.getSharedPreferences("smartlife798", Context.MODE_PRIVATE)
         val originalAuto = preferences.all["autoCheckIn"] as? Boolean
+        val originalCachedProtocol = preferences.all["originalAppVersion"] as? String
+        val originalProtocol = OriginalAppVersion.current.value
         val originalPreview = Preview.enabled
         val viewModels = ViewModelStore()
         val scenario = AtomicReference(Scenario.SUCCESS)
@@ -166,7 +169,8 @@ object CheckInFlowChecks {
             check(guards.values.all { it })
             fixtureStarted = true
             clientField.set(null, fixture)
-            check(preferences.edit().remove("autoCheckIn").commit())
+            OriginalAppVersion.restore("3.1.10")
+            check(preferences.edit().remove("autoCheckIn").putString("originalAppVersion", "3.1.10").commit())
             create()
             check(vm.autoCheckIn.value && Store.autoCheckIn())
 
@@ -334,6 +338,31 @@ object CheckInFlowChecks {
             check(Store.token == "offline-new-login-token" && Store.uid == "offline-new-login-user")
             check(posts.get() == 0)
 
+            stage = "unknown discovered protocol refuses manual check-in before any durable attempt or POST"
+            reset(Scenario.SUCCESS)
+            test.runOnMainSync { vm.setAutoCheckIn(false) }
+            foreground()
+            test.waitForIdleSync()
+            check(reads.get() == 0 && posts.get() == 0)
+            val attemptBeforeUnknownProtocol = Store.checkInAttemptDay()
+            try {
+                test.runOnMainSync {
+                    OriginalAppVersion.accept("3.1.11")
+                    check(session.versionHeader() == "3.1.11" && Store.originalAppVersion == "3.1.11")
+                    vm.checkInNow()
+                }
+                await { !vm.checkingIn.value && vm.checkInStatus.value.contains("当前官方协议尚未适配签到") }
+                check(vm.message.value?.contains("当前官方协议尚未适配签到") == true)
+                check(reads.get() == 1 && posts.get() == 0 && events.toList() == listOf("read"))
+                check(Store.checkInAttemptDay() == attemptBeforeUnknownProtocol && attemptBeforeUnknownProtocol == null)
+            } finally {
+                test.runOnMainSync {
+                    OriginalAppVersion.restore("3.1.10")
+                    Store.originalAppVersion = "3.1.10"
+                }
+            }
+            check(session.versionHeader() == "3.1.10")
+
             stage = "manual check-in works with automation disabled and reports success"
             reset(Scenario.SUCCESS)
             test.runOnMainSync { vm.setAutoCheckIn(false) }
@@ -493,7 +522,7 @@ object CheckInFlowChecks {
             }
             await { !vm.loggedIn.value && session.token == null }
             check(Store.checkInAttemptDay() == null && !Store.autoCheckIn())
-            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
+            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; unknown 3.1.11 protocol reads status but sends zero POSTs or attempt markers and restores 3.1.10; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("state", "reads=${reads.get()},posts=${posts.get()},busy=${if (vmCreated) vm.checkingIn.value else false},status=${if (vmCreated) vm.checkInStatus.value else "not initialized"}")
@@ -507,6 +536,9 @@ object CheckInFlowChecks {
                 Store.clearAccount()
                 val editor = preferences.edit()
                 if (originalAuto == null) editor.remove("autoCheckIn") else editor.putBoolean("autoCheckIn", originalAuto)
+                if (originalCachedProtocol == null) editor.remove("originalAppVersion")
+                else editor.putString("originalAppVersion", originalCachedProtocol)
+                OriginalAppVersion.restore(originalProtocol)
                 if (!editor.commit()) {
                     result.putString("stream", "FAIL at fixture cleanup: preference flush failed\n")
                     code = Activity.RESULT_CANCELED

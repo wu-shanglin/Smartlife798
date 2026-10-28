@@ -21,6 +21,14 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "nfc-tools") {
+            NfcCaptureChecks.run(this)
+            return
+        }
+        if (mode == "profile-refresh") {
+            ProfileRefreshChecks.run(this)
+            return
+        }
         if (mode == "check-in-ui") {
             CheckInUiChecks.run(this)
             return
