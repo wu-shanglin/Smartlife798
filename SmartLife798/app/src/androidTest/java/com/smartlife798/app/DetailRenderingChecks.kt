@@ -66,6 +66,7 @@ object DetailRenderingChecks {
         val clientField = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
         val originalClient = Api.client
         val originalToken = session.token
+        val originalUid = session.uid
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val sourceReady = CountDownLatch(1)
@@ -80,6 +81,7 @@ object DetailRenderingChecks {
         var responseStartedAt = Long.MAX_VALUE
         var settledAt = Long.MAX_VALUE
         var tracing = false
+        var metricsAttached = false
         val listener = android.view.Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
             if (metrics.getMetric(FrameMetrics.FIRST_DRAW_FRAME) == 0L) {
                 frames.add(Sample(
@@ -171,7 +173,9 @@ object DetailRenderingChecks {
             test.runOnMainSync {
                 Preview.enabled = false
                 session.token = "offline-render-fixture"
+                session.uid = "preview-user"
                 screen.window.addOnFrameMetricsAvailableListener(listener, Handler(frameThread.looper))
+                metricsAttached = true
                 expanded = true
             }
             stage = "request starts during actual shared transition"
@@ -226,19 +230,20 @@ object DetailRenderingChecks {
                 "responseFrames=${responseFrames.size}, responseUiMs(${summary(responseFrames.map { it.ui })}); " +
                 "shared return settled; intercepted transport only\n")
             code = Activity.RESULT_OK
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
         } finally {
             if (tracing) android.os.Debug.stopMethodTracing()
             release.countDown()
             test.runOnMainSync {
-                activity?.window?.removeOnFrameMetricsAvailableListener(listener)
+                if (metricsAttached) activity?.window?.removeOnFrameMetricsAvailableListener(listener)
                 activity?.finish()
             }
             frameThread.quitSafely()
             test.waitForIdleSync()
             clientField.set(null, originalClient)
             session.token = originalToken
+            session.uid = originalUid
             Preview.enabled = false
         }
         test.finish(code, result)

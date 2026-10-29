@@ -28,4 +28,21 @@ class NfcRouteTest {
         assertEquals(NfcRoute.Unsupported, NfcRoutes.parseAll(listOf(
             "https://i.ilife798.com/nfc.html?q=1", "https://i.ilife798.com/nfc.html?q=2")))
     }
+
+    @Test fun explicitHuiLifeMiniappDeviceCanBeCarriedByAnInlineAlipayNfcRoute() {
+        val page = "devview/view?__appxPageId=6&id=123456789012345"
+        val target = "alipays://platformapi/startapp?appId=2019061465519660&page=" + URLEncoder.encode(page, "UTF-8")
+        val inline = "alipay://nfc/app?id=10000007&actionType=route&codeContent=" + URLEncoder.encode(target, "UTF-8")
+        assertEquals(NfcRoute.Device("123456789012345"), NfcRoutes.parse(target))
+        assertEquals(NfcRoute.Device("123456789012345"), NfcRoutes.parse(inline))
+        assertEquals(NfcRoute.Device("123456789012345"), NfcRoutes.parse(
+            "https://render.alipay.com/p/s/ulink/xty?s=dc&scheme=" + URLEncoder.encode(inline, "UTF-8")))
+        assertEquals(NfcRoute.Unsupported, NfcRoutes.parse(target.replace("2019061465519660", "123")))
+        assertEquals(NfcRoute.Unsupported, NfcRoutes.parse(target.replace("devview", "payview")))
+        assertEquals(NfcRoute.Unsupported, NfcRoutes.parse(target + "&appId=other"))
+        assertEquals(NfcRoute.Unsupported, NfcRoutes.parse(inline + "&t=ambiguous"))
+        val duplicate = "alipays://platformapi/startapp?appId=2019061465519660&page=" +
+            URLEncoder.encode("devview/view?id=123&id=456", "UTF-8")
+        assertEquals(NfcRoute.Unsupported, NfcRoutes.parse(duplicate))
+    }
 }

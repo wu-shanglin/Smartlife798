@@ -35,10 +35,19 @@ object NfcEntryChecks {
         val clientField = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
         val calls = AtomicInteger()
         val serverType = AtomicInteger(3)
+        val deviceReads = AtomicInteger()
+        val directDeviceId = AtomicReference("123456789012345")
         val gate = AtomicReference<CountDownLatch?>()
         val entered = AtomicReference<CountDownLatch?>()
         val fixture = original.newBuilder().addInterceptor { chain ->
             val request = chain.request()
+            if (request.method == "GET" && request.url.encodedPath == "/api/v1/ui/app/dev/home/1") {
+                check(request.header("Authorization") == "offline-nfc-token")
+                check(request.url.queryParameter("did") == "123456789012345")
+                deviceReads.incrementAndGet()
+                return@addInterceptor Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                    .code(200).message("fixture").body("""{"code":0,"data":{"device":{"id":"${directDeviceId.get()}","name":"离线直连设备","status":1,"bm":{"dtype":8},"gene":{"status":99}}}}""".toResponseBody()).build()
+            }
             check(request.method == "GET" && request.url.encodedPath == "/api/v1/qr/use")
             check(request.header("Authorization") == "offline-nfc-token")
             check(request.url.queryParameter("id") == "fixture-qr")
@@ -128,14 +137,30 @@ object NfcEntryChecks {
             test.runOnMainSync { vm.acceptNfcUris(listOf(uri)) }
             SystemClock.sleep(100)
             check(calls.get() == 3)
+            stage = "inline Alipay miniapp route confirms exact device; ordinary link has no automatic authority"
+            val direct = "alipays://platformapi/startapp?appId=2019061465519660&page=" +
+                java.net.URLEncoder.encode("devview/view?id=123456789012345", "UTF-8")
+            test.runOnMainSync {
+                vm.setAppResumed(true, allowAutoCheckIn = false)
+                vm.acceptNfcUris(listOf(direct))
+            }
+            await { vm.nfcDevice.value?.deviceId == "123456789012345" }
+            check(vm.nfcDevice.value?.autoStartTicket == null && deviceReads.get() == 1)
+            test.runOnMainSync { vm.consumeNfcDevice(checkNotNull(vm.nfcDevice.value)) }
+            directDeviceId.set("different-device")
+            test.runOnMainSync { vm.acceptNfcUris(listOf(direct)) }
+            await { deviceReads.get() == 2 && vm.message.value?.contains("未返回可用设备") == true }
+            check(vm.nfcDevice.value == null)
             stage = "Preview has no NFC business reads or account persistence"
             test.runOnMainSync {
                 vm.startPreview()
                 vm.setAppResumed(true, allowAutoCheckIn = false)
                 vm.acceptNfcUris(listOf(uri))
+                vm.acceptNfcUris(listOf(direct))
             }
             SystemClock.sleep(100)
             check(calls.get() == 3 && vm.nfcDevice.value == null)
+            check(deviceReads.get() == 2)
             check(vm.deviceEntry("fixture-device") == null)
             val packageManager = test.targetContext.packageManager
             fun defaultHandler(action: String) = Intent(action, Uri.parse(uri))

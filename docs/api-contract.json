@@ -554,5 +554,11 @@
       "/api/v1/ui/app/pga-check",
       "/api/v1/ui/app/sign-pga"
     ]
+  },
+  "deviceAccessPolicy": {
+    "ownership": "DeviceDetailData.user.id is compared with the current account id; an explicit other user blocks commands even with a local bookmark. Running without an owner or matching local bookmark is not adopted.",
+    "preflight": "Under the shared command mutex, read dev/home/1?did=&apply=6 again and require a complete matching device, allowed ownership and matching start/stop action before sending a command. Read failure sends no command; server authorization remains final.",
+    "polling": "While blocked by ownership, refresh full detail in the foreground to discover release; ordinary dev/status only contains partial machine state.",
+    "clientError": "-1004 DEVICE_ACCESS_CHANGED is local only; refresh the detail and keep the reason visible. Not a server code."
   }
 }

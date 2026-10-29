@@ -33,7 +33,7 @@ object StartFlowChecks {
         val originalClient = Api.client
         val originalToken = session.token
         val calls = AtomicInteger()
-        val state = AtomicInteger(10)
+        val state = AtomicInteger(99)
         // 0 matching, 1 network failure, 2 foreign, 3 incomplete, 4 blocked read.
         val responseMode = AtomicInteger(4)
         val readEntered = CountDownLatch(1)
@@ -53,6 +53,7 @@ object StartFlowChecks {
                 val body = when {
                     path.endsWith("/dev/start") -> {
                         calls.incrementAndGet()
+                        state.set(10)
                         """{"code":0}"""
                     }
                     path.endsWith("/dev/status") -> {
@@ -170,6 +171,7 @@ object StartFlowChecks {
             runBlocking { vm.loadDevice(device.id) }
             check(vm.active.value == null)
             stage = "logout rejects a late status and releases command guard"
+            state.set(99) // A new start must pass the fresh standby/ownership preflight.
             runBlocking { check(vm.startDevice(device, 21, "") is Res.Ok) }
             responseMode.set(5)
             val stale = callers.async { vm.pollDevice(device.id, device.copy(gene = Gene(status = 10))) }
