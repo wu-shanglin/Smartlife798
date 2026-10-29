@@ -8,15 +8,15 @@
 | 当前版本 | `1.17.1`（`versionCode 50`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [1.14.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.14.0/SmartLife798-1.14.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.14.0) |
+| 最新已发布 | [1.17.1 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.17.1/SmartLife798-1.17.1-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.17.1) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
 
-**1.17.1 / 50 开发构建，尚未远端发布**：共用下拉刷新改用轻量官方指示器，撤回详情额外预取与滚动状态替换；服务端确认当天签到后，重启不再自动查询/提交或重复提示，跨日重新检查，手动刷新仍查询。保留设备占用守卫及已核验的 NFC 长格式入口；支付宝中转短码、真实 NFC 分发及整机流畅度仍有独立验收边界，见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
+**1.17.1 / 50 已正式发布**：共用下拉刷新改用轻量官方指示器，撤回详情额外预取与滚动状态替换；服务端确认当天签到后，重启不再自动查询/提交或重复提示，跨日重新检查，手动刷新仍查询。保留设备占用守卫及已核验的 NFC 长格式入口；支付宝中转短码、真实 NFC 分发及整机流畅度仍有独立验收边界，见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
 
-最新公开版本为 **1.14.0 / 46**，普通更新、最低支持码 37；公开 APK、update.json 与历史附件均已下载核验。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.14.0/SmartLife798-1.14.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
+最新公开版本为 **1.17.1 / 50**，普通更新、最低支持码 37；公开 APK、update.json 与历史附件均已下载核验。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.17.1/SmartLife798-1.17.1-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
 ## 功能与边界
 
