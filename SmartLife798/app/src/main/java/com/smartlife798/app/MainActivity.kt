@@ -2,6 +2,8 @@
 
 package com.smartlife798.app
 
+import android.content.Intent
+import android.nfc.NfcAdapter
 import android.os.Bundle
 import android.net.Uri
 import androidx.activity.ComponentActivity
@@ -72,6 +74,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -85,6 +88,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.lifecycle.withResumed
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import androidx.navigation.NavHostController
@@ -119,9 +123,23 @@ import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
 
 class MainActivity : ComponentActivity() {
+    private var nfcIntent by androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        acceptNfcIntent(intent)
+    }
+
+    private fun acceptNfcIntent(intent: Intent?) {
+        if (intent != null && (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED || intent.action == Intent.ACTION_VIEW))
+            nfcIntent = intent.dataString
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        acceptNfcIntent(intent)
         setContent {
             val themeMode by com.smartlife798.app.core.Appearance.mode.collectAsStateWithLifecycle()
             val dynamicColor by com.smartlife798.app.core.Appearance.dynamicColor.collectAsStateWithLifecycle()
@@ -135,6 +153,13 @@ class MainActivity : ComponentActivity() {
                     forcePreview = BuildConfig.DEBUG &&
                         intent?.getBooleanExtra("preview", false) == true,
                     onExitApp = ::finishAndRemoveTask,
+                    incomingNfc = nfcIntent,
+                    onNfcConsumed = {
+                        nfcIntent = null
+                        // Avoid replaying an already consumed card after activity recreation.
+                        if (intent?.action in setOf(NfcAdapter.ACTION_NDEF_DISCOVERED, Intent.ACTION_VIEW))
+                            setIntent(Intent(intent).apply { data = null; removeExtra(NfcAdapter.EXTRA_NDEF_MESSAGES) })
+                    },
                 )
             }
         }
@@ -144,7 +169,12 @@ class MainActivity : ComponentActivity() {
 private data class Tab(val route: String, val label: String, val icon: @Composable () -> Unit)
 
 @Composable
-private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
+private fun AppRoot(
+    forcePreview: Boolean = false,
+    onExitApp: () -> Unit,
+    incomingNfc: String? = null,
+    onNfcConsumed: () -> Unit = {},
+) {
     val vm: MainViewModel = viewModel()
     val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
     val unpaidCount by vm.unpaidCount.collectAsStateWithLifecycle()
@@ -167,6 +197,16 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
         if (!forcePreview) vm.checkAppUpdate()
         if (loggedIn) vm.bumpRefresh()
         onPauseOrDispose { vm.setAppResumed(false) }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(incomingNfc, loggedIn, updateRequired, lifecycleOwner) {
+        val raw = incomingNfc ?: return@LaunchedEffect
+        if (!loggedIn || updateRequired || forcePreview || Preview.enabled) return@LaunchedEffect
+        lifecycleOwner.lifecycle.withResumed {
+            vm.acceptNfcUris(listOf(raw))
+            onNfcConsumed()
+        }
     }
 
     LaunchedEffect(message) {
@@ -216,6 +256,29 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
     val startDestination = rememberSaveable { vm.startupPage.value.route }
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
+    val nfcDevice by vm.nfcDevice.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as? android.app.Activity
+    val nfcReader = remember(activity, vm) {
+        activity?.let { com.smartlife798.app.core.NfcDeviceReader(it, vm::acceptNfcUris) }
+    }
+    val normalNfc = currentEntry != null && currentEntry?.destination?.route != "developer-tools/nfc" &&
+        !forcePreview && !Preview.enabled
+    LifecycleResumeEffect(nfcReader, normalNfc) {
+        if (normalNfc) nfcReader?.start()
+        onPauseOrDispose { nfcReader?.stop() }
+    }
+    LaunchedEffect(nfcDevice, currentEntry?.id) {
+        val id = nfcDevice ?: return@LaunchedEffect
+        val entry = currentEntry ?: return@LaunchedEffect
+        entry.lifecycle.withResumed {
+            if (entry.arguments?.getString("id") != id) {
+                navController.navigate("device/${Uri.encode(id)}?autoStart=false") { launchSingleTop = true }
+            }
+            vm.consumeNfcDevice(id)
+        }
+    }
+
     val hasBottomBar = currentEntry?.destination?.route in setOf("home", "devices", "orders", "me")
     var bottomBarHeight by remember { mutableIntStateOf(0) }
     val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -528,7 +591,7 @@ private fun RowScope.ExpressiveNavItem(
     val pressed by interaction.collectIsPressedAsState()
     // The press feedback and the settled selection use the same pill. This is
     // what makes the tap preview and the post-navigation highlight consistent.
-    val container by animateColorAsState(
+    val container = animateColorAsState(
         targetValue = when {
             selected -> MaterialTheme.colorScheme.primaryContainer
             pressed -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
@@ -561,7 +624,7 @@ private fun RowScope.ExpressiveNavItem(
                 role = Role.Tab,
                 onClick = onClick,
             )
-            .background(container),
+            .drawBehind { drawRect(container.value) },
         contentAlignment = Alignment.Center,
     ) {
         Column(

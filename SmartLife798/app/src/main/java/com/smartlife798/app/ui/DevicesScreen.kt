@@ -43,6 +43,7 @@ import com.smartlife798.app.ui.components.EmptyState
 import com.smartlife798.app.ui.components.ErrorState
 import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.deviceSubtitle
+import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -54,7 +55,6 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val recents by vm.recents.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
-    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
     val loading by vm.loadingMaster.collectAsStateWithLifecycle()
     val error by vm.masterError.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -69,7 +69,9 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
 
     // Same silent auto-refresh contract as the other tabs; without it this page
     // only ever refreshed through pull-to-refresh.
-    LaunchedEffect(refreshTick) { vm.refreshMaster() }
+    LaunchedEffect(vm) {
+        collectRefreshRequests(vm.refreshTick) { vm.refreshMaster().join() }
+    }
 
     val favoriteIds = remember(favorites) { favorites.mapTo(hashSetOf()) { it.id } }
     val favoritesById = remember(favorites) { favorites.associateBy { it.id } }

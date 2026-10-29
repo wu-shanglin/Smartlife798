@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -43,7 +44,8 @@ fun NetworkAvatar(bitmap: Bitmap?, name: String, modifier: Modifier = Modifier) 
             Text(name.take(1).ifBlank { "慧" }, style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer)
         } else {
-            Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop,
+            val image = remember(bitmap) { bitmap.asImageBitmap() }
+            Image(image, contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize())
         }
     }

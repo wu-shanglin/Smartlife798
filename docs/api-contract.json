@@ -141,8 +141,8 @@
         "id"
       ],
       "response": "QRCodeData{qr,dev,card,wallet}",
-      "use": "scan/manual id resolve",
-      "verified": "live (device id)"
+      "use": "scan/manual id and official NFC nfc.html q resolve",
+      "verified": "live (device id); NFC linkage static and offline fixture only"
     },
     {
       "method": "GET",

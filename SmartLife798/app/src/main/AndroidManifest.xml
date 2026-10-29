@@ -36,6 +36,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="true"
             android:screenOrientation="portrait"
@@ -44,6 +45,18 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="i.ilife798.com" android:path="/nfc.html" />
+                <data android:host="i.hnkzy.com" android:path="/nfc.html" />
+                <data android:host="act.hnkzy.com" android:path="/nfc.html" />
+                <data android:host="act2.hnkzy.com" android:path="/nfc.html" />
+                <data android:host="prerelease.ilife798.com" android:path="/nfc.html" />
             </intent-filter>
         </activity>
 
