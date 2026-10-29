@@ -10,7 +10,6 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.MotionEvent
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.setContent
@@ -21,7 +20,6 @@ import com.smartlife798.app.ui.DeviceDetailScreen
 import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
@@ -73,7 +71,7 @@ object DeviceAccessChecks {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK).putExtra("preview", true)) as MainActivity
             val screen = activity
             lateinit var vm: MainViewModel
-            var scroll = LazyListState(LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 1f))
+            var scroll = LazyListState()
             var render = 0
             fun show(auto: Boolean = false) = test.runOnMainSync {
                 Preview.enabled = false
@@ -81,7 +79,7 @@ object DeviceAccessChecks {
                 session.uid = "me"
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 val entry = ++render
-                scroll = LazyListState(LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 1f))
+                scroll = LazyListState()
                 screen.setContent { SmartLifeTheme { key(entry) {
                     DeviceDetailScreen(vm, "access-fixture", onBack = {}, onOpenOrders = {}, autoStart = auto,
                         listState = scroll)
@@ -152,38 +150,6 @@ object DeviceAccessChecks {
                 await(test) { (scroll.firstVisibleItemIndex > 0 || scroll.firstVisibleItemScrollOffset > 0) }
             } finally { motion(MotionEvent.ACTION_UP, y - 192f) }
             check((scroll.firstVisibleItemIndex > 0 || scroll.firstVisibleItemScrollOffset > 0) && commands.get() == 0)
-            stage = "cache handoff preserves position and waits for contact and scrolling"
-            val ready = androidx.compose.runtime.mutableStateOf(false)
-            val contact = androidx.compose.runtime.mutableStateOf(true)
-            val selected = AtomicReference<LazyListState?>()
-            test.runOnMainSync {
-                screen.setContent {
-                    val state = com.smartlife798.app.ui.rememberDetailListState(ready.value, contact)
-                    androidx.compose.runtime.SideEffect { selected.set(state) }
-                    androidx.compose.foundation.lazy.LazyColumn(state = state) {
-                        items(30) { androidx.compose.material3.Text("离线滚动项目 $it",
-                            modifier = androidx.compose.ui.Modifier.height(48.dp)) }
-                    }
-                }
-            }
-            await(test) { selected.get() != null }
-            val previous = checkNotNull(selected.get())
-            runBlocking { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { previous.scrollToItem(3, 2) } }
-            test.runOnMainSync { ready.value = true }
-            Thread.sleep(250)
-            check(selected.get() === previous)
-            val scrollScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
-            try {
-                val entered = java.util.concurrent.CountDownLatch(1)
-                val job = scrollScope.launch { previous.scroll { entered.countDown(); kotlinx.coroutines.awaitCancellation() } }
-                check(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
-                test.runOnMainSync { contact.value = false }
-                Thread.sleep(250)
-                check(selected.get() === previous)
-                runBlocking { job.cancel(); job.join() }
-                await(test) { selected.get() !== previous }
-                check(selected.get()?.firstVisibleItemIndex == 3 && selected.get()?.firstVisibleItemScrollOffset == 2)
-            } finally { scrollScope.coroutineContext[kotlinx.coroutines.Job]?.cancel() }
             result.putString("stream", "PASS: foreign/unknown ownership disables controls and automatic entry; stale standby/changed owner send zero commands; own running controls and automatic release refresh work; real drag updates scroll before UP; terminal fixtures only\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {

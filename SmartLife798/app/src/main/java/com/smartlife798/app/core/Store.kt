@@ -207,6 +207,28 @@ object Store {
         if (!Preview.enabled) prefs.edit { putBoolean("autoCheckIn", enabled) }
     }
 
+    fun confirmedCheckIn(): ConfirmedCheckIn? = prefs.getString("confirmedCheckIn", null)?.let {
+        runCatching { gson.fromJson(it, ConfirmedCheckIn::class.java) }.getOrNull()
+    }
+
+    @Synchronized
+    fun saveConfirmedCheckIn(serverTime: Long, token: String) {
+        if (!Preview.enabled && session.token == token) prefs.edit {
+            putString("confirmedCheckIn", gson.toJson(ConfirmedCheckIn(serverTime, System.currentTimeMillis())))
+        }
+    }
+
+    @Synchronized
+    fun clearConfirmedCheckIn(token: String) {
+        if (!Preview.enabled && session.token == token) prefs.edit { remove("confirmedCheckIn") }
+    }
+
+    fun checkInNoticeDay(): String? = prefs.getString("checkInNoticeDay", null)
+
+    fun saveCheckInNoticeDay(day: String) {
+        if (!Preview.enabled) prefs.edit { putString("checkInNoticeDay", day) }
+    }
+
     /** Record before submission, so an uncertain write is never auto-replayed after a crash. */
     fun checkInAttemptDay(): String? = prefs.getString("checkInAttemptDay", null)
 
@@ -247,6 +269,8 @@ object Store {
             remove("recents")
             remove("pinned")
             remove("checkInAttemptDay")
+            remove("confirmedCheckIn")
+            remove("checkInNoticeDay")
         }
     }
 }

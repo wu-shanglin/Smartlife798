@@ -5,6 +5,15 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
+/** Confirmed server snapshot; used only to suppress automatic work for the remaining server day. */
+data class ConfirmedCheckIn(val serverTime: Long = 0L, val recordedAt: Long = 0L) {
+    fun isCurrent(now: Long): Boolean {
+        val elapsed = now - recordedAt
+        return serverTime > 0L && recordedAt > 0L && elapsed in 0 until 86_400_000L &&
+            CheckIn.dayKey(serverTime) == CheckIn.dayKey(serverTime + elapsed)
+    }
+}
+
 /** Only fields required for daily check-in; absent data stays unknown. */
 data class Missions(
     val accScoreRsp: ScoreAccount? = null,
