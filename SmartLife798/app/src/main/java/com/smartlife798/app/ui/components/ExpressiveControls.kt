@@ -87,13 +87,15 @@ private fun AdaptiveChoiceGroup(
     val measurer = rememberTextMeasurer()
     // TextMeasurer caches shaping. Do not subcompose a second, invisible set of
     // Material buttons just to discover their intrinsic widths on every measure.
-    val widths = labels.mapIndexed { index, label ->
-        val text = measurer.measure(label, style, softWrap = false, maxLines = 1).size.width
-        with(density) {
-            maxOf(48.dp.roundToPx(), text +
-                (padding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr) +
-                    padding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).roundToPx() +
-                if (icons.getOrNull(index) != null) 26.dp.roundToPx() else 0)
+    val widths = remember(labels, icons, style, density, measurer, padding) {
+        labels.mapIndexed { index, label ->
+            val text = measurer.measure(label, style, softWrap = false, maxLines = 1).size.width
+            with(density) {
+                maxOf(48.dp.roundToPx(), text +
+                    (padding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr) +
+                        padding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).roundToPx() +
+                    if (icons.getOrNull(index) != null) 26.dp.roundToPx() else 0)
+            }
         }
     }
     BoxWithConstraints(modifier.fillMaxWidth()) {

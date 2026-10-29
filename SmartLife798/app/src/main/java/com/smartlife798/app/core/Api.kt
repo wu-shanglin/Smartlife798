@@ -415,4 +415,6 @@ object ErrorCodes {
     const val START_UNCONFIRMED = -1002
     /** `dev/end` accepted, but a matching standby snapshot has not arrived. */
     const val END_UNCONFIRMED = -1003
+    /** Client-side preflight found changed/unknown device ownership; no command was sent. */
+    const val DEVICE_ACCESS_CHANGED = -1004
 }

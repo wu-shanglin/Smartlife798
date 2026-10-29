@@ -98,6 +98,7 @@ object NfcNavigationChecks {
                         check(it.await(10, java.util.concurrent.TimeUnit.SECONDS))
                     }
                     gson.toJson(Preview.detail(sample.id).copy(
+                        user = com.smartlife798.app.core.User(id = "offline-nfc-navigation-user"),
                         device = device(request.url.queryParameter("did") == "fixture-warm-device")))
                 }
                 else -> { forbidden.incrementAndGet(); unexpectedPath.set(request.url.encodedPath); "null" }

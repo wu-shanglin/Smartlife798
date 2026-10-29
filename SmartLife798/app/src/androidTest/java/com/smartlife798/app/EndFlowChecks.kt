@@ -36,6 +36,7 @@ object EndFlowChecks {
         val clientField = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
         val originalClient = Api.client
         val originalToken = session.token
+        val originalUid = session.uid
         val endCalls = AtomicInteger()
         val statusReads = AtomicInteger()
         val totalStatusReads = AtomicInteger()
@@ -60,11 +61,11 @@ object EndFlowChecks {
                         """{"code":0,"data":{"device":{"id":"end-fixture","status":1,"gene":{"status":$status}}}}"""
                     }
                     path.endsWith("/dev/home/1") -> {
-                        if (holdFull.get()) {
+                        if (holdFull.getAndSet(false)) {
                             fullEntered.countDown()
                             check(releaseFull.await(20, TimeUnit.SECONDS))
                         }
-                        """{"code":0,"data":{"device":$device,"payItems":[{"type":21}]}}"""
+                        """{"code":0,"data":{"device":$device,"user":{"id":"offline-end-user"},"payItems":[{"type":21}]}}"""
                     }
                     else -> """{"code":0,"data":[]}"""
                 }
@@ -83,6 +84,7 @@ object EndFlowChecks {
                 test.runOnMainSync {
                     Preview.enabled = false
                     session.token = "offline-end-fixture"
+                    session.uid = "offline-end-user"
                     vm = ViewModelProvider(screen)[MainViewModel::class.java]
                     screen.setContent {
                         SmartLifeTheme {
@@ -149,6 +151,7 @@ object EndFlowChecks {
             test.runOnMainSync { activity?.finish() }
             Preview.enabled = false
             session.token = originalToken
+            session.uid = originalUid
             if (replaced) clientField.set(null, originalClient)
         }
         test.finish(code, result)

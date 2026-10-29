@@ -45,6 +45,7 @@ import com.smartlife798.app.core.activeBelongsTo
 import com.smartlife798.app.core.blockedByOtherSession
 import com.smartlife798.app.core.isAbnormal
 import com.smartlife798.app.core.isInUse
+import com.smartlife798.app.core.access
 import com.smartlife798.app.core.isStandby
 import com.smartlife798.app.core.isUnpaid
 import com.smartlife798.app.core.mergeStatus
@@ -794,11 +795,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             is Res.Ok -> when (val resolved = com.smartlife798.app.core.resolveQr(
                                 response.data?.dev, response.data?.qr?.type, com.smartlife798.app.core.QR_TYPE_DEVICE)) {
                                 is com.smartlife798.app.core.QrResolution.Resolved -> {
-                                    rememberScan(resolved.device)
-                                    val event = java.util.UUID.randomUUID().toString()
-                                    nfcAutoStart.clear()
-                                    if (autoStart) nfcAutoStart.issue(event, resolved.device.id)
-                                    _nfcDevice.value = NfcOpen(event, resolved.device.id, event.takeIf { autoStart })
+                                    publishNfcDevice(resolved.device, autoStart)
                                 }
                                 else -> notify("卡片未返回可用设备，请移开后重新碰卡")
                             }
@@ -806,11 +803,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                 }
+                is com.smartlife798.app.core.NfcRoute.Device -> {
+                    val generation = accountGeneration
+                    val token = session.token
+                    nfcResolveJob = viewModelScope.launch {
+                        val response = loadDevice(route.id)
+                        if (Preview.enabled || !appResumed || accountGeneration != generation || session.token != token)
+                            return@launch
+                        val device = (response as? Res.Ok)?.data?.device
+                        val resolved = com.smartlife798.app.core.resolveQr(device,
+                            com.smartlife798.app.core.QR_TYPE_DEVICE, com.smartlife798.app.core.QR_TYPE_DEVICE)
+                        if (device?.id == route.id && resolved is com.smartlife798.app.core.QrResolution.Resolved)
+                            publishNfcDevice(resolved.device, autoStart)
+                        else notify("NFC 入口未返回可用设备，请刷新后重试")
+                    }
+                }
                 is com.smartlife798.app.core.NfcRoute.Alipay ->
                     notify("该卡使用支付宝平台中转，当前尚未取得对应设备入口")
                 com.smartlife798.app.core.NfcRoute.Unsupported -> notify("暂不支持这张卡的设备链接")
             }
         }
+    }
+
+    private fun publishNfcDevice(device: Device, autoStart: Boolean) {
+        rememberScan(device)
+        val event = java.util.UUID.randomUUID().toString()
+        nfcAutoStart.clear()
+        if (autoStart) nfcAutoStart.issue(event, device.id)
+        _nfcDevice.value = NfcOpen(event, device.id, event.takeIf { autoStart })
     }
 
     fun consumeNfcDevice(request: NfcOpen) {
@@ -1397,17 +1417,55 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         did, _favorites.value, _recents.value, _active.value, _liveStatus.value, scannedEntry,
     )
 
+    fun deviceAccess(detail: DeviceDetail): com.smartlife798.app.core.DeviceAccess = detail.access(
+        if (Preview.enabled) detail.user?.id else session.uid,
+        if (Preview.enabled) detail.device?.id else (_active.value ?: _pendingStart.value)?.deviceId,
+    )
+
     suspend fun loadDevice(did: String): Res<DeviceDetail> = withContext(Dispatchers.IO) {
         if (Preview.enabled) {
             val detail = Preview.detail(did)
             Res.Ok(detail.copy(device = _liveStatus.value?.takeIf { it.id == did } ?: detail.device))
         } else {
             val token = session.token
+            val revision = deviceRevision
             val result = Api.deviceDetail(did)
             checkDeviceSession(token)
-            // Full detail can lag behind command/status reads. Reconciliation
-            // only consumes dev/status; a cached detail must not erase a start.
+            val detail = (result as? Res.Ok)?.data
+            if (result is Res.Ok && detail?.device?.id != did) {
+                return@withContext Res.Fail(-1, if (detail?.device == null) "设备不存在或已停用" else "设备响应不匹配，请刷新后重试")
+            }
+            val uid = session.uid
+            if (detail?.device?.id == did && !uid.isNullOrBlank() &&
+                detail.user?.id?.takeIf { it.isNotBlank() }?.let { it != uid } == true) {
+                withContext(Dispatchers.Main.immediate) {
+                    checkDeviceSession(token)
+                    if (revision == deviceRevision) dropForeignDeviceRecord(did)
+                }
+            }
+            // Full detail state may lag command/status reads. Only an explicit
+            // foreign owner invalidates a bookmark here; standby alone never does.
             result
+        }
+    }
+
+    /** An explicit foreign owner invalidates only our bookmark, never sends dev/end. */
+    private fun dropForeignDeviceRecord(id: String) {
+        var removed = false
+        if (_active.value?.deviceId == id) {
+            Store.setActive(null)
+            _active.value = null
+            removed = true
+        }
+        if (_pendingStart.value?.deviceId == id) {
+            Store.setPendingStart(null)
+            _pendingStart.value = null
+            removed = true
+        }
+        if (removed) {
+            deviceRevision += 1
+            ensureWatch()
+            notify("设备正由他人使用，本机旧使用记录已清除；账单以服务端为准")
         }
     }
 
@@ -1699,6 +1757,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else "本设备已有进行中记录，请先刷新状态，勿重复启动"
             return@withContext Res.Fail(-1, message)
         }
+        // Details may have remained open while another account acquired the device.
+        // Recheck ownership under the command mutex, before any billable request.
+        when (val checked = checkedDeviceAccess(device.id)) {
+            is Res.Fail -> return@withContext checked
+            is Res.Ok -> if (checked.data?.access(session.uid, null)?.action != com.smartlife798.app.core.PrimaryAction.START) {
+                return@withContext Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "设备当前已在使用或不可用，请刷新设备状态")
+            }
+        }
+        checkDeviceSession(token)
         val accepted = Api.deviceStart(device.id, payType, args, count = 1)
         checkDeviceSession(token)
         if (accepted is Res.Fail) {
@@ -1877,6 +1944,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private suspend fun checkedDeviceAccess(id: String): Res<DeviceDetail> {
+        val token = session.token
+        val result = withContext(Dispatchers.IO) { Api.deviceDetail(id) }
+        checkDeviceSession(token)
+        if (result is Res.Fail) return result
+        val detail = (result as Res.Ok).data
+        if (detail?.device?.id != id || detail.device.gene == null) {
+            return Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "未能确认设备状态，请刷新后重试")
+        }
+        val access = detail.access(session.uid, (_active.value ?: _pendingStart.value)?.deviceId)
+        if (!session.uid.isNullOrBlank() && detail.user?.id?.takeIf { it.isNotBlank() }?.let { it != session.uid } == true)
+            dropForeignDeviceRecord(id)
+        return if (access.notice != null) Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, access.notice) else Res.Ok(detail)
+    }
+
     private suspend fun stopDeviceInternal(device: Device): Res<Device> = withContext(Dispatchers.Main.immediate) {
         if (Preview.enabled) {
             // 预览模式只在内存里结束，不写任何本地状态。
@@ -1888,6 +1970,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!session.isLoggedIn) return@withContext Res.Fail(ErrorCodes.TOKEN_EXPIRED, "请先登录")
         val token = session.token
+        when (val checked = checkedDeviceAccess(device.id)) {
+            is Res.Fail -> return@withContext checked
+            is Res.Ok -> if (checked.data?.access(session.uid, (_active.value ?: _pendingStart.value)?.deviceId)?.action != com.smartlife798.app.core.PrimaryAction.STOP) {
+                return@withContext Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "当前没有可结束的本账号使用，请刷新设备状态")
+            }
+        }
+        checkDeviceSession(token)
         watchJob?.cancel()
         val res = endCommand.execute(
             device = device,

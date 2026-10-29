@@ -32,6 +32,7 @@ object DetailLoadingChecks {
         val field = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
         val original = Api.client
         val originalToken = session.token
+        val originalUid = session.uid
         val reads = AtomicInteger()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -73,6 +74,7 @@ object DetailLoadingChecks {
             test.runOnMainSync {
                 Preview.enabled = false
                 session.token = "offline-detail-fixture"
+                session.uid = "preview-user"
             }
             lateinit var vm: MainViewModel
             test.runOnMainSync { vm = ViewModelProvider(activity!!)[MainViewModel::class.java] }
@@ -113,6 +115,7 @@ object DetailLoadingChecks {
             test.waitForIdleSync()
             if (replaced) field.set(null, original)
             session.token = originalToken
+            session.uid = originalUid
             Preview.enabled = false
         }
         test.finish(code, result)

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.smartlife798.app.ui
 
@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -56,6 +58,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.runtime.State
 import com.smartlife798.app.core.Args
 import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceDetail
@@ -68,6 +73,7 @@ import com.smartlife798.app.core.PrimaryAction
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.core.isInUse
+import com.smartlife798.app.core.isStandby
 import com.smartlife798.app.core.StartWatch
 import com.smartlife798.app.core.StartCommandLock
 import com.smartlife798.app.core.primaryAction
@@ -79,6 +85,28 @@ import com.smartlife798.app.ui.components.StatusPill
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
+
+/** Keep cold prefetch out of the morph, then warm adjacent controls without interrupting a drag. */
+@Composable
+internal fun rememberDetailListState(entryReady: Boolean, contact: State<Boolean>): LazyListState {
+    var state by rememberSaveable(stateSaver = LazyListState.Saver) { mutableStateOf(LazyListState()) }
+    var cacheEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(entryReady) {
+        if (entryReady && !cacheEnabled) {
+            val previous = state
+            snapshotFlow { previous.isScrollInProgress || contact.value }.first { !it }
+            state = LazyListState(
+                cacheWindow = LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 1f),
+                firstVisibleItemIndex = previous.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = previous.firstVisibleItemScrollOffset,
+            )
+            cacheEnabled = true
+        }
+    }
+    return state
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,6 +118,7 @@ fun DeviceDetailScreen(
     autoStart: Boolean = false,
     nfcTicket: String = "",
     onNeedPayment: () -> Unit = {},
+    listState: LazyListState? = null,
 ) {
     val scope = rememberCoroutineScope()
     val awaitCardEntry = rememberAwaitCardEntry()
@@ -99,6 +128,8 @@ fun DeviceDetailScreen(
         awaitCardEntry()
         entryReady = true
     }
+    val contact = remember(deviceId) { mutableStateOf(false) }
+    val detailListState = listState ?: rememberDetailListState(entryReady, contact)
     val context = androidx.compose.ui.platform.LocalContext.current
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
@@ -139,6 +170,7 @@ fun DeviceDetailScreen(
 
     val device = detail?.device
     val shownDevice = device ?: initialDevice
+    val access = detail?.takeIf { it.device != null }?.let(vm::deviceAccess)
     val favorite = favorites.any { it.id == deviceId }
 
     suspend fun reload(showLoading: Boolean, duringCommand: Boolean = false) {
@@ -202,12 +234,25 @@ fun DeviceDetailScreen(
         val revision = statusRevision
         val current = detail ?: return
         val device = current.device ?: return
+        // A partial status cannot tell whether another account released/acquired
+        // the machine. While blocked, refresh the ownership envelope as well.
+        if (vm.deviceAccess(current).notice != null) {
+            when (val res = vm.loadDevice(deviceId)) {
+                is Res.Ok -> if (revision == statusRevision && !busy && res.data?.device?.id == deviceId) {
+                    if (res.data != current) detail = res.data
+                    lastUpdate = System.currentTimeMillis()
+                }
+                is Res.Fail -> Unit
+            }
+            return
+        }
         when (val res = vm.pollDevice(deviceId, device)) {
             is Res.Ok -> {
                 if (revision != statusRevision || busy) return
                 // The VM merged the partial `dev/status` into `device`; this page
                 // never receives a dtype-less object.
-                detail = current.copy(device = res.data)
+                if (res.data != device) detail = current.copy(device = res.data,
+                    user = if (res.data?.isStandby == true && device.isInUse) null else current.user)
                 lastUpdate = System.currentTimeMillis()
             }
             is Res.Fail -> Unit
@@ -243,7 +288,7 @@ fun DeviceDetailScreen(
             deviceId = deviceId,
         )
 
-    LaunchedEffect(deviceId, lifecycleOwner, pendingStartUntil, detail?.device?.isInUse, busy) {
+    LaunchedEffect(deviceId, lifecycleOwner, pendingStartUntil, detail?.device?.isInUse, access?.notice, busy) {
         lifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             pollOnce()
             noteObservedState()
@@ -262,7 +307,8 @@ fun DeviceDetailScreen(
                 // Same rule as the original client: only a machine that is
                 // starting/running is polled. A failed start, an ended session
                 // or a stale lock therefore leaves no loop behind.
-                if (!locked && kind != DeviceStateKind.STARTING && kind != DeviceStateKind.RUNNING) {
+                if (!locked && kind != DeviceStateKind.STARTING && kind != DeviceStateKind.RUNNING &&
+                    detail?.let(vm::deviceAccess)?.notice == null) {
                     if (pendingStartUntil != 0L) pendingStartUntil = 0L
                     break
                 }
@@ -281,13 +327,18 @@ fun DeviceDetailScreen(
         // both would otherwise call dev/start (or dev/end) and be billed twice.
         if (busy || !entryReady) return
         val dev = detail?.device ?: return
+        val currentAccess = detail?.let(vm::deviceAccess) ?: return
+        if (currentAccess.action == null) {
+            currentAccess.notice?.let(vm::notify)
+            return
+        }
         statusRevision += 1
         busy = true
         scope.launch {
             error = null
             var toast: String? = null
             try {
-                when (dev.primaryAction()) {
+                when (currentAccess.action) {
                     PrimaryAction.START -> {
                         busyText = "正在启动设备，等待设备响应…"
                         val args = Args.forDevice(dev, mode)
@@ -305,6 +356,7 @@ fun DeviceDetailScreen(
                                 reload(false, duringCommand = true)
                             }
                             is Res.Fail -> {
+                                if (res.code == ErrorCodes.DEVICE_ACCESS_CHANGED) reload(false, duringCommand = true)
                                 // No pending window on failure: the command did
                                 // not take effect, so no state polling starts.
                                 if (res.code == ErrorCodes.START_UNCONFIRMED) {
@@ -337,7 +389,10 @@ fun DeviceDetailScreen(
                                 lastUpdate = System.currentTimeMillis()
                                 toast = "设备已恢复待机，账单以服务端结算为准"
                             }
-                            is Res.Fail -> error = vm.errorText(res.code, res.msg)
+                            is Res.Fail -> {
+                                if (res.code == ErrorCodes.DEVICE_ACCESS_CHANGED) reload(false, duringCommand = true)
+                                error = vm.errorText(res.code, res.msg)
+                            }
                         }
                     }
                     else -> Unit
@@ -358,7 +413,8 @@ fun DeviceDetailScreen(
             if (autoStarted) return@withResumed
             autoStarted = true
             if (nfcTicket.isNotEmpty() && !vm.claimNfcAutoStart(nfcTicket, deviceId)) return@withResumed
-            when (dev.primaryAction()) {
+            val currentAccess = detail?.let(vm::deviceAccess) ?: return@withResumed
+            when (currentAccess.action) {
                 PrimaryAction.START -> {
                     if (payType < 0) {
                         vm.notify("暂无可用支付方式，请选择后手动开始")
@@ -370,11 +426,14 @@ fun DeviceDetailScreen(
                 PrimaryAction.OFFLINE -> vm.notify("设备当前离线，暂时无法开始使用")
                 PrimaryAction.DISABLED -> vm.notify("设备已停用，暂时无法使用")
                 PrimaryAction.LINKING -> vm.notify("该设备需要蓝牙连接，请使用原应用")
+                null -> currentAccess.notice?.let(vm::notify)
                 else -> Unit
             }
         }
     }
 
+    val parts = remember(shownDevice.bm) { shownDevice.bm?.parts.orEmpty().filter { it.mode > 0 } }
+    val payItems = remember(detail?.payItems) { detail?.payItems.orEmpty().map { it.type } }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -408,13 +467,21 @@ fun DeviceDetailScreen(
                 .padding(padding),
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                state = detailListState,
+                modifier = Modifier.fillMaxSize().pointerInput(contact) {
+                    try {
+                        awaitPointerEventScope {
+                            while (true) contact.value = awaitPointerEvent(PointerEventPass.Initial).changes.any { it.pressed }
+                        }
+                    } finally { contact.value = false }
+                },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 8.dp, 16.dp, 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "hero", contentType = "hero") {
                     HeroCard(
                         device = shownDevice,
+                        access = access,
                         confirmed = device != null,
                         loading = loading,
                         actionsReady = entryReady,
@@ -440,7 +507,7 @@ fun DeviceDetailScreen(
                 }
 
                 if (device == null && !loading && error != null) {
-                    item(key = "pending-detail", contentType = "loading") {
+                    item(key = "pending-detail", contentType = "pending-detail") {
                         ErrorState(error!!) { scope.launch { reload(true) } }
                     }
                 }
@@ -462,16 +529,14 @@ fun DeviceDetailScreen(
                     }
                 }
 
-                val parts = (device ?: initialDevice).bm?.parts.orEmpty().filter { it.mode > 0 }
                 if ((device == null && loading) || (device != null && parts.isNotEmpty())) {
                     item(key = "modes", contentType = "modes") {
                         ModeSection(parts, mode ?: initialDevice.gene?.mode, loading = device == null) { mode = it }
                     }
                 }
 
-                val payItems = detail?.payItems.orEmpty().map { it.type }
                 if (payItems.isNotEmpty()) {
-                    item(key = "use-score", contentType = "setting") {
+                    item(key = "use-score", contentType = "use-score") {
                         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
                             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -583,7 +648,7 @@ fun DeviceDetailScreen(
                     }
                 }
 
-                if (device != null) item(key = "settlement", contentType = "hint") {
+                if (device != null) item(key = "settlement", contentType = "settlement") {
                     HintBanner(
                         "设备状态、计费与订单均由官方服务端下发；结束使用后由服务端结算并生成消费记录。" +
                             "如设备提示余额不足，请先在原应用中充值，本客户端不代收任何款项。",
@@ -597,6 +662,7 @@ fun DeviceDetailScreen(
 @Composable
 private fun HeroCard(
     device: Device,
+    access: com.smartlife798.app.core.DeviceAccess?,
     confirmed: Boolean,
     loading: Boolean,
     actionsReady: Boolean,
@@ -611,8 +677,10 @@ private fun HeroCard(
     onPin: () -> Unit,
     onOpenOrders: () -> Unit,
 ) {
-    val state = device.stateLabel()
-    val action = device.primaryAction()
+    val state = if (access?.notice != null) com.smartlife798.app.core.DeviceState(
+        DeviceStateKind.RUNNING, access.label ?: "状态待确认",
+    ) else device.stateLabel()
+    val action = access?.action
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -693,12 +761,16 @@ private fun HeroCard(
                                 PrimaryAction.DISABLED -> "设备已停用"
                                 PrimaryAction.LINKING -> "蓝牙设备，请使用原应用连接"
                                 PrimaryAction.SETTLE -> "立即结算"
+                                null -> "${access?.label ?: "设备状态待确认"}，暂不可用"
                             }
                         },
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
             }
+
+            access?.notice?.let { Text(it, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error) }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

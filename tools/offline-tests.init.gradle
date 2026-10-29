@@ -1,0 +1,9 @@
+// Explicit opt-in for account-free emulator fixtures. Never use this APK as a release artifact.
+// Run the normal build again without -I when preparing the deliverable APK.
+gradle.beforeProject { project ->
+    project.plugins.withId('com.android.application') {
+        project.androidComponents.finalizeDsl { android ->
+            android.defaultConfig.applicationId = 'com.smartlife798.app.offline'
+        }
+    }
+}

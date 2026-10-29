@@ -7,11 +7,12 @@ import java.util.Locale
 
 sealed interface NfcRoute {
     data class Qr(val id: String) : NfcRoute
+    data class Device(val id: String) : NfcRoute
     data class Alipay(val code: String) : NfcRoute
     data object Unsupported : NfcRoute
 }
 
-/** Only documented card URI shapes. Nothing here follows redirects or guesses a device ID. */
+/** Only observed card/device URI shapes. Nothing here follows redirects or guesses a device ID. */
 object NfcRoutes {
     private val hosts = setOf("i.ilife798.com", "i.hnkzy.com", "act.hnkzy.com", "act2.hnkzy.com",
         "prerelease.ilife798.com")
@@ -23,10 +24,10 @@ object NfcRoutes {
         return candidates.singleOrNull() ?: NfcRoute.Unsupported
     }
 
-    fun parse(raw: String): NfcRoute = parse(raw, nested = false)
+    fun parse(raw: String): NfcRoute = parse(raw, depth = 0)
 
-    private fun parse(raw: String, nested: Boolean): NfcRoute {
-        if (raw.length !in 1..4096 || raw.any { it.isISOControl() }) return NfcRoute.Unsupported
+    private fun parse(raw: String, depth: Int): NfcRoute {
+        if (depth > 3 || raw.length !in 1..4096 || raw.any { it.isISOControl() }) return NfcRoute.Unsupported
         return try {
             val uri = URI(raw)
             val scheme = uri.scheme?.lowercase(Locale.ROOT)
@@ -38,9 +39,14 @@ object NfcRoutes {
                     query["q"]?.takeIf(identifier::matches)?.let(NfcRoute::Qr) ?: NfcRoute.Unsupported
                 scheme == "alipay" && host == "nfc" && uri.rawPath == "/app" && query["id"] == "20002153" ->
                     query["t"]?.takeIf(identifier::matches)?.let(NfcRoute::Alipay) ?: NfcRoute.Unsupported
-                !nested && scheme == "https" && host == "render.alipay.com" &&
+                scheme in setOf("alipay", "alipays") && host == "platformapi" && uri.rawPath == "/startapp" &&
+                    query["appId"] == "2019061465519660" -> miniappDevice(query["page"])
+                scheme == "alipay" && host == "nfc" && uri.rawPath == "/app" &&
+                    query["id"] == "10000007" && query["actionType"] == "route" && query["t"] == null ->
+                    query["codeContent"]?.let { parse(it, depth + 1) } ?: NfcRoute.Unsupported
+                depth == 0 && scheme == "https" && host == "render.alipay.com" &&
                     uri.rawPath == "/p/s/ulink/xty" && query["s"] == "dc" ->
-                    query["scheme"]?.let { parse(it, nested = true) } ?: NfcRoute.Unsupported
+                    query["scheme"]?.let { parse(it, depth + 1) } ?: NfcRoute.Unsupported
                 else -> NfcRoute.Unsupported
             }
         } catch (_: IllegalArgumentException) {
@@ -48,6 +54,15 @@ object NfcRoutes {
         } catch (_: java.net.URISyntaxException) {
             NfcRoute.Unsupported
         }
+    }
+
+    /** Exact HuiLife miniapp page observed in the supplied public share redirect. */
+    private fun miniappDevice(page: String?): NfcRoute {
+        val uri = page?.let(::URI) ?: return NfcRoute.Unsupported
+        if (uri.scheme != null || uri.authority != null || uri.fragment != null || uri.rawPath != "devview/view")
+            return NfcRoute.Unsupported
+        val id = query(uri.rawQuery)?.get("id") ?: return NfcRoute.Unsupported
+        return if (id.matches(Regex("[0-9]{1,32}"))) NfcRoute.Device(id) else NfcRoute.Unsupported
     }
 
     private fun query(raw: String?): Map<String, String>? {
