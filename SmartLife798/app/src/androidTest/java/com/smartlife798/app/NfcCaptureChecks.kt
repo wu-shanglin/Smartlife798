@@ -123,7 +123,7 @@ object NfcCaptureChecks {
         test.finish(code, result)
     }
 
-    private fun mockTag(message: NdefMessage): Tag {
+    internal fun mockTag(message: NdefMessage): Tag {
         val extra = Bundle().apply {
             putParcelable("ndefmsg", message)
             putInt("ndefmaxlength", 8192)

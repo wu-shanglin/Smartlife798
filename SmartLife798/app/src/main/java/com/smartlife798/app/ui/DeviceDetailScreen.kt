@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.withResumed
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,6 +88,7 @@ fun DeviceDetailScreen(
     onBack: () -> Unit,
     onOpenOrders: () -> Unit,
     autoStart: Boolean = false,
+    nfcTicket: String = "",
     onNeedPayment: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -104,6 +106,7 @@ fun DeviceDetailScreen(
     val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refreshMaster() }
     var detail by remember { mutableStateOf<DeviceDetail?>(null) }
+    var autoStartSnapshot by remember(deviceId, nfcTicket) { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -111,7 +114,7 @@ fun DeviceDetailScreen(
     var busyText by remember { mutableStateOf("") }
     // Invalidate reads started before a command; old responses cannot undo its result.
     var statusRevision by remember(deviceId) { mutableStateOf(0) }
-    var autoStarted by rememberSaveable(deviceId) { mutableStateOf(false) }
+    var autoStarted by rememberSaveable(deviceId, nfcTicket) { mutableStateOf(false) }
     var payType by remember { mutableStateOf(0) }
     var signingAli by remember(deviceId) { mutableStateOf(false) }
     var mode by remember { mutableStateOf<Int?>(null) }
@@ -152,6 +155,7 @@ fun DeviceDetailScreen(
         when (res) {
             is Res.Ok -> {
                 detail = res.data
+                autoStartSnapshot = res.data?.device != null
                 error = if (res.data?.device == null) "设备不存在或已停用" else null
                 lastUpdate = System.currentTimeMillis()
                 if (payType == 0) {
@@ -179,10 +183,11 @@ fun DeviceDetailScreen(
 
     // 详情页有自己的 2s 轮询；告知 ViewModel 让位，避免同一设备双倍请求。
     androidx.compose.runtime.DisposableEffect(deviceId) {
-        vm.setDetailDeviceOpen(deviceId)
-        onDispose { vm.setDetailDeviceOpen(null) }
+        val owner = Any()
+        vm.setDetailDeviceOpen(deviceId, owner)
+        onDispose { vm.releaseDetailDevice(owner) }
     }
-    LaunchedEffect(deviceId) {
+    LaunchedEffect(deviceId, nfcTicket) {
         // Navigation emits another tick after entry settles. Keep the first
         // in-flight response instead of cancelling it and starting a second read.
         collectRefreshRequests(vm.refreshTick) { reload(detail == null) }
@@ -346,19 +351,27 @@ fun DeviceDetailScreen(
     }
 
     // 扫码进入详情时自动点一次「立即使用」，只执行一次；离线/禁用设备只提示。
-    LaunchedEffect(autoStart, detail?.device?.id, entryReady) {
-        if (!autoStart || autoStarted || !entryReady) return@LaunchedEffect
+    LaunchedEffect(autoStart, detail?.device?.id, entryReady, autoStartSnapshot, nfcTicket, lifecycleOwner) {
+        if (!autoStart || autoStarted || !entryReady || !autoStartSnapshot) return@LaunchedEffect
         val dev = detail?.device ?: return@LaunchedEffect
-        autoStarted = true
-        when (dev.primaryAction()) {
-            PrimaryAction.START -> {
-                vm.notify("已识别设备，正在自动开始…")
-                action()
+        lifecycleOwner.lifecycle.withResumed {
+            if (autoStarted) return@withResumed
+            autoStarted = true
+            if (nfcTicket.isNotEmpty() && !vm.claimNfcAutoStart(nfcTicket, deviceId)) return@withResumed
+            when (dev.primaryAction()) {
+                PrimaryAction.START -> {
+                    if (payType < 0) {
+                        vm.notify("暂无可用支付方式，请选择后手动开始")
+                        return@withResumed
+                    }
+                    vm.notify("已识别设备，正在自动开始…")
+                    action()
+                }
+                PrimaryAction.OFFLINE -> vm.notify("设备当前离线，暂时无法开始使用")
+                PrimaryAction.DISABLED -> vm.notify("设备已停用，暂时无法使用")
+                PrimaryAction.LINKING -> vm.notify("该设备需要蓝牙连接，请使用原应用")
+                else -> Unit
             }
-            PrimaryAction.OFFLINE -> vm.notify("设备当前离线，暂时无法开始使用")
-            PrimaryAction.DISABLED -> vm.notify("设备已停用，暂时无法使用")
-            PrimaryAction.LINKING -> vm.notify("该设备需要蓝牙连接，请使用原应用")
-            else -> Unit
         }
     }
 
@@ -452,7 +465,7 @@ fun DeviceDetailScreen(
                 val parts = (device ?: initialDevice).bm?.parts.orEmpty().filter { it.mode > 0 }
                 if ((device == null && loading) || (device != null && parts.isNotEmpty())) {
                     item(key = "modes", contentType = "modes") {
-                        ModeSection(parts, mode, loading = device == null) { mode = it }
+                        ModeSection(parts, mode ?: initialDevice.gene?.mode, loading = device == null) { mode = it }
                     }
                 }
 
@@ -755,7 +768,8 @@ private fun ModeSection(
     onSelect: (Int) -> Unit,
 ) {
     val placeholders = remember { List(2) { com.smartlife798.app.core.DevicePart() } }
-    val options = if (parts.isEmpty() && loading) placeholders else parts
+    val knownParts = parts.isNotEmpty()
+    val options = if (!knownParts && loading) placeholders else parts
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -764,8 +778,8 @@ private fun ModeSection(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(if (loading) "正在获取设备信息…" else "选择模式", style = MaterialTheme.typography.titleSmall)
             ChoiceButtonGroup(
-                labels = options.map { if (loading) "正在获取…" else it.name.ifBlank { "模式 ${it.mode}" } },
-                selectedIndex = options.indexOfFirst { !loading && selected == it.mode },
+                labels = options.map { if (loading && !knownParts) "正在获取…" else it.name.ifBlank { "模式 ${it.mode}" } },
+                selectedIndex = options.indexOfFirst { selected == it.mode },
                 onSelect = { if (!loading) onSelect(options[it].mode) }, enabled = !loading,
             )
             Text(

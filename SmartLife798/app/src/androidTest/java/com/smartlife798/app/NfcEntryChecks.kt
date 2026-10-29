@@ -77,6 +77,18 @@ object NfcEntryChecks {
                 vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
                 vm.setAppResumed(true, allowAutoCheckIn = false)
             }
+            stage = "URI extras cannot impersonate a verified card"
+            val rawInput = kotlinx.coroutines.runBlocking {
+                com.smartlife798.app.core.NfcIntentInput.read(Intent(NfcAdapter.ACTION_NDEF_DISCOVERED, Uri.parse(uri))
+                    .putExtra("autoStart", true))
+            }
+            check(rawInput != null && !rawInput.allowsAutoStart())
+            val fakeTag = NfcCaptureChecks.mockTag(android.nfc.NdefMessage(arrayOf(android.nfc.NdefRecord.createUri(uri))))
+            val synthetic = kotlinx.coroutines.runBlocking {
+                com.smartlife798.app.core.NfcIntentInput.read(Intent(NfcAdapter.ACTION_NDEF_DISCOVERED, Uri.parse(uri))
+                    .putExtra(NfcAdapter.EXTRA_TAG, fakeTag).putExtra("autoStart", true))
+            }
+            check(synthetic != null && !synthetic.allowsAutoStart())
             stage = "Alipay and unknown card do not become guessed device queries"
             test.runOnMainSync { vm.acceptNfcUris(listOf("alipay://nfc/app?id=20002153&t=fixture-code")) }
             await { vm.message.value?.contains("支付宝") == true }
@@ -94,9 +106,9 @@ object NfcEntryChecks {
             SystemClock.sleep(50)
             check(calls.get() == 1 && vm.nfcDevice.value == null)
             release.countDown()
-            await { vm.nfcDevice.value == "fixture-device" }
+            await { vm.nfcDevice.value?.deviceId == "fixture-device" }
             check(Store.active() == null && Store.pendingStart() == null)
-            test.runOnMainSync { vm.consumeNfcDevice("fixture-device") }
+            test.runOnMainSync { vm.consumeNfcDevice(checkNotNull(vm.nfcDevice.value)) }
             check(vm.nfcDevice.value == null)
             stage = "non-device response does not navigate even if dev is present"
             serverType.set(1)
@@ -124,6 +136,12 @@ object NfcEntryChecks {
             }
             SystemClock.sleep(100)
             check(calls.get() == 3 && vm.nfcDevice.value == null)
+            check(vm.deviceEntry("fixture-device") == null)
+            val packageManager = test.targetContext.packageManager
+            fun defaultHandler(action: String) = Intent(action, Uri.parse(uri))
+                .addCategory(Intent.CATEGORY_DEFAULT).resolveActivity(packageManager)?.packageName ?: "none"
+            result.putString("dispatch", "implicitNdef=${defaultHandler(NfcAdapter.ACTION_NDEF_DISCOVERED)}," +
+                "implicitView=${defaultHandler(Intent.ACTION_VIEW)}; no antenna/AAR simulation")
             result.putString("stream", "PASS: official URI/manifest, Alipay boundary, QR server resolution, duplicate guard, no start, background/Preview isolation\n")
             code = Activity.RESULT_OK
         } catch (e: Exception) {

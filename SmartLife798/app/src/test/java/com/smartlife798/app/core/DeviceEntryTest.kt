@@ -6,6 +6,22 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 class DeviceEntryTest {
+    @Test fun `freshly resolved QR data retains full mode metadata for entry without a favourite`() {
+        val resolved = Device(id = "target", name = "resolved", bm = DeviceModel(dtype = 8,
+            parts = listOf(DevicePart(mode = 21, name = "标准"))), gene = Gene(status = 99, mode = 21))
+        val shown = deviceEntrySnapshot("target", emptyList(), emptyList(), null, null, resolved)
+        assertSame(resolved, shown)
+        assertEquals(21, shown?.bm?.parts?.single()?.mode)
+        assertNull(deviceEntrySnapshot("other", emptyList(), emptyList(), null, null, resolved))
+    }
+
+    @Test fun `a sparse resolution cannot hide a full favourite and account clearing removes the seed`() {
+        val favorite = Device(id = "target", name = "full", bm = DeviceModel(dtype = 8))
+        assertSame(favorite, deviceEntrySnapshot("target", listOf(favorite), emptyList(), null, null,
+            Device(id = "target")))
+        assertNull(deviceEntrySnapshot("target", emptyList(), emptyList(), null, null, null))
+    }
+
     private fun seed(
         id: String = "target",
         favorites: List<Device> = emptyList(),

@@ -94,7 +94,11 @@ object DetailLoadingChecks {
             await(test) { reads.get() == 2 }
             stage = "back and reopen performs a new read"
             test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-            await(test) { nodes(root(test)).any { it.text?.toString() == "我的设备" } }
+            await(test) {
+                val current = nodes(root(test))
+                current.any { it.text?.toString() == "我的设备" && it.isVisibleToUser } &&
+                    current.none { it.contentDescription?.toString() == "返回" && it.isVisibleToUser }
+            }
             check(click(root(test), sample.name.orEmpty()))
             await(test) { reads.get() >= 3 }
             await(test) { nodes(root(test)).any { it.text?.toString() == "当前模式" } }
@@ -123,11 +127,12 @@ object DetailLoadingChecks {
         if (node == null) emptyList() else listOf(node) + (0 until node.childCount).flatMap { nodes(node.getChild(it)) }
 
     private fun click(node: AccessibilityNodeInfo?, text: String): Boolean {
-        val match = nodes(node).firstOrNull { it.text?.toString() == text } ?: return false
-        var target: AccessibilityNodeInfo? = match
-        while (target != null) {
-            if (target.isClickable) return target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            target = target.parent
+        for (match in nodes(node).filter { it.text?.toString() == text && it.isVisibleToUser }) {
+            var target: AccessibilityNodeInfo? = match
+            while (target != null) {
+                if (target.isClickable && target.isEnabled && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                target = target.parent
+            }
         }
         return false
     }

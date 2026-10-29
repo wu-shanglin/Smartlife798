@@ -71,6 +71,8 @@ object DetailRenderingChecks {
         val sourceReady = CountDownLatch(1)
         val transitionActive = CountDownLatch(1)
         val transitionSettled = CountDownLatch(1)
+        val exitStarted = CountDownLatch(1)
+        val exitSettled = CountDownLatch(1)
         var shared: SharedTransitionScope? = null
         var expanded by mutableStateOf(false)
         val frameThread = HandlerThread("detail-frames").apply { start() }
@@ -127,6 +129,10 @@ object DetailRenderingChecks {
                                     settledAt = System.nanoTime()
                                     transitionSettled.countDown()
                                     entryOwner.lifecycle.currentState = Lifecycle.State.RESUMED
+                                    snapshotFlow { sharedScope.isTransitionActive }.first { it }
+                                    exitStarted.countDown()
+                                    snapshotFlow { sharedScope.isTransitionActive }.first { !it }
+                                    exitSettled.countDown()
                                 }
                                 AnimatedContent(expanded, label = "detail-live") { showDetail ->
                                     SharedCardScene(this@SharedTransitionLayout, this,
@@ -155,6 +161,13 @@ object DetailRenderingChecks {
                 }
             }
             check(sourceReady.await(10, TimeUnit.SECONDS))
+            if (profile) {
+                android.os.Debug.startMethodTracingSampling(
+                    java.io.File(test.targetContext.cacheDir, "detail-render.trace").absolutePath,
+                    8 * 1024 * 1024, 1_000,
+                )
+                tracing = true
+            }
             test.runOnMainSync {
                 Preview.enabled = false
                 session.token = "offline-render-fixture"
@@ -164,13 +177,6 @@ object DetailRenderingChecks {
             stage = "request starts during actual shared transition"
             check(entered.await(5, TimeUnit.SECONDS))
             check(transitionActive.await(5, TimeUnit.SECONDS))
-            if (profile) {
-                android.os.Debug.startMethodTracingSampling(
-                    java.io.File(test.targetContext.cacheDir, "detail-render.trace").absolutePath,
-                    8 * 1024 * 1024, 1_000,
-                )
-                tracing = true
-            }
             responseStartedAt = System.nanoTime()
             release.countDown()
             if (!measureOnly) {
@@ -190,6 +196,16 @@ object DetailRenderingChecks {
             if (tracing) {
                 android.os.Debug.stopMethodTracing()
                 tracing = false
+                // Sampling traces contain method metadata from this empty-account
+                // fixture only. Compress for extraction from an isolated test user.
+                val bytes = java.io.ByteArrayOutputStream().use { buffer ->
+                    java.util.zip.GZIPOutputStream(buffer).use { output ->
+                        java.io.File(test.targetContext.cacheDir, "detail-render.trace").inputStream().use { it.copyTo(output) }
+                    }
+                    buffer.toByteArray()
+                }
+                check(bytes.size < 512 * 1024)
+                result.putString("profileTraceGzip", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
             }
             Thread.sleep(150) // drain asynchronous window metric delivery, after the morph
             val snapshot = synchronized(frames) { frames.filter { it.time <= settledAt } }
@@ -199,12 +215,16 @@ object DetailRenderingChecks {
                 val ms = values.sorted().map { it / 1_000_000.0 }
                 return "p95=${ms[((ms.size - 1) * 0.95).toInt()]}, max=${ms.last()}"
             }
+            stage = "shared bounds return to the original source"
+            test.runOnMainSync { expanded = false }
+            check(exitStarted.await(5, TimeUnit.SECONDS))
+            check(exitSettled.await(20, TimeUnit.SECONDS))
             result.putString("stream", (if (measureOnly) "PASS: quiet frame capture, no UI inspection during morph; "
                 else "PASS: full detail visible while SharedTransitionScope.isTransitionActive, then settled; ") +
                 "entryFrames=${snapshot.size}, totalMs(${summary(snapshot.map { it.total })}), " +
                 "animationLayoutDrawMs(${summary(snapshot.map { it.ui })}); " +
                 "responseFrames=${responseFrames.size}, responseUiMs(${summary(responseFrames.map { it.ui })}); " +
-                "intercepted transport only\n")
+                "shared return settled; intercepted transport only\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
