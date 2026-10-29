@@ -40,18 +40,19 @@ object Api {
     const val BASE_URL: String = "https://i.ilife798.com"
 
     /** Verified bundled fallback; distribution discovery may supply a newer version. See docs/04. */
-    const val CLIENT_VERSION: String = "3.1.9"
+    const val CLIENT_VERSION: String = "3.1.10"
 
     private val gson = Gson()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
-    private class RequestSession(val token: String?)
+    private class RequestSession(val token: String?, val protocolVersion: String? = null)
 
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)
         .addInterceptor { chain ->
-            val version = session.versionHeader()
+            val snapshot = chain.request().tag(RequestSession::class.java)
+            val version = snapshot?.protocolVersion ?: session.versionHeader()
             val builder = chain.request().newBuilder()
                 .header("ApplicationType", "1,1")
                 .header("VersionCode", version)
@@ -59,7 +60,6 @@ object Api {
             if (chain.request().url.encodedPath == "/api/v1/sys/app/upt") {
                 builder.url(chain.request().url.newBuilder().setQueryParameter("version", version).build())
             }
-            val snapshot = chain.request().tag(RequestSession::class.java)
             val token = if (snapshot == null) session.token else snapshot.token
             token?.takeIf { it.isNotBlank() }?.let { builder.header("Authorization", it) }
             chain.proceed(builder.build())
@@ -75,13 +75,14 @@ object Api {
         body: Any? = null,
         allowConnectionRetry: Boolean = true,
         accountToken: String? = session.token,
+        protocolVersion: String? = null,
         dataType: Type,
     ): Res<T> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val url = (BASE_URL + path).toHttpUrl().newBuilder().apply {
                 params.forEach { (k, v) -> if (v != null) addQueryParameter(k, v) }
             }.build()
-            val builder = Request.Builder().url(url).tag(RequestSession::class.java, RequestSession(accountToken)).method(
+            val builder = Request.Builder().url(url).tag(RequestSession::class.java, RequestSession(accountToken, protocolVersion)).method(
                 method,
                 when {
                     body == null && method == "GET" -> null
@@ -210,9 +211,9 @@ object Api {
         request("GET", "/api/v1/acc/score/mission-lst", dataType = dataType<Missions>())
 
     /** Independent compatibility digest; never carries or impersonates the original APK identity. */
-    suspend fun checkIn(params: ScoreParams, sign: String): Res<Unit> =
+    suspend fun checkIn(params: ScoreParams, sign: String, protocolVersion: String = session.versionHeader()): Res<Unit> =
         request("POST", "/api/v1/acc/score/score-send", mapOf("sign" to sign, "s" to "1"),
-            body = params, allowConnectionRetry = false, dataType = dataType<Unit>())
+            body = params, allowConnectionRetry = false, protocolVersion = protocolVersion, dataType = dataType<Unit>())
 
     /** GET /api/v1/ui/app/dev/home/1?did=&apply=6 */
     suspend fun deviceDetail(did: String, apply: Int = 6): Res<DeviceDetail> =

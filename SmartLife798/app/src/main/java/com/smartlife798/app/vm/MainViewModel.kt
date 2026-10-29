@@ -259,6 +259,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishCheckIn("签到参数不完整，未提交", manual, day)
                     return@launch
                 }
+                val protocolVersion = session.versionHeader()
+                if (!CheckIn.supportsProtocol(protocolVersion)) {
+                    publishCheckIn("当前官方协议尚未适配签到，请更新客户端；本次未提交", manual, day)
+                    return@launch
+                }
                 if (!allowed()) return@launch
                 withContext(Dispatchers.IO) {
                     // commit(false) can still update preference memory: re-confirm durability on manual retry.
@@ -274,11 +279,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishCheckIn("日期已变化，请重新检查签到", manual, day)
                     return@launch
                 }
-                val sign = CheckIn.sign(params.adId, token, requireNotNull(uid), serverTime, submitElapsed)
+                val sign = CheckIn.sign(params.adId, token, requireNotNull(uid), serverTime, submitElapsed,
+                    protocolVersion = protocolVersion)
                 _checkInStatus.value = if (manual) "正在签到…" else "正在自动签到…"
                 submitted = true
                 checkInPostStarted = true
-                val result = Api.checkIn(params, sign)
+                val result = Api.checkIn(params, sign, protocolVersion)
                 if (!allowed()) return@launch
                 // Reconcile even a rejection: a duplicate day or lost response can already be signed.
                 val confirmed = Api.checkInMissions()
@@ -327,6 +333,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         task.start()
+    }
+
+    private val _developerToolsEnabled = MutableStateFlow(Store.developerToolsEnabled())
+    val developerToolsEnabled: StateFlow<Boolean> = _developerToolsEnabled.asStateFlow()
+
+    fun setDeveloperToolsEnabled(enabled: Boolean) {
+        _developerToolsEnabled.value = enabled
+        if (!Preview.enabled) Store.saveDeveloperToolsEnabled(enabled)
     }
 
     private val _startupPage: MutableStateFlow<StartupPage> = MutableStateFlow(Store.startupPage())
@@ -544,14 +558,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private data class CachedAvatar(val generation: Long, val image: String, val bitmap: android.graphics.Bitmap)
+    @Volatile private var avatarCache: CachedAvatar? = null
+
+    /** One small account-scoped bitmap; a recreated page can render it on its first frame. */
+    fun cachedAvatar(image: String?): android.graphics.Bitmap? {
+        if (Preview.enabled || !session.isLoggedIn || image == null || image != _profile.value?.img) return null
+        return avatarCache?.takeIf { it.generation == accountGeneration && it.image == image }?.bitmap
+    }
+
     suspend fun loadAvatar(image: String): android.graphics.Bitmap? {
         if (Preview.enabled || !session.isLoggedIn || image != _profile.value?.img) return null
+        cachedAvatar(image)?.let { return it }
         val token = session.token
         val generation = accountGeneration
         val bitmap = com.smartlife798.app.core.Avatar.load(image)
         return bitmap?.takeIf {
             !Preview.enabled && session.token == token && generation == accountGeneration && image == _profile.value?.img
-        }
+        }?.also { avatarCache = CachedAvatar(generation, image, it) }
     }
 
     private val _wallet = MutableStateFlow<Wallet?>(null)
@@ -618,6 +642,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val refreshTick: StateFlow<Int> = _refreshTick.asStateFlow()
 
     private var refreshDebounce: Job? = null
+    private var foregroundEpoch = 0L
+    private data class MeRefreshKey(val account: Long, val foreground: Long, val day: String?)
+    private var meRefreshKey: MeRefreshKey? = null
+    private var meRefreshJob: Job? = null
+
+    /**
+     * Navigation can compose Me before its debounced refresh tick arrives. Both
+     * entry signals share one account/foreground/day snapshot, so switching tabs
+     * retains the loaded screen. A pull refresh is explicit and always waits for
+     * the current read, or starts a new read once it has completed.
+     */
+    fun refreshMePage(force: Boolean = false): Job? {
+        if (Preview.enabled || !session.isLoggedIn || !appResumed) return null
+        meRefreshJob?.takeIf { it.isActive }?.let { return it }
+        val day = checkInServerTime.takeIf { it > 0L }?.let {
+            CheckIn.dayKey(it + android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed)
+        }
+        val key = MeRefreshKey(accountGeneration, foregroundEpoch, day)
+        if (!force && meRefreshKey == key) return null
+        meRefreshKey = key
+        val generation = accountGeneration
+        val epoch = foregroundEpoch
+        return viewModelScope.launch {
+            refreshCheckInStatus()
+            val statusRead = checkInJob
+            val masterRead = async {
+                val existing = masterJob?.takeIf { it.isActive }
+                if (existing != null) existing.join() else refreshMasterInternal()
+            }
+            val walletRead = async { refreshWallet() }
+            masterRead.await()
+            walletRead.await()
+            statusRead?.join()
+            if (accountGeneration == generation && !Preview.enabled) {
+                // The first mission response may supply the previously unknown
+                // server day. Adopt it without turning the next nav tick into a read.
+                val loadedDay = checkInServerTime.takeIf { it > 0L }?.let {
+                    CheckIn.dayKey(it + android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed)
+                }
+                meRefreshKey = MeRefreshKey(generation, epoch, loadedDay)
+            }
+        }.also { meRefreshJob = it }
+    }
 
     /**
      * Bursts are normal: a tab change fires the destination listener *and* the
@@ -744,6 +811,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun resetAccountState() {
         accountGeneration += 1
+        _developerToolsEnabled.value = Store.developerToolsEnabled()
+        meRefreshJob?.cancel()
+        meRefreshKey = null
+        avatarCache = null
         clearCheckInNotice()
         profileJob?.cancel()
         checkInJob?.cancel()
@@ -1149,6 +1220,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Enables the clearly-labelled UI preview (static sample data, no network). */
     fun startPreview() {
         accountGeneration += 1
+        meRefreshJob?.cancel()
+        meRefreshKey = null
+        avatarCache = null
         clearCheckInNotice()
         profileJob?.cancel()
         checkInJob?.cancel()
@@ -1174,6 +1248,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         session.suspendForPreview()
         _loggedIn.value = true
         _availableScore.value = Preview.profile.totalScore
+        _wallet.value = Preview.wallet()
         _profile.value = Preview.profile
         _favorites.value = Preview.filterFavorites()
         _recents.value = Preview.devices.mapIndexed { i, d ->
@@ -1333,6 +1408,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // One foreground watch for this install's confirmed usage or unresolved start.
     // The detail page yields no duplicate reads, and command confirmation owns its reads.
     fun setAppResumed(value: Boolean, allowAutoCheckIn: Boolean = true) {
+        if (value && !appResumed) foregroundEpoch += 1
+        if (!value) meRefreshJob?.cancel()
         appResumed = value
         if (value && allowAutoCheckIn) requestAutoCheckIn() else checkInJob?.cancel()
         ensureWatch()

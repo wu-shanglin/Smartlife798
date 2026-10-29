@@ -20,10 +20,15 @@ import androidx.compose.ui.layout.ContentScale
 
 /** Keep this state above lazy items. Identity changes discard old account pixels immediately. */
 @Composable
-fun rememberAvatar(identity: String?, image: String?, load: suspend (String) -> Bitmap?): Bitmap? {
+fun rememberAvatar(
+    identity: String?,
+    image: String?,
+    load: suspend (String) -> Bitmap?,
+    initial: Bitmap? = null,
+): Bitmap? {
     val currentLoad by rememberUpdatedState(load)
     return key(identity, image) {
-        val bitmap by produceState<Bitmap?>(null, image) {
+        val bitmap by produceState(initial, image) {
             value = image?.takeIf { it.isNotBlank() }?.let { currentLoad(it) }
         }
         bitmap

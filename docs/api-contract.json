@@ -1,11 +1,11 @@
 {
   "name": "慧生活798 (ilife798) client contract",
   "baseUrl": "https://i.ilife798.com",
-  "source": "v3.1.5 static path baseline and REA account/check-in/avatar methods; LLVM arm64 check-in digest observations; v3.1.7 command/update signatures; recovered v3.1.9 DEX account/signing chain and isolated libwatermelon loader-memory observations + scoped historical live probes (see docs/01, docs/04 and docs/05)",
+  "source": "v3.1.5 static path baseline and REA account/check-in/avatar methods; LLVM arm64 check-in digest observations; v3.1.7 command/update signatures; recovered v3.1.9 DEX account/signing chain and isolated libwatermelon loader-memory observations + scoped historical live probes (see docs/01, docs/04 and docs/05); recovered v3.1.10 OctUtil and isolated liboct loader-memory/LLVM signing observations",
   "headers": {
     "ApplicationType": "1,1",
-    "VersionCode": "3.1.9",
-    "user-agent": "Android_ilife798_3.1.9",
+    "VersionCode": "3.1.10",
+    "user-agent": "Android_ilife798_3.1.10",
     "Authorization": "<login token>"
   },
   "headerVersionPolicy": {
@@ -107,13 +107,13 @@
       "response": "Missions{accScoreRsp{validScore,daily{ltime,week}},dailyRSP{adId,score}}",
       "use": "query daily points-check-in status and server reward",
       "verified": "static",
-      "notes": "v3.1.5 d4.g.b and SignInFragment.z0; week Monday bit0 to Sunday bit6; existing score account missing daily/week defaults to zero for preparation as original, but missing account/invalid bitmap/reward/time blocks requests; read-back confirmation requires an actual signed bit"
+      "notes": "Original SignInFragment week bitmap uses Monday bit0 through Sunday bit6. Missing first score account/daily/week defaults to zero for request preparation; invalid bitmap or missing reward/server time blocks submission. Read-back success requires an actual same-day signed bit, not a default."
     },
     {
       "method": "POST",
       "path": "/api/v1/acc/score/score-send",
       "query": [
-        "sign (session-bound lowercase MD5 digest)",
+        "sign (protocol-specific session digest)",
         "s=1"
       ],
       "body": [
@@ -125,7 +125,7 @@
       "response": "BaseReq",
       "use": "normal daily check-in only; omit type, no retroactive or advertising reward",
       "verified": "static",
-      "notes": "v3.1.9 BaseTaskFragment.O -> util.t.b -> WatermelonUtil.ice; independent authorized digest implementation under this app's own identity and legitimate session; no original SO/certificate reuse; persist same-account day attempt before request, never automatically retry; read mission-lst after acceptance and require same-day signed bit before success"
+      "notes": "v3.1.10 BaseTaskFragment.U -> OctUtil.d/e -> liboct native s; BLAKE3 keyed digest first 16 bytes in lowercase hex. v3.1.9 legacy MD5 remains explicit. Freeze signer protocol in both digest and request headers; unknown protocols do not submit. Independent implementation, no original SO/certificate reuse; durable same-account attempt, no automatic retry, actual same-day signed bitmap read-back."
     },
     {
       "method": "GET",
@@ -411,11 +411,11 @@
       "trigger": "foreground signed-in session or login while foreground; default-on install preference; Me also offers explicit manual check-in with automation disabled; no Preview IO or writes",
       "clock": "positive server envelope time plus monotonic elapsed since snapshot; Asia/Shanghai day and Monday=1 weekday; do not submit a stale snapshot after midnight",
       "prepare": "require positive server time and valid dailyRSP.adId/score; original v3.1.5 z0 treats absent score account/daily/week as zero for preparation; invalid bitmap remains unknown; never use zero fallback to confirm success",
-      "digest": "lowercase MD5(sort-and-join(adId.split(&)) + decimal(floor(adjustedServerMs/30000)*30) + last8(token) + last8(uid) + currentFixed31ByteSalt); never log inputs, digest, or signed request URL",
+      "digest": "3.1.10: first16(BLAKE3-keyed(fixed8 + last8(bucketSeconds) + middle8(token) + last8(normalized endpoint), key-sorted adId + bucketSeconds + last8(token) + last8(uid))), lowercase hex. 3.1.9: legacy lowercase MD5 with verified salt. 30-second server+monotonic bucket. Unsupported protocol: no POST. Freeze request headers to signer version; never log credentials/key/payload/digest/signed URL.",
       "identity": "original native implementation gates on its app certificate; user explicitly authorized a separate implementation with this app's own package/certificate and legitimate login; no original library, private key or official identity spoofing",
       "deduplication": "shared automatic/manual Mutex; cancellable wait for old VM cleanup; synchronously confirm current-account day attempt on every POST including explicit retry; automatic reentry/process recreation does not resubmit that day; manual first queries fresh status and may explicitly retry; cancellation removes only a newly-created unsent marker",
       "confirmation": "after any POST result, GET missions again and require same-day signed bitmap; timeout/cancellation/failure/unknown state is unconfirmed, with no automatic write retry or fabricated points",
-      "validation": "v3.1.9 recovered DEX REA methods + isolated offline library loader-memory/LLVM instructions + synthetic Python/JVM vectors; no original identity bypass or native signer execution, no claim of all-current-field compatibility; real acceptance is recorded in docs/05",
+      "validation": "v3.1.10 recovered DEX REA methods + isolated offline liboct loader-memory/LLVM and independent JVM BLAKE3 vectors. Real-service results are tracked in docs/05. No original signer execution or identity bypass.",
       "feedback": "global Snackbar for success/already-signed/check failure/unconfirmed, plus persistent Me status and busy manual button; same automatic notice deduplicated, current-account notice cleared on session transition; Snackbar avoids actual bottom navigation height",
       "session": "logout clears local session and cancels jobs immediately, remote logout uses captured old token; Preview exit keeps disk unchanged; successful login only inherits cached account data when old and new nonblank uid match; login success is also generation-bound and cannot replace a Preview or exited session with a late result"
     },
@@ -427,7 +427,7 @@
       "checkInCalendar": "ev_7c3e8ff8352be0c6ed4775c7ae9b9388159b7abb2f1d953a297153a977f77f14",
       "javaSignatureBridge": "ev_525b21b2cad3ba53e43a0724d4de0e7edd27334555144ca7afa49d7352796393",
       "avatar": "ev_1230ddb73e18a14c2e02ee5569002a645af15326c738c2288901cb5b7445451e",
-      "newSampleBoundary": "3.1.9/31009 original shell had 31 wrapper classes; reconstructed nine internal DEX headers and independently matched first-4KiB masks; recovered path comparison has 104 paths (3 additions, 5 removals), intentionally retain original 106-path baseline pending separate full drift review"
+      "newSampleBoundary": "3.1.9/31009 and 3.1.10/31010 protected samples were recovered into nine-DEX analysis-only carriers. 3.1.10 recovered comparison has 106 paths with 6 additions and 6 removals against the historical 106-path baseline; retain that baseline pending independent full drift review. Current signing uses OctUtil/liboct, not the leftover watermelon binary."
     }
   },
   "outOfScopePaths": [

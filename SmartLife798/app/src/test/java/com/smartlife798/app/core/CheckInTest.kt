@@ -91,21 +91,70 @@ class CheckInTest {
     }
 
     @Test
-    fun `signature matches independent hashlib fixture and changes only at bucket boundary`() {
-        // Independently computed from the static native concatenation using Python hashlib.
+    fun `legacy 319 MD5 fixture remains explicit and uses thirty second buckets`() {
         val expected = "7024e17b3e0c0ca9d12f02aa4d702ae3"
-        assertEquals(expected, CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh", mondayMidnightChina))
-        assertEquals(expected, CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina, 29_999))
-        assertEquals(
-            CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina + 30_000),
-            CheckIn.sign("daily-fixture", "12345678", "abcdefgh", mondayMidnightChina, 30_000),
-        )
+        assertEquals(expected, CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh",
+            mondayMidnightChina, protocolVersion = "3.1.9"))
+        assertEquals(expected, CheckIn.sign("daily-fixture", "12345678", "abcdefgh",
+            mondayMidnightChina, 29_999, protocolVersion = "3.1.9"))
     }
 
     @Test
-    fun `current native sorts ampersand arguments before hashing`() {
+    fun `3110 signature matches independent Rust backed Python reference`() {
+        val expected = "36ce4348b84310502e39e08598667b4a"
+        assertEquals(expected, CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh",
+            mondayMidnightChina, protocolVersion = "3.1.10"))
+        assertEquals(expected, CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh",
+            mondayMidnightChina, 29_999, protocolVersion = "3.1.10"))
+        assertEquals(CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh", mondayMidnightChina + 30_000),
+            CheckIn.sign("daily-fixture", "prefix-12345678", "prefix-abcdefgh", mondayMidnightChina, 30_000))
+    }
+
+    @Test
+    fun `3110 arguments sort by key and preserve equal key order`() {
         assertEquals(CheckIn.sign("a=1&b=2", "12345678", "abcdefgh", mondayMidnightChina),
             CheckIn.sign("b=2&a=1", "12345678", "abcdefgh", mondayMidnightChina))
+        org.junit.Assert.assertNotEquals(CheckIn.sign("a=2&a=1", "12345678", "abcdefgh", mondayMidnightChina),
+            CheckIn.sign("a=1&a=2", "12345678", "abcdefgh", mondayMidnightChina))
+    }
+
+    @Test
+    fun `unknown protocols fail before producing a write signature`() {
+        assertTrue(CheckIn.supportsProtocol("3.1.9"))
+        assertTrue(CheckIn.supportsProtocol("3.1.10"))
+        for (version in listOf("3.1.11", "3.1.5", "", "invalid")) {
+            assertEquals(false, CheckIn.supportsProtocol(version))
+            val failure = try {
+                CheckIn.sign("daily", "12345678", "abcdefgh", mondayMidnightChina, protocolVersion = version)
+                null
+            } catch (error: IllegalArgumentException) { error }
+            assertTrue(failure is IllegalArgumentException)
+        }
+    }
+
+    @Test
+    fun `keyed BLAKE3 matches independent block chunk and tree boundary vectors`() {
+        // Rust-backed Python blake3 1.0.8; official test key and repeating 0..250 input.
+        val key = "whats the Elvish word for friend".toByteArray(Charsets.UTF_8)
+        val vectors = listOf(
+            0 to "92b2b75604ed3c761f9d6f62392c8a9227ad0ea3f09573e783f1498a4ed60d26",
+            1 to "6d7878dfff2f485635d39013278ae14f1454b8c0a3a2d34bc1ab38228a80c95b",
+            63 to "bb1eb5d4afa793c1ebdd9fb08def6c36d10096986ae0cfe148cd101170ce37ae",
+            64 to "ba8ced36f327700d213f120b1a207a3b8c04330528586f414d09f2f7d9ccb7e6",
+            65 to "c0a4edefa2d2accb9277c371ac12fcdbb52988a86edc54f0716e1591b4326e72",
+            1023 to "c951ecdf03288d0fcc96ee3413563d8a6d3589547f2c2fb36d9786470f1b9d6e",
+            1024 to "75c46f6f3d9eb4f55ecaaee480db732e6c2105546f1e675003687c31719c7ba4",
+            1025 to "357dc55de0c7e382c900fd6e320acc04146be01db6a8ce7210b7189bd664ea69",
+            2048 to "879cf1fa2ea0e79126cb1063617a05b6ad9d0b696d0d757cf053439f60a99dd1",
+            2049 to "9f29700902f7c86e514ddc4df1e3049f258b2472b6dd5267f61bf13983b78dd5",
+            3072 to "044a0e7b172a312dc02a4c9a818c036ffa2776368d7f528268d2e6b5df191770",
+            4096 to "befc660aea2f1718884cd8deb9902811d332f4fc4a38cf7c7300d597a081bfc0",
+        )
+        for ((length, expected) in vectors) {
+            val actual = CheckInBlake3.keyedHash(key, ByteArray(length) { (it % 251).toByte() })
+                .joinToString("") { "%02x".format(it.toInt() and 255) }
+            assertEquals("input length $length", expected, actual)
+        }
     }
 
     @Test

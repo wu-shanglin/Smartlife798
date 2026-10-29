@@ -108,6 +108,8 @@ import com.smartlife798.app.ui.HomeScreen
 import com.smartlife798.app.ui.LoginScreen
 import com.smartlife798.app.ui.ManualScanScreen
 import com.smartlife798.app.ui.MeScreen
+import com.smartlife798.app.ui.DeveloperToolsScreen
+import com.smartlife798.app.ui.NfcCaptureScreen
 import com.smartlife798.app.ui.OrdersScreen
 import com.smartlife798.app.ui.ScanScreen
 import com.smartlife798.app.ui.WalletScreen
@@ -313,12 +315,29 @@ private fun AppRoot(forcePreview: Boolean = false, onExitApp: () -> Unit) {
                             MainTabPage("me", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 MeScreen(
                                     vm = vm,
+                                    onOpenDeveloperTools = { navController.navigate("developer-tools") { launchSingleTop = true } },
                                     onOpenWallet = {
                                         openCardPage(navController, "wallet", CardSource(entry.id, CardOrigin.WALLET))
                                     },
                                 )
                             }
                         }
+                    }
+                    composable("developer-tools") {
+                        val enabled by vm.developerToolsEnabled.collectAsStateWithLifecycle()
+                        DeveloperToolsScreen(
+                            enabled = enabled,
+                            onOpenNfc = { navController.navigate("developer-tools/nfc") { launchSingleTop = true } },
+                            onDisable = { vm.setDeveloperToolsEnabled(false) },
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                    composable("developer-tools/nfc") {
+                        val enabled by vm.developerToolsEnabled.collectAsStateWithLifecycle()
+                        NfcCaptureScreen(
+                            enabled = enabled,
+                            onBack = { navController.popBackStack() },
+                        )
                     }
                     composable(
                         "wallet?cardOrigin={cardOrigin}&cardEntry={cardEntry}",

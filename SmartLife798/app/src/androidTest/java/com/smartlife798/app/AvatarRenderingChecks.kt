@@ -108,7 +108,8 @@ object AvatarRenderingChecks {
                 screen.setContent {
                     SmartLifeTheme(darkTheme = false, dynamicColor = false) {
                         val profile by vm.profile.collectAsStateWithLifecycle()
-                        val bitmap = com.smartlife798.app.ui.components.rememberAvatar(profile?.id, profile?.img, vm::loadAvatar)
+                        val bitmap = com.smartlife798.app.ui.components.rememberAvatar(
+                            profile?.id, profile?.img, vm::loadAvatar, initial = vm.cachedAvatar(profile?.img))
                         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                             contentAlignment = Alignment.Center) {
                             if (avatarVisible.value) NetworkAvatar(bitmap = bitmap,
@@ -119,8 +120,8 @@ object AvatarRenderingChecks {
             }
             val image = "https://avatar.invalid/success.png"
             recreate(image)
-            stage = "VM downloads and Android decodes actual PNG pixels"
-            val decoded = runBlocking { vm.loadAvatar(image) } ?: error("PNG decode failed")
+            stage = "Avatar downloads and Android decodes actual PNG pixels"
+            val decoded = runBlocking { Avatar.load(image) } ?: error("PNG decode failed")
             check(decoded.width == 64 && decoded.height == 64 && decoded.getPixel(10, 10) == Color.MAGENTA)
             decoded.recycle()
             val savedProfile = Store.profileJson
@@ -143,6 +144,17 @@ object AvatarRenderingChecks {
             test.waitForIdleSync()
             await { isMagenta(sample(test)) }
             check(requests.get() == afterLoad)
+
+            stage = "same account page remount renders cached pixels without a network request"
+            test.runOnMainSync { screen.setContent { } }
+            test.waitForIdleSync()
+            show()
+            test.waitForIdleSync()
+            check(isMagenta(sample(test)))
+            check(requests.get() == afterLoad)
+            val cached = vm.cachedAvatar(image) ?: error("Missing avatar cache")
+            repeat(3) { check(runBlocking { vm.loadAvatar(image) } === cached) }
+            check(vm.cachedAvatar("https://avatar.invalid/other.png") == null && requests.get() == afterLoad)
 
             stage = "failed image falls back without changing account storage"
             mode.set(1)
@@ -169,12 +181,13 @@ object AvatarRenderingChecks {
             test.waitForIdleSync()
             SystemClock.sleep(300)
             check(!isMagenta(sample(test)))
+            check(vm.cachedAvatar(image) == null && vm.cachedAvatar("https://avatar.invalid/old-account.png") == null)
 
             stage = "Preview cannot download or change cached account"
             val beforePreviewLoad = requests.get()
             runBlocking { check(vm.loadAvatar(image) == null) }
             check(requests.get() == beforePreviewLoad && Store.profileJson == storedBeforePreview)
-            result.putString("stream", "PASS: real PNG bytes through Avatar and VM decode, pending initials, rendered avatar pixels, image-error fallback, account transition cancels old image, Preview no requests or account writes; requests=${requests.get()}\n")
+            result.putString("stream", "PASS: real PNG bytes through Avatar and VM decode, pending initials, rendered avatar pixels, retained lazy-item/page-remount pixels, repeated same-URL VM loads cached, changed URL rejects cached pixels, image-error fallback, account transition cancels old image, Preview no requests or account writes; requests=${requests.get()}\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")

@@ -7,11 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,7 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,7 +84,11 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
+fun MeScreen(
+    vm: MainViewModel,
+    onOpenWallet: () -> Unit,
+    onOpenDeveloperTools: () -> Unit = {},
+) {
     val profile by vm.profile.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val wallet by vm.wallet.collectAsStateWithLifecycle()
@@ -97,6 +100,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
     val protocolVersion by vm.protocolVersion.collectAsStateWithLifecycle()
     val startupPage by vm.startupPage.collectAsStateWithLifecycle()
+    val developerToolsEnabled by vm.developerToolsEnabled.collectAsStateWithLifecycle()
     val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
     val autoCheckIn by vm.autoCheckIn.collectAsStateWithLifecycle()
     val checkInStatus by vm.checkInStatus.collectAsStateWithLifecycle()
@@ -104,18 +108,18 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
 
     val availableScore by vm.availableScore.collectAsStateWithLifecycle()
     val signedInToday by vm.signedInToday.collectAsStateWithLifecycle()
-    // Above the lazy item: scrolling away must not dispose the decoded bitmap.
+    // Keep decoded pixels for the page lifetime, independently of scroll position.
     val avatarContent = com.smartlife798.app.ui.components.rememberAvatar(
-        profile?.id, profile?.img, vm::loadAvatar)
+        profile?.id, profile?.img, vm::loadAvatar, initial = vm.cachedAvatar(profile?.img))
     LaunchedEffect(refreshTick) {
-        vm.refreshCheckInStatus()
-        vm.refreshMaster()
-        vm.refreshWallet()
+        vm.refreshMePage()?.join()
     }
     val coroutineScope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var checkResult by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+    var developerTapCount by remember { mutableStateOf(0) }
+    var lastDeveloperTap by remember { mutableStateOf(0L) }
     var confirmClearRecents by remember { mutableStateOf(false) }
     var editNickname by remember { mutableStateOf(false) }
     var nickname by remember { mutableStateOf("") }
@@ -128,8 +132,7 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
                 refreshing = true
                 coroutineScope.launch {
                     try {
-                        vm.refreshAll()
-                        vm.refreshCheckInStatus()
+                        vm.refreshMePage(force = true)?.join()
                     } finally {
                         refreshing = false
                     }
@@ -140,318 +143,322 @@ fun MeScreen(vm: MainViewModel, onOpenWallet: () -> Unit) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 20.dp, 16.dp, 28.dp),
+        // A bounded set of settings: keep controls composed while scrolling instead
+        // of recreating button groups and auto-sized text at each lazy-item boundary.
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(16.dp, 20.dp, 16.dp, 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    NetworkAvatar(bitmap = avatarContent, name = profile?.name.orEmpty(), modifier = Modifier.size(56.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NetworkAvatar(bitmap = avatarContent, name = profile?.name.orEmpty(), modifier = Modifier.size(56.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        profile?.name?.takeIf { it.isNotBlank() } ?: "未设置昵称",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        Fmt.phoneMasked(profile?.phone ?: session.phone),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "用户编号 ${profile?.no ?: profile?.id?.take(8) ?: "-"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (syncedAt > 0) {
                         Text(
-                            profile?.name?.takeIf { it.isNotBlank() } ?: "未设置昵称",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            Fmt.phoneMasked(profile?.phone ?: session.phone),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            "用户编号 ${profile?.no ?: profile?.id?.take(8) ?: "-"}",
+                            "资料更新于 " + Fmt.hhmm(syncedAt),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (syncedAt > 0) {
-                            Text(
-                                "资料更新于 " + Fmt.hhmm(syncedAt),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
-                    TextButton(
-                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                        enabled = profile != null && !savingProfile,
-                        onClick = {
-                            nickname = profile?.name.orEmpty()
-                            nicknameError = null
-                            editNickname = true
-                        },
-                    ) { Text("修改昵称") }
                 }
+                TextButton(
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    enabled = profile != null && !savingProfile,
+                    onClick = {
+                        nickname = profile?.name.orEmpty()
+                        nicknameError = null
+                        editNickname = true
+                    },
+                ) { Text("修改昵称") }
             }
 
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min)
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Column(
+                        modifier = Modifier.weight(1f).sharedCard(CardOrigin.WALLET).clickable(onClick = onOpenWallet).padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxHeight().sharedCard(CardOrigin.WALLET).clickable(onClick = onOpenWallet).padding(vertical = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                "钱包",
-                                modifier = Modifier.sharedCardElement(CardOrigin.WALLET),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Text(
+                            "钱包",
+                            modifier = Modifier.sharedCardElement(CardOrigin.WALLET),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        MetricValue(
+                            wallet?.let { Fmt.money(it.total) } ?: "—",
+                            modifier = Modifier.sharedCardElement(CardOrigin.WALLET, part = CardPart.AMOUNT),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f).padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        MetricValue(availableScore ?: "—")
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f).padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text("收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        MetricValue("${favorites.size}")
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("自动签到", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        Switch(checked = autoCheckIn, onCheckedChange = vm::setAutoCheckIn,
+                            modifier = Modifier.semantics { contentDescription = "自动签到开关" })
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("打开应用时检查当天签到，未签则自动签到", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(checkInStatus, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(
+                        onClick = vm::checkInNow,
+                        enabled = !checkingIn && signedInToday == false,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    ) {
+                        if (checkingIn) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = androidx.compose.material3.LocalContentColor.current,
                             )
-                            MetricValue(
-                                wallet?.let { Fmt.money(it.total) } ?: "—",
-                                modifier = Modifier.sharedCardElement(CardOrigin.WALLET, part = CardPart.AMOUNT),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                            Spacer(Modifier.width(8.dp))
                         }
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
+                        Text(if (checkingIn) "正在检查…" else if (signedInToday == true) "已签到" else if (signedInToday == false) "签到" else "等待签到状态")
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SettingsHeading(Icons.Filled.Home, "启动页面", "选择下次打开时显示的页面")
+                    SettingsChoiceButtonGroup(
+                        labels = StartupPage.entries.map { it.label },
+                        selectedIndex = StartupPage.entries.indexOf(startupPage),
+                        onSelect = { vm.setStartupPage(StartupPage.entries[it]) },
+                        icons = listOf(Icons.Filled.Home, Icons.AutoMirrored.Filled.List),
+                    )
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SettingsHeading(Icons.Filled.Settings, "外观", "选择适合你的显示方式")
+                    SettingsChoiceButtonGroup(labels = listOf("跟随系统", "浅色", "深色"),
+                        selectedIndex = ThemeMode.entries.indexOf(themeMode),
+                        onSelect = { Appearance.setMode(ThemeMode.entries[it]) })
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
                         ) {
-                            Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            MetricValue(availableScore ?: "—")
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text("收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            MetricValue("${favorites.size}")
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("动态取色", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "跟随壁纸配色，关闭用品牌色",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Switch(
+                                    checked = dynamicColor,
+                                    onCheckedChange = { Appearance.setDynamicColor(it) },
+                                    modifier = Modifier.semantics { contentDescription = "动态取色开关" },
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("自动签到", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                            Switch(checked = autoCheckIn, onCheckedChange = vm::setAutoCheckIn,
-                                modifier = Modifier.semantics { contentDescription = "自动签到开关" })
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("打开应用时检查当天签到，未签则自动签到", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(checkInStatus, style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("服务端连接", style = MaterialTheme.typography.titleSmall)
+                    InfoRow("接口地址", Api.BASE_URL)
+                    InfoRow("客户端标识", "Android_ilife798_$protocolVersion")
+                    InfoRow("登录令牌", if (session.isLoggedIn) "已持有" else "无")
+                    InfoRow("本机最近设备", "${recents.size} 台")
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = vm::checkInNow,
-                            enabled = !checkingIn && signedInToday == false,
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                            enabled = !checking,
+                            onClick = {
+                                if (checking) return@Button
+                                checking = true
+                                checkResult = null
+                                coroutineScope.launch {
+                                    try {
+                                        checkResult = vm.checkConnection()
+                                    } finally {
+                                        checking = false
+                                    }
+                                }
+                            },
                         ) {
-                            if (checkingIn) {
+                            if (checking) {
                                 LoadingIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = androidx.compose.material3.LocalContentColor.current,
+                                    modifier = Modifier.size(16.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
                                 )
                                 Spacer(Modifier.width(8.dp))
                             }
-                            Text(if (checkingIn) "正在检查…" else if (signedInToday == true) "已签到" else if (signedInToday == false) "签到" else "等待签到状态")
+                            Text("测试接口连通性")
+                        }
+                        if (recents.isNotEmpty()) {
+                            OutlinedButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { confirmClearRecents = true }) {
+                                Text("清空本机记录")
+                            }
                         }
                     }
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SettingsHeading(Icons.Filled.Home, "启动页面", "选择下次打开时显示的页面")
-                        SettingsChoiceButtonGroup(
-                            labels = StartupPage.entries.map { it.label },
-                            selectedIndex = StartupPage.entries.indexOf(startupPage),
-                            onSelect = { vm.setStartupPage(StartupPage.entries[it]) },
-                            icons = listOf(Icons.Filled.Home, Icons.AutoMirrored.Filled.List),
+                    if (checkResult != null) {
+                        Text(
+                            checkResult!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }
             }
 
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SettingsHeading(Icons.Filled.Settings, "外观", "选择适合你的显示方式")
-                        SettingsChoiceButtonGroup(labels = listOf("跟随系统", "浅色", "深色"),
-                            selectedIndex = ThemeMode.entries.indexOf(themeMode),
-                            onSelect = { Appearance.setMode(ThemeMode.entries[it]) })
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text("动态取色", style = MaterialTheme.typography.bodyMedium)
-                                        Text(
-                                            "跟随壁纸配色，关闭用品牌色",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    Switch(
-                                        checked = dynamicColor,
-                                        onCheckedChange = { Appearance.setDynamicColor(it) },
-                                        modifier = Modifier.semantics { contentDescription = "动态取色开关" },
-                                    )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("关于本客户端", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "客户端版本 ${BuildConfig.VERSION_NAME}",
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            if (developerToolsEnabled) {
+                                onOpenDeveloperTools()
+                            } else {
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                developerTapCount = if (now - lastDeveloperTap <= 3_000L) developerTapCount + 1 else 1
+                                lastDeveloperTap = now
+                                if (developerTapCount >= 7) {
+                                    developerTapCount = 0
+                                    vm.setDeveloperToolsEnabled(true)
+                                    vm.notify("开发者工具已启用")
                                 }
                             }
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("服务端连接", style = MaterialTheme.typography.titleSmall)
-                        InfoRow("接口地址", Api.BASE_URL)
-                        InfoRow("客户端标识", "Android_ilife798_$protocolVersion")
-                        InfoRow("登录令牌", if (session.isLoggedIn) "已持有" else "无")
-                        InfoRow("本机最近设备", "${recents.size} 台")
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                                enabled = !checking,
-                                onClick = {
-                                    if (checking) return@Button
-                                    checking = true
-                                    checkResult = null
-                                    coroutineScope.launch {
-                                        try {
-                                            checkResult = vm.checkConnection()
-                                        } finally {
-                                            checking = false
-                                        }
-                                    }
-                                },
-                            ) {
-                                if (checking) {
-                                    LoadingIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                }
-                                Text("测试接口连通性")
-                            }
-                            if (recents.isNotEmpty()) {
-                                OutlinedButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { confirmClearRecents = true }) {
-                                    Text("清空本机记录")
-                                }
-                            }
-                        }
-                        if (checkResult != null) {
-                            Text(
-                                checkResult!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("关于本客户端", style = MaterialTheme.typography.titleSmall)
-                        Text("客户端版本 ${BuildConfig.VERSION_NAME}")
+                        }.padding(vertical = 8.dp),
+                    )
+                    if (developerToolsEnabled) {
                         OutlinedButton(
                             shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                            onClick = { vm.checkAppUpdate(manual = true) },
-                            enabled = !checkingUpdate,
-                        ) { Text(if (checkingUpdate) "正在检查更新…" else "检查更新") }
-                        Text(
-                            "本应用是「慧生活798」服务端的独立重制客户端：登录、扫码、设备状态、启用/停用设备、" +
-                                "计费与账单全部调用官方接口，界面与交互完全重新设计。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text(
-                            "已实现：手机号+图形验证码+短信登录、收藏同步、扫码解析、设备详情与实时状态、" +
-                                "启动/结束使用、消费记录与账单详情、支付宝与余额/钱包支付。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            "微信 SDK 已集成，平台配置与真实支付待验；未集成云闪付/银行支付、门禁蓝牙与 IC 卡、E 袋洗与驾考模块。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                            onClick = onOpenDeveloperTools,
+                        ) { Text("开发者工具") }
                     }
+                    OutlinedButton(
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                        onClick = { vm.checkAppUpdate(manual = true) },
+                        enabled = !checkingUpdate,
+                    ) { Text(if (checkingUpdate) "正在检查更新…" else "检查更新") }
+                    Text(
+                        "本应用是「慧生活798」服务端的独立重制客户端：登录、扫码、设备状态、启用/停用设备、" +
+                            "计费与账单全部调用官方接口，界面与交互完全重新设计。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    Text(
+                        "已实现：手机号+图形验证码+短信登录、收藏同步、扫码解析、设备详情与实时状态、" +
+                            "启动/结束使用、消费记录与账单详情、支付宝与余额/钱包支付。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "微信 SDK 已集成，平台配置与真实支付待验；未集成云闪付/银行支付、门禁蓝牙与 IC 卡、E 袋洗与驾考模块。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
-            item {
-                HintBanner(
-                    "收藏数据保存在服务端账号内；常用设备、最近使用与置顶仅保存在本机，卸载应用后会丢失。",
-                )
+            HintBanner(
+                "收藏数据保存在服务端账号内；常用设备、最近使用与置顶仅保存在本机，卸载应用后会丢失。",
+            )
+
+            OutlinedButton(
+                onClick = { vm.logout() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("退出登录")
             }
 
-            item {
-                OutlinedButton(
-                    onClick = { vm.logout() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("退出登录")
-                }
-            }
-
-            item {
-                Text(
-                    "版本 ${BuildConfig.VERSION_NAME} · 数据来源 ${Api.BASE_URL}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                "版本 ${BuildConfig.VERSION_NAME} · 数据来源 ${Api.BASE_URL}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 
