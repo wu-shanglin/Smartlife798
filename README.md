@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.15.0`（`versionCode 47`） |
+| 当前版本 | `1.16.0`（`versionCode 48`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.14.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.14.0/SmartLife798-1.14.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.14.0) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**1.15.0 / 47 开发构建，尚未远端发布**：修复按钮联动压缩时的文本换行，合并和并行页面读取，接入官方直接 NFC 链接的服务端设备解析与详情导航。保留独立开发者 NFC 原始采集工具。现有支付宝中转卡仍未取得设备映射，验证边界见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
+**1.16.0 / 48 开发构建，尚未远端发布**：详情过渡移除重复绘制层、保留首帧模式资料并修复页面轮询归属；经确认的 NFC 事件读取最新详情后自动尝试使用一次，普通链接仅打开详情。保留 1.15.0 的按钮排版与页面读取优化，以及独立开发者 NFC 采集工具。支付宝中转卡映射暂缓，实物分发和整机性能仍待验收，见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
 
 最新公开版本为 **1.14.0 / 46**，普通更新、最低支持码 37；公开 APK、update.json 与历史附件均已下载核验。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.14.0/SmartLife798-1.14.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -46,7 +46,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.15.0-debug.apk`](dist/SmartLife798-1.15.0-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.16.0-debug.apk`](dist/SmartLife798-1.16.0-debug.apk) |
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 
