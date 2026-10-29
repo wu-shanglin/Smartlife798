@@ -71,6 +71,7 @@ import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
 import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.ui.components.usagePillState
+import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -91,7 +92,6 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
     // `liveStatus` is global; only this device's snapshot may describe this session.
     val liveForActive = live?.takeIf { it.id == active?.deviceId }
-    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
     val unpaidBadge by vm.unpaidCount.collectAsStateWithLifecycle()
     val payRequest by vm.payRequest.collectAsStateWithLifecycle()
 
@@ -137,9 +137,11 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
 
     // Bills plus the local session: the 「进行中」 card must not survive a refresh
     // once the server reports the machine idle or gone.
-    LaunchedEffect(refreshTick) {
-        loadBills(true)
-        vm.syncActiveStatus()
+    LaunchedEffect(vm) {
+        collectRefreshRequests(vm.refreshTick) {
+            loadBills(true)
+            vm.syncActiveStatus()
+        }
     }
 
     // A failed dev/start raises this request; land directly on the outstanding bill.
@@ -152,12 +154,14 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
         vm.consumePayRequest()
     }
 
-    val unpaid = bills.count { it.isUnpaid }
-    val done = bills.count { it.status == BillStatus.PAID }
-    val visibleBills = when (filter) {
-        OrderFilter.ALL -> bills
-        OrderFilter.UNPAID -> bills.filter { it.isUnpaid }
-        OrderFilter.DONE -> bills.filter { it.status == BillStatus.PAID }
+    val unpaid = remember(bills) { bills.count { it.isUnpaid } }
+    val done = remember(bills) { bills.count { it.status == BillStatus.PAID } }
+    val visibleBills = remember(bills, filter) {
+        when (filter) {
+            OrderFilter.ALL -> bills
+            OrderFilter.UNPAID -> bills.filter { it.isUnpaid }
+            OrderFilter.DONE -> bills.filter { it.status == BillStatus.PAID }
+        }
     }
 
     ExpressiveRefreshBox(

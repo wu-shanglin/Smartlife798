@@ -52,6 +52,8 @@ import com.smartlife798.app.core.statusOnly
 import com.smartlife798.app.core.session
 import com.smartlife798.app.core.stateLabel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -615,6 +617,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var detailDevice: String? = null
     private var watchJob: Job? = null
     private var masterJob: Job? = null
+    private val accountReads = mutableMapOf<String, Deferred<Unit>>()
+    private var recentBillsRead: Deferred<List<Bill>?>? = null
+
+    /** Share only concurrent read requests, never cache business results or retry writes. */
+    private suspend fun accountRead(key: String, read: suspend () -> Unit) = withContext(Dispatchers.Main.immediate) {
+        val task = accountReads[key]?.takeIf { it.isActive }
+            ?: viewModelScope.async(start = CoroutineStart.LAZY) { read() }.also {
+                accountReads[key] = it
+                it.start()
+            }
+        try {
+            task.await()
+        } finally {
+            if (task.isCompleted && accountReads[key] === task) accountReads.remove(key)
+        }
+    }
+
+    private fun cancelAccountReads() {
+        accountReads.values.forEach { it.cancel() }
+        accountReads.clear()
+        recentBillsRead?.cancel()
+        recentBillsRead = null
+        _loadingMaster.value = false
+    }
     private val endCommand = EndCommand()
 
     private val _loadingMaster = MutableStateFlow(false)
@@ -745,6 +771,46 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = text
     }
 
+    private val _nfcDevice = MutableStateFlow<String?>(null)
+    val nfcDevice: StateFlow<String?> = _nfcDevice.asStateFlow()
+    private var nfcResolveJob: Job? = null
+
+    /** A deliberate card tap resolves a QR through the server; it never starts a device. */
+    fun acceptNfcUris(uris: List<String>) {
+        viewModelScope.launch {
+            if (Preview.enabled || !session.isLoggedIn || !appResumed || nfcResolveJob?.isActive == true) return@launch
+            when (val route = com.smartlife798.app.core.NfcRoutes.parseAll(uris)) {
+                is com.smartlife798.app.core.NfcRoute.Qr -> {
+                    val generation = accountGeneration
+                    val token = session.token
+                    nfcResolveJob = viewModelScope.launch {
+                        val response = resolveQr(route.id)
+                        if (Preview.enabled || !appResumed || accountGeneration != generation || session.token != token)
+                            return@launch
+                        when (response) {
+                            is Res.Ok -> when (val resolved = com.smartlife798.app.core.resolveQr(
+                                response.data?.dev, response.data?.qr?.type, com.smartlife798.app.core.QR_TYPE_DEVICE)) {
+                                is com.smartlife798.app.core.QrResolution.Resolved -> {
+                                    rememberScan(resolved.device)
+                                    _nfcDevice.value = resolved.device.id
+                                }
+                                else -> notify("卡片未返回可用设备，请移开后重新碰卡")
+                            }
+                            is Res.Fail -> notify("NFC 设备识别失败：${errorText(response.code, response.msg)}")
+                        }
+                    }
+                }
+                is com.smartlife798.app.core.NfcRoute.Alipay ->
+                    notify("该卡使用支付宝平台中转，当前尚未取得对应设备入口")
+                com.smartlife798.app.core.NfcRoute.Unsupported -> notify("暂不支持这张卡的设备链接")
+            }
+        }
+    }
+
+    fun consumeNfcDevice(id: String) {
+        if (_nfcDevice.value == id) _nfcDevice.value = null
+    }
+
     // ------------------------------------------------------------------ auth
 
     suspend fun requestCaptcha(seed: String, ts: String): ByteArray? = withContext(Dispatchers.IO) {
@@ -826,6 +892,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         startJob?.cancel()
         watchJob?.cancel()
         masterJob?.cancel()
+        cancelAccountReads()
+        nfcResolveJob?.cancel()
+        _nfcDevice.value = null
         deviceRevision += 1
         profileRevision += 1
         _pendingStart.value = null
@@ -846,12 +915,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- master
 
-    fun refreshMaster() {
-        if (masterJob?.isActive == true) return
-        masterJob = viewModelScope.launch {
+    fun refreshMaster(): Job {
+        masterJob?.takeIf { it.isActive }?.let { return it }
+        return viewModelScope.launch {
             refreshMasterInternal()
             refreshBillsDerived()
-        }
+        }.also { masterJob = it }
     }
 
     /**
@@ -861,26 +930,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * 「进行中」 card on screen for as long as the 2 s watch loop needed, so a
      * failed start looked like a running machine until the loop gave up.
      */
-    suspend fun refreshAll() {
-        refreshMasterInternal()
-        refreshWallet()
-        refreshBillsDerived()
-        syncActiveStatus()
+    suspend fun refreshAll() = coroutineScope {
+        launch { refreshMasterInternal() }
+        launch { refreshWallet() }
+        launch { refreshBillsDerived() }
+        launch { syncActiveStatus() }
+        Unit
     }
 
     /** Account wallet of the enterprise; drives the recharge screen and payment defaults. */
-    suspend fun refreshWallet() {
+    suspend fun refreshWallet() = accountRead("wallet") {
         if (Preview.enabled) {
             _wallet.value = Preview.wallet()
-            return
+            return@accountRead
         }
         if (!session.isLoggedIn) {
             _wallet.value = null
-            return
+            return@accountRead
         }
         val tokenAtStart = session.token
+        val generation = accountGeneration
         val res = withContext(Dispatchers.IO) { Api.wallet() }
-        if (!Preview.enabled && session.token == tokenAtStart && res is Res.Ok) _wallet.value = res.data
+        if (!Preview.enabled && generation == accountGeneration && session.token == tokenAtStart && res is Res.Ok)
+            _wallet.value = res.data
     }
 
     /**
@@ -962,33 +1034,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * One page-0 fetch feeds both the history index and the unpaid badge, which
      * used to cost two identical requests on every navigation.
      */
-    private suspend fun refreshBillsDerived() {
+    private suspend fun refreshBillsDerived() = withContext(Dispatchers.Main.immediate) {
         if (Preview.enabled) {
             _unpaidCount.value = Preview.bills().count(::isUnpaidBill)
-            return
+            return@withContext
         }
         if (!session.isLoggedIn) {
             _unpaidCount.value = 0
-            return
+            return@withContext
         }
-        val bills = fetchRecentBills() ?: return
+        val bills = fetchRecentBills() ?: return@withContext
         updateUnpaid(bills)
         applyCloudHistory(bills)
     }
 
     /** Kept for callers that only need the history index. */
-    suspend fun syncCloudHistory() {
-        if (Preview.enabled || !session.isLoggedIn) return
+    suspend fun syncCloudHistory() = withContext(Dispatchers.Main.immediate) {
+        if (Preview.enabled || !session.isLoggedIn) return@withContext
         fetchRecentBills()?.let(::applyCloudHistory)
     }
 
-    private suspend fun fetchRecentBills(): List<Bill>? =
-        withContext(Dispatchers.IO) { Api.bills(page = 0, size = HISTORY_PAGE_SIZE) }.let { res ->
-            when (res) {
-                is Res.Ok -> res.data.orEmpty()
-                is Res.Fail -> null
+    private suspend fun fetchRecentBills(): List<Bill>? = withContext(Dispatchers.Main.immediate) {
+        val generation = accountGeneration
+        val token = session.token
+        if (Preview.enabled || token.isNullOrBlank()) return@withContext null
+        val task = recentBillsRead?.takeIf { it.isActive } ?: viewModelScope.async {
+            withContext(Dispatchers.IO) { Api.bills(page = 0, size = HISTORY_PAGE_SIZE) }.let { res ->
+                when (res) {
+                    is Res.Ok -> res.data.orEmpty()
+                    is Res.Fail -> null
+                }
             }
+        }.also { recentBillsRead = it }
+        try {
+            task.await().takeIf { !Preview.enabled && token == session.token && generation == accountGeneration }
+        } finally {
+            if (task.isCompleted && recentBillsRead === task) recentBillsRead = null
         }
+    }
 
     private fun applyCloudHistory(bills: List<Bill>) {
         val grouped = LinkedHashMap<String, RecentDevice>()
@@ -1007,10 +1090,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         val cloud = grouped.values.sortedByDescending { it.lastUsedAt }
         val cloudIds = cloud.map { it.id }.toSet()
-        val localOnly = Store.recents().filter { it.id !in cloudIds }
+        val localOnly = _recents.value.filter { it.id !in cloudIds }
         val merged = (cloud + localOnly).take(60)
-        Store.saveRecents(merged)
-        _recents.value = merged
+        if (_recents.value != merged) {
+            Store.saveRecents(merged)
+            _recents.value = merged
+        }
         _historySyncedAt.value = System.currentTimeMillis()
     }
 
@@ -1027,14 +1112,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * The first page is enough for the badge because it is ordered by ctime;
      * the orders screen still pages through the complete cloud list.
      */
-    suspend fun refreshOrderBadge() {
+    suspend fun refreshOrderBadge() = withContext(Dispatchers.Main.immediate) {
         if (Preview.enabled) {
             _unpaidCount.value = Preview.bills().count(::isUnpaidBill)
-            return
+            return@withContext
         }
         if (!session.isLoggedIn) {
             _unpaidCount.value = 0
-            return
+            return@withContext
         }
         fetchRecentBills()?.let(::updateUnpaid)
     }
@@ -1184,34 +1269,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun refreshMasterInternal() {
+    private suspend fun refreshMasterInternal() = accountRead("master") {
         // 预览模式只用本地示例数据，不请求服务端，避免“演示模式”里混入真实账号数据。
-        if (Preview.enabled) return
-        if (!session.isLoggedIn) return
+        if (Preview.enabled) return@accountRead
+        if (!session.isLoggedIn) return@accountRead
         _loadingMaster.value = true
         _masterError.value = null
         val tokenAtStart = session.token
         val revisionAtStart = profileRevision
+        val generation = accountGeneration
         try {
             val res = withContext(Dispatchers.IO) { Api.master() }
-            if (Preview.enabled || session.token != tokenAtStart) return
+            if (Preview.enabled || session.token != tokenAtStart || generation != accountGeneration) return@accountRead
             when (res) {
                 is Res.Ok -> {
                     val master: Master? = res.data
                     val p = master?.storedProfile(session.phone)
                     if (p != null && revisionAtStart == profileRevision && !_savingProfile.value) {
-                        Store.saveProfile(p)
-                        _profile.value = p
+                        if (_profile.value != p) {
+                            Store.saveProfile(p)
+                            _profile.value = p
+                        }
                     }
-                    _favorites.value = master?.favos ?: emptyList()
-                    Store.saveFavoritesCache(gson.toJson(_favorites.value))
+                    val favorites = master?.favos.orEmpty()
+                    if (_favorites.value != favorites) {
+                        _favorites.value = favorites
+                        Store.saveFavoritesCache(gson.toJson(favorites))
+                    }
                 }
                 is Res.Fail -> {
                     _masterError.value = res.msg
                 }
             }
         } finally {
-            _loadingMaster.value = false
+            if (generation == accountGeneration) _loadingMaster.value = false
         }
     }
 
@@ -1234,6 +1325,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         startJob?.cancel()
         watchJob?.cancel()
         masterJob?.cancel()
+        cancelAccountReads()
+        nfcResolveJob?.cancel()
+        _nfcDevice.value = null
         deviceRevision += 1
         profileRevision += 1
         _pendingStart.value = null
@@ -1409,7 +1503,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // The detail page yields no duplicate reads, and command confirmation owns its reads.
     fun setAppResumed(value: Boolean, allowAutoCheckIn: Boolean = true) {
         if (value && !appResumed) foregroundEpoch += 1
-        if (!value) meRefreshJob?.cancel()
+        if (!value) {
+            meRefreshJob?.cancel()
+            nfcResolveJob?.cancel()
+            _nfcDevice.value = null
+        }
         appResumed = value
         if (value && allowAutoCheckIn) requestAutoCheckIn() else checkInJob?.cancel()
         ensureWatch()

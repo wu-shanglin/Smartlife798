@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.14.0`（`versionCode 46`） |
+| 当前版本 | `1.15.0`（`versionCode 47`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.14.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.14.0/SmartLife798-1.14.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.14.0) |
@@ -14,11 +14,13 @@
 
 ## 当前版本
 
-**1.14.0 / 46 已发布**：修复「我的」切页重复请求，复用账号头像缓存，并减少固定设置页滚动时重复组合；版本行连续点击七次启用开发者 NFC 工具，主动采集并查看、清空或分享本机原始记录。3.1.10 签到已在一加真机确认成功、积分由 0 增至 5；卡片路由适配仍在核验，验证边界见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
+**1.15.0 / 47 开发构建，尚未远端发布**：修复按钮联动压缩时的文本换行，合并和并行页面读取，接入官方直接 NFC 链接的服务端设备解析与详情导航。保留独立开发者 NFC 原始采集工具。现有支付宝中转卡仍未取得设备映射，验证边界见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
 
 最新公开版本为 **1.14.0 / 46**，普通更新、最低支持码 37；公开 APK、update.json 与历史附件均已下载核验。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.14.0/SmartLife798-1.14.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
 ## 功能与边界
+
+官方直接 NFC 链接可经服务端解析进入设备详情，不自动启停。现有支付宝中转卡仍未取得设备映射，真实 NFC 天线与整机性能尚待实机验收。
 
 登录、收藏、扫码/手输编号、设备状态与启停、消费账单、钱包充值及支付宝/微信 SDK 已实现；执行、金额和支付结果由服务端决定。支持昵称修改、网络头像、设备「使用积分」账号偏好和默认开启的自动签到（「我的」可关闭，并提供手动签到）。签到结果在当前页面提示，先查询当天状态、提交后读回确认；自动不重发当天不明结果，手动可先查询再明确重试；积分设置已在真机保存并恢复；昵称保存仍待验收；3.1.10 签到已在真机确认实际位图及积分入账。微信另受开放平台包名、签名与 appId 配置约束。常用/最近设备、搜索、置顶、启动页和外观偏好属于客户端能力。
 
@@ -44,7 +46,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.14.0-debug.apk`](dist/SmartLife798-1.14.0-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.15.0-debug.apk`](dist/SmartLife798-1.15.0-debug.apk) |
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 

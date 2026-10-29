@@ -282,7 +282,7 @@ object Api {
     suspend fun setMode(did: String, mode: Int, args: String): Res<Unit> =
         request("GET", "/api/v1/dev/mode/start", mapOf("did" to did, "mode" to mode.toString(), "args" to args), dataType = dataType<Unit>())
 
-    /** GET /api/v1/qr/use?id= */
+    /** GET /api/v1/qr/use?id= — scan/manual ID or the official NFC card q parameter. */
     suspend fun qrUse(id: String): Res<QrData> = request("GET", "/api/v1/qr/use", mapOf("id" to id), dataType = dataType<QrData>())
 
     /** GET /api/v1/ui/app/dev/dev-use-way?way= */

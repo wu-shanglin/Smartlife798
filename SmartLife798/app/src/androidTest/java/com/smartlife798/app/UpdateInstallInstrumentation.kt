@@ -21,6 +21,18 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "nfc-navigation") {
+            NfcNavigationChecks.run(this)
+            return
+        }
+        if (mode == "nfc-entry") {
+            NfcEntryChecks.run(this)
+            return
+        }
+        if (mode == "reads-benchmark" || mode == "reads-performance") {
+            ReadPerformanceChecks.run(this, verify = mode == "reads-performance")
+            return
+        }
         if (mode == "nfc-tools") {
             NfcCaptureChecks.run(this)
             return

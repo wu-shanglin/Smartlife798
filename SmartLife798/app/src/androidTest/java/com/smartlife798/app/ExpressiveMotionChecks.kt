@@ -53,6 +53,10 @@ object ExpressiveMotionChecks {
         val geometry = mutableListOf<String>()
         val labels = listOf("春日晨", "夏日午", "秋日夜")
         test.runOnMainSync { ServiceLocator.init(test.targetContext) }
+        val accessibilityInfo = test.uiAutomation.serviceInfo
+        accessibilityInfo.flags = accessibilityInfo.flags or
+            android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        test.uiAutomation.serviceInfo = accessibilityInfo
         try {
             check(Store.token.isNullOrBlank() && session.token.isNullOrBlank())
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
@@ -204,19 +208,69 @@ object ExpressiveMotionChecks {
                     }
                 }
             }
-            await { settingsLabels.all { find(test, it) != null } }
+            await { find(test, settingsLabels.first()) != null }
             test.waitForIdleSync()
-            val settingBounds = settingsLabels.map { bounds(button(find(test, it)!!)) }
+            val settingBounds = settingsLabels.mapNotNull { find(test, it)?.let { node -> bounds(button(node)) } }
             val minTouch = 48 * test.targetContext.resources.displayMetrics.density
             check(settingBounds.all { it.width() >= minTouch && it.height() >= minTouch })
             check(settingBounds.all { abs(it.exactCenterY() - settingBounds.first().exactCenterY()) <= 1f })
             check(settingBounds.zipWithNext().all { (left, right) -> !Rect.intersects(left, right) })
+            // A narrow large-font row must offer full labels through overflow,
+            // rather than force every choice into a compressed multiline button.
             settingsLabels.forEachIndexed { index, label ->
+                if (find(test, label) == null) {
+                    click(test, "更多选项")
+                    await { find(test, label) != null }
+                }
                 click(test, label)
                 await { counts.get() == index + 1 }
             }
             capture(test, "expressive-settings-large-font.png")
             geometry.add("settings-large-font=${settingBounds.map { "${it.width()}x${it.height()}" }}")
+
+            stage = "long labels do not change row height while either edge is held"
+            val edgeLabels = listOf("跟随系统", "浅色模式", "深色模式")
+            for (fontScale in listOf(1f, 1.3f, 2f)) {
+                test.runOnMainSync {
+                    screen.setContent {
+                        SmartLifeTheme(darkTheme = false) {
+                            val density = LocalDensity.current
+                            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                                Column(Modifier.fillMaxSize().padding(top = 100.dp)) {
+                                    SettingsChoiceButtonGroup(edgeLabels, 0, {})
+                                }
+                            }
+                        }
+                    }
+                }
+                test.waitForIdleSync()
+                SystemClock.sleep(300)
+                await { find(test, edgeLabels.first()) != null }
+                for (pressedLabel in listOf(edgeLabels.first(), edgeLabels.last())) {
+                    stage = "font $fontScale edge $pressedLabel retains row height"
+                    val target = find(test, pressedLabel) ?: continue // Available in overflow instead.
+                    val visible = edgeLabels.mapNotNull { label -> find(test, label)?.let { label to bounds(button(it)) } }
+                    val area = bounds(button(target))
+                    val point = area.exactCenterX() to area.exactCenterY()
+                    val started = SystemClock.uptimeMillis()
+                    downTime = started
+                    downPoint = point
+                    touch(test, MotionEvent.ACTION_DOWN, started, point)
+                    repeat(5) {
+                        SystemClock.sleep(70)
+                        visible.forEach { (label, before) ->
+                            val held = bounds(button(find(test, label)!!))
+                            check(abs(held.height() - before.height()) <= 1)
+                            check(held.top == before.top && held.bottom == before.bottom)
+                        }
+                    }
+                    capture(test, "expressive-edge-$fontScale-${edgeLabels.indexOf(pressedLabel)}.png")
+                    touch(test, MotionEvent.ACTION_UP, started, point)
+                    downTime = null
+                    downPoint = null
+                    SystemClock.sleep(350)
+                }
+            }
 
             stage = "light and dark refresh indicator captures"
             for (dark in listOf(false, true)) {
@@ -236,11 +290,12 @@ object ExpressiveMotionChecks {
                         }
                     }
                 }
-                test.waitForIdleSync()
+                // This preview deliberately runs an infinite progress animation;
+                // the main queue need not become idle on a fast emulator.
                 SystemClock.sleep(500)
                 capture(test, "expressive-refresh-${if (dark) "dark" else "light"}.png")
             }
-            result.putString("stream", "PASS: real DOWN/UP expands center and compresses both neighbors in Choice/Settings groups, release restores widths within 2px and fires once, disabled zero clicks, 240dp/1.3 font held overflow does not overlap and preserves four choices; actual settings labels remain visible/centered/clickable at 240dp/2x font; light/dark refresh captures; ${geometry.joinToString("; ")}\n")
+            result.putString("stream", "PASS: real DOWN/UP expands center and compresses both neighbors in Choice/Settings groups, release restores widths within 2px and fires once, disabled zero clicks, 240dp/1.3 font held overflow does not overlap and preserves four choices; settings labels remain accessible inline or through overflow at 240dp/2x font, edge holds at 1x/1.3x/2x retain row height; light/dark refresh captures; ${geometry.joinToString("; ")}\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("failureFrames", failure.stackTrace.take(5).joinToString {
@@ -253,7 +308,7 @@ object ExpressiveMotionChecks {
                     "checkable=${it.isCheckable},enabled=${it.isEnabled},visible=${it.isVisibleToUser},bounds=${bounds(it)}"
             })
             if (activity != null) capture(test, "expressive-failure.png")
-            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; ${geometry.joinToString("; ")}\n")
+            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; line=${failure.stackTrace.firstOrNull { it.className.contains("ExpressiveMotionChecks") }?.lineNumber}; ${geometry.joinToString("; ")}\n")
         } finally {
             val started = downTime
             val point = downPoint
@@ -280,7 +335,11 @@ object ExpressiveMotionChecks {
 
     private fun root(test: Instrumentation): AccessibilityNodeInfo? {
         if (android.os.Build.VERSION.SDK_INT >= 33) test.uiAutomation.clearCache()
-        return test.uiAutomation.rootInActiveWindow
+        val active = test.uiAutomation.rootInActiveWindow
+        if (active?.packageName?.toString() == test.targetContext.packageName) return active
+        // API 28 can keep the dismissed overflow popup as the active window.
+        return test.uiAutomation.windows.mapNotNull { it.root }
+            .firstOrNull { it.packageName?.toString() == test.targetContext.packageName } ?: active
     }
 
     private fun nodes(node: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> =
@@ -307,9 +366,8 @@ object ExpressiveMotionChecks {
 
     private fun capture(test: Instrumentation, name: String) {
         val bitmap = test.uiAutomation.takeScreenshot() ?: error("Screenshot unavailable")
-        File(test.targetContext.filesDir, name).outputStream().use {
-            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
-        }
+        val image = File(test.targetContext.filesDir, name)
+        image.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         bitmap.recycle()
     }
 

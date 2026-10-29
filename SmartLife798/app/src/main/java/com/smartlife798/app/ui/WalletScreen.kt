@@ -50,6 +50,7 @@ import com.smartlife798.app.ui.components.ErrorState
 import com.smartlife798.app.ui.components.HintBanner
 import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.PaySheet
+import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -65,21 +66,21 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? Activity
     val wallet by vm.wallet.collectAsStateWithLifecycle()
-    val tick by vm.refreshTick.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var products by remember { mutableStateOf<List<Product>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
 
-    LaunchedEffect(tick) {
-        vm.refreshWallet()
-        when (val res = vm.rechargeProducts()) {
-            is Res.Ok -> {
-                products = res.data.orEmpty()
-                error = null
+    LaunchedEffect(vm) {
+        collectRefreshRequests(vm.refreshTick) {
+            kotlinx.coroutines.coroutineScope {
+                launch { vm.refreshWallet() }
+                when (val res = vm.rechargeProducts()) {
+                    is Res.Ok -> { products = res.data.orEmpty(); error = null }
+                    is Res.Fail -> error = res.msg
+                }
             }
-            is Res.Fail -> error = res.msg
         }
     }
 
