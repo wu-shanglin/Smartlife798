@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.13.2`（`versionCode 44`） |
+| 当前版本 | `1.14.0`（`versionCode 46`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.13.2 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.13.2/SmartLife798-1.13.2-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.13.2) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**下一版本的未发布变更**：修复「我的」切页重复请求，复用账号头像缓存，并减少固定设置页滚动时重复组合；版本行连续点击七次启用开发者 NFC 工具，主动采集并查看、清空或分享本机原始记录。3.1.10 签到已在一加真机确认成功、积分由 0 增至 5；卡片路由适配仍在核验，验证边界见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
+**1.14.0 / 46 开发构建**：修复「我的」切页重复请求，复用账号头像缓存，并减少固定设置页滚动时重复组合；版本行连续点击七次启用开发者 NFC 工具，主动采集并查看、清空或分享本机原始记录。3.1.10 签到已在一加真机确认成功、积分由 0 增至 5；卡片路由适配仍在核验，验证边界见 [docs/05](docs/05-真实支付与计费实测.md#9-工程验证记录)。
 
 最新公开版本仍为 **1.13.2 / 44**，普通更新、最低支持码 37，未修改远端更新策略。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.13.2/SmartLife798-1.13.2-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -44,7 +44,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.13.2-debug.apk`](dist/SmartLife798-1.13.2-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.14.0-debug.apk`](dist/SmartLife798-1.14.0-debug.apk) |
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 
