@@ -130,7 +130,10 @@ object CheckInFlowChecks {
             test.runOnMainSync {
                 viewModels.clear()
                 Preview.enabled = false
-                if (clearAttempt) Store.clearAccount()
+                if (clearAttempt) {
+                    Store.clearAccount()
+                    check(Store.confirmedCheckIn() == null && Store.checkInNoticeDay() == null)
+                }
                 session.token = "offline-checkin-token"
                 session.uid = "offline-checkin-user"
                 Store.token = session.token
@@ -204,6 +207,29 @@ object CheckInFlowChecks {
             foreground()
             await { vm.checkInStatus.value == "今日已签到" }
             check(posts.get() == 0 && reads.get() == 1 && Store.checkInAttemptDay() == null)
+
+            stage = "confirmed server day survives VM recreation without requests or notice"
+            create(clearAttempt = false)
+            foreground()
+            test.waitForIdleSync()
+            check(vm.checkInStatus.value == "今日已签到" && vm.signedInToday.value == true)
+            check(posts.get() == 0 && reads.get() == 1 && vm.message.value == null)
+            test.runOnMainSync { vm.refreshCheckInStatus() }
+            await { !vm.checkingIn.value }
+            check(reads.get() == 2 && posts.get() == 0 && vm.message.value == null)
+
+            stage = "expired confirmation reads again but same-day automatic notice stays suppressed"
+            val expired = com.google.gson.Gson().toJson(com.smartlife798.app.core.ConfirmedCheckIn(
+                SERVER_TIME, System.currentTimeMillis() - 86_400_000L))
+            check(preferences.edit().putString("confirmedCheckIn", expired).commit())
+            create(clearAttempt = false)
+            foreground()
+            await { !vm.checkingIn.value && reads.get() == 3 }
+            check(vm.signedInToday.value == true && vm.message.value == null && posts.get() == 0)
+            stage = "manual check bypasses persisted confirmation and notice suppression"
+            test.runOnMainSync { vm.checkInNow() }
+            await { !vm.checkingIn.value && reads.get() == 4 }
+            check(vm.message.value == "今日已签到" && posts.get() == 0)
 
             stage = "duplicate-day rejection reconciles to signed and never reports unconfirmed"
             reset(Scenario.DUPLICATE)
@@ -522,7 +548,7 @@ object CheckInFlowChecks {
             }
             await { !vm.loggedIn.value && session.token == null }
             check(Store.checkInAttemptDay() == null && !Store.autoCheckIn())
-            result.putString("stream", "PASS: default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; unknown 3.1.11 protocol reads status but sends zero POSTs or attempt markers and restores 3.1.10; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
+            result.putString("stream", "PASS: confirmed day persists across VM recreation with zero requests/notices; expiry rechecks; manual bypass; account reset clears cache; default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; unknown 3.1.11 protocol reads status but sends zero POSTs or attempt markers and restores 3.1.10; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("state", "reads=${reads.get()},posts=${posts.get()},busy=${if (vmCreated) vm.checkingIn.value else false},status=${if (vmCreated) vm.checkInStatus.value else "not initialized"}")

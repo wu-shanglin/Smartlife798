@@ -32,7 +32,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -181,7 +180,7 @@ private fun AdaptiveChoiceGroup(
     }
 }
 
-/** The same gesture state drives pull distance, release and the Expressive loading morph. */
+/** Keep drag progress in the official indicator's layout/draw phases. */
 @Composable
 fun ExpressiveRefreshBox(
     isRefreshing: Boolean,
@@ -190,19 +189,15 @@ fun ExpressiveRefreshBox(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val state = rememberPullToRefreshState()
-    val showIndicator by remember(state, isRefreshing) {
-        derivedStateOf { isRefreshing || state.distanceFraction > 0f || state.isAnimating }
-    }
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         modifier = modifier,
         state = state,
         indicator = {
-            // The hidden zero-distance morph is expensive to compose but has
-            // no visible output. Keep the official component throughout pull,
-            // refresh and return-to-hidden animation.
-            if (showIndicator) PullToRefreshDefaults.LoadingIndicator(
+            // Keep one lightweight indicator mounted. Creating a morphing loading
+            // component on the first drag adds composition work to the input frame.
+            PullToRefreshDefaults.Indicator(
                 state = state,
                 isRefreshing = isRefreshing,
                 modifier = Modifier.align(Alignment.TopCenter),

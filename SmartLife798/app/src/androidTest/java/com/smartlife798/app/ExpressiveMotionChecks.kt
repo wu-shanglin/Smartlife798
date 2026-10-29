@@ -272,6 +272,44 @@ object ExpressiveMotionChecks {
                 }
             }
 
+            stage = "common refresh wrapper tracks continuous upward drag before release"
+            val scroll = androidx.compose.foundation.lazy.LazyListState()
+            val compositions = AtomicInteger()
+            counts.set(0)
+            test.runOnMainSync {
+                screen.setContent {
+                    SmartLifeTheme(darkTheme = false) {
+                        ExpressiveRefreshBox(false, { counts.incrementAndGet() }, Modifier.fillMaxSize()) {
+                            androidx.compose.runtime.SideEffect { compositions.incrementAndGet() }
+                            androidx.compose.foundation.lazy.LazyColumn(state = scroll, modifier = Modifier.fillMaxSize()) {
+                                items(100) { index -> Text("连续滚动夹具 $index", Modifier.padding(24.dp)) }
+                            }
+                        }
+                    }
+                }
+            }
+            await { find(test, "连续滚动夹具 0") != null }
+            test.waitForIdleSync()
+            val composedBefore = compositions.get()
+            val metrics = test.targetContext.resources.displayMetrics
+            val dragX = metrics.widthPixels * 0.5f
+            val dragY = metrics.heightPixels * 0.75f
+            val dragStart = SystemClock.uptimeMillis()
+            downTime = dragStart
+            downPoint = dragX to dragY
+            touch(test, MotionEvent.ACTION_DOWN, dragStart, dragX to dragY)
+            for (step in 1..20) {
+                SystemClock.sleep(16)
+                touch(test, MotionEvent.ACTION_MOVE, dragStart, dragX to (dragY - step * 18f))
+            }
+            // Input must be reflected while the finger is still down.
+            await { scroll.firstVisibleItemIndex > 0 || scroll.firstVisibleItemScrollOffset > 0 }
+            check(compositions.get() == composedBefore && counts.get() == 0)
+            touch(test, MotionEvent.ACTION_UP, dragStart, dragX to (dragY - 360f))
+            downTime = null
+            downPoint = null
+            geometry.add("continuousDragBeforeUP=true,contentRecompositions=${compositions.get() - composedBefore}")
+
             stage = "hidden indicator appears on real pull and refreshes once"
             counts.set(0)
             test.runOnMainSync {
@@ -394,7 +432,8 @@ object ExpressiveMotionChecks {
 
     private fun click(test: Instrumentation, label: String) {
         val target = button(find(test, label) ?: error("Option unavailable"))
-        check(target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        // Exercise actual pointer dispatch; popup semantics actions may be unavailable during entry.
+        tap(test, bounds(target))
         test.waitForIdleSync()
     }
 

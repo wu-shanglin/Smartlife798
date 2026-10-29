@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,9 +58,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.runtime.State
 import com.smartlife798.app.core.Args
 import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceDetail
@@ -85,28 +82,6 @@ import com.smartlife798.app.ui.components.StatusPill
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
-import androidx.compose.runtime.snapshotFlow
-
-/** Keep cold prefetch out of the morph, then warm adjacent controls without interrupting a drag. */
-@Composable
-internal fun rememberDetailListState(entryReady: Boolean, contact: State<Boolean>): LazyListState {
-    var state by rememberSaveable(stateSaver = LazyListState.Saver) { mutableStateOf(LazyListState()) }
-    var cacheEnabled by remember { mutableStateOf(false) }
-    LaunchedEffect(entryReady) {
-        if (entryReady && !cacheEnabled) {
-            val previous = state
-            snapshotFlow { previous.isScrollInProgress || contact.value }.first { !it }
-            state = LazyListState(
-                cacheWindow = LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 1f),
-                firstVisibleItemIndex = previous.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = previous.firstVisibleItemScrollOffset,
-            )
-            cacheEnabled = true
-        }
-    }
-    return state
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,8 +103,7 @@ fun DeviceDetailScreen(
         awaitCardEntry()
         entryReady = true
     }
-    val contact = remember(deviceId) { mutableStateOf(false) }
-    val detailListState = listState ?: rememberDetailListState(entryReady, contact)
+    val detailListState = listState ?: rememberLazyListState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
@@ -468,13 +442,7 @@ fun DeviceDetailScreen(
         ) {
             LazyColumn(
                 state = detailListState,
-                modifier = Modifier.fillMaxSize().pointerInput(contact) {
-                    try {
-                        awaitPointerEventScope {
-                            while (true) contact.value = awaitPointerEvent(PointerEventPass.Initial).changes.any { it.pressed }
-                        }
-                    } finally { contact.value = false }
-                },
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 8.dp, 16.dp, 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

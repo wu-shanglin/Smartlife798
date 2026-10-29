@@ -126,7 +126,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun publishCheckIn(status: String, manual: Boolean, day: String? = null, notice: String = status) {
         _checkInStatus.value = status
         val key = "$day:$notice"
-        if (manual || lastAutoCheckInNotice != key) {
+        if (manual || (lastAutoCheckInNotice != key && (day == null || Store.checkInNoticeDay() != day))) {
+            if (!manual && day != null) Store.saveCheckInNoticeDay(day)
             lastAutoCheckInNotice = key
             showCheckInNotice(notice)
         }
@@ -165,6 +166,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Resume may arrive while a cancelled request is still releasing its durable marker.
             if (!manual && checkInJob?.isCancelled == true) checkInResumePending = true
             if (manual) showCheckInNotice("签到处理中，请稍候")
+            return
+        }
+        if (!manual && !statusOnly && Store.confirmedCheckIn()?.isCurrent(System.currentTimeMillis()) == true) {
+            _checkInStatus.value = "今日已签到"
+            _signedInToday.value = true
             return
         }
         if (!manual && !statusOnly && checkInDoneDay != null && checkInServerTime > 0L &&
@@ -229,6 +235,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // Invalid bitmaps stay unknown; the fallback never confirms a successful submission.
                 val signed = CheckIn.isSignedIn(missions, weekday, allowUnsignedDefault = true)
                 _signedInToday.value = signed
+                if (signed == true) Store.saveConfirmedCheckIn(serverTime, token)
+                else if (signed == false) Store.clearConfirmedCheckIn(token)
                 if (statusOnly) {
                     checkInDoneDay = day.takeIf { signed == true }
                     _checkInStatus.value = when (signed) {
@@ -299,6 +307,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _signedInToday.value = confirmedSigned
                 if (confirmedSigned == true) {
                     checkInDoneDay = day
+                    Store.saveConfirmedCheckIn((confirmed as Res.Ok).serverTime, token)
                     publishCheckIn(if (manual) "今日已签到" else "今日已自动签到", manual, day,
                         notice = if (result is Res.Fail) "今日已签到" else if (manual) "签到成功" else "自动签到成功")
                 } else if (result is Res.Fail) {
