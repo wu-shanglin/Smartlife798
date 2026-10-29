@@ -17,7 +17,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -76,10 +75,11 @@ fun Modifier.sharedCardPage(source: CardSource?, itemId: String = ""): Modifier 
 @Composable
 fun SharedCardPage(source: CardSource?, itemId: String = "", content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalPageCardKey provides source?.key(itemId)) {
-        Box(Modifier.sharedCardPage(source, itemId).fillMaxSize()) {
-            // Scale the recorded page layer, not the layout constraints. Content is
-            // measured at its final viewport and async updates do not retarget the shell.
-            Box(Modifier.fillMaxSize().graphicsLayer(), propagateMinConstraints = true) { content() }
+        // sharedBounds already records its content into a GraphicsLayer and
+        // scaleToBounds fixes the child viewport. Another full-page ViewLayer
+        // duplicates hierarchy/layout work on older renderers.
+        Box(Modifier.sharedCardPage(source, itemId).fillMaxSize(), propagateMinConstraints = true) {
+            content()
         }
     }
 }

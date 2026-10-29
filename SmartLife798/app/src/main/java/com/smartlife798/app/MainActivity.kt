@@ -88,7 +88,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.lifecycle.withResumed
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import androidx.navigation.NavHostController
@@ -123,7 +122,7 @@ import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
 
 class MainActivity : ComponentActivity() {
-    private var nfcIntent by androidx.compose.runtime.mutableStateOf<String?>(null)
+    private var nfcIntent by androidx.compose.runtime.mutableStateOf<Intent?>(null)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -132,8 +131,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun acceptNfcIntent(intent: Intent?) {
-        if (intent != null && (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED || intent.action == Intent.ACTION_VIEW))
-            nfcIntent = intent.dataString
+        if (intent == null || (BuildConfig.DEBUG && intent.getBooleanExtra("preview", false))) return
+        nfcIntent = if (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED || intent.action == Intent.ACTION_VIEW)
+            Intent(intent) else null
+    }
+
+    override fun onStop() {
+        nfcIntent = null
+        super.onStop()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -158,7 +163,7 @@ class MainActivity : ComponentActivity() {
                         nfcIntent = null
                         // Avoid replaying an already consumed card after activity recreation.
                         if (intent?.action in setOf(NfcAdapter.ACTION_NDEF_DISCOVERED, Intent.ACTION_VIEW))
-                            setIntent(Intent(intent).apply { data = null; removeExtra(NfcAdapter.EXTRA_NDEF_MESSAGES) })
+                            setIntent(Intent(intent).apply { data = null; removeExtra(NfcAdapter.EXTRA_NDEF_MESSAGES); removeExtra(NfcAdapter.EXTRA_TAG); removeExtra(NfcAdapter.EXTRA_ID) })
                     },
                 )
             }
@@ -172,7 +177,7 @@ private data class Tab(val route: String, val label: String, val icon: @Composab
 private fun AppRoot(
     forcePreview: Boolean = false,
     onExitApp: () -> Unit,
-    incomingNfc: String? = null,
+    incomingNfc: Intent? = null,
     onNfcConsumed: () -> Unit = {},
 ) {
     val vm: MainViewModel = viewModel()
@@ -199,15 +204,6 @@ private fun AppRoot(
         onPauseOrDispose { vm.setAppResumed(false) }
     }
 
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    LaunchedEffect(incomingNfc, loggedIn, updateRequired, lifecycleOwner) {
-        val raw = incomingNfc ?: return@LaunchedEffect
-        if (!loggedIn || updateRequired || forcePreview || Preview.enabled) return@LaunchedEffect
-        lifecycleOwner.lifecycle.withResumed {
-            vm.acceptNfcUris(listOf(raw))
-            onNfcConsumed()
-        }
-    }
 
     LaunchedEffect(message) {
         val text = message
@@ -256,11 +252,28 @@ private fun AppRoot(
     val startDestination = rememberSaveable { vm.startupPage.value.route }
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner) {
+        val raw = incomingNfc ?: return@LaunchedEffect
+        val entry = currentEntry ?: return@LaunchedEffect
+        if (updateRequired || forcePreview || Preview.enabled) return@LaunchedEffect
+        lifecycleOwner.lifecycle.withResumed { }
+        if (entry.destination.route == "developer-tools/nfc") {
+            vm.notify("请在采集页点击开始采集后再碰卡")
+        } else {
+            val input = com.smartlife798.app.core.NfcIntentInput.read(raw)
+            if (input != null && lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                vm.acceptNfcUris(input.uris, autoStart = input.allowsAutoStart())
+            }
+        }
+        onNfcConsumed()
+    }
+
     val nfcDevice by vm.nfcDevice.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as? android.app.Activity
     val nfcReader = remember(activity, vm) {
-        activity?.let { com.smartlife798.app.core.NfcDeviceReader(it, vm::acceptNfcUris) }
+        activity?.let { com.smartlife798.app.core.NfcDeviceReader(it) { uris -> vm.acceptNfcUris(uris, autoStart = true) } }
     }
     val normalNfc = currentEntry != null && currentEntry?.destination?.route != "developer-tools/nfc" &&
         !forcePreview && !Preview.enabled
@@ -269,13 +282,16 @@ private fun AppRoot(
         onPauseOrDispose { nfcReader?.stop() }
     }
     LaunchedEffect(nfcDevice, currentEntry?.id) {
-        val id = nfcDevice ?: return@LaunchedEffect
+        val request = nfcDevice ?: return@LaunchedEffect
         val entry = currentEntry ?: return@LaunchedEffect
         entry.lifecycle.withResumed {
-            if (entry.arguments?.getString("id") != id) {
-                navController.navigate("device/${Uri.encode(id)}?autoStart=false") { launchSingleTop = true }
+            if (request.autoStartTicket != null || entry.arguments?.getString("id") != request.deviceId) {
+                val ticket = request.autoStartTicket.orEmpty()
+                navController.navigate("device/${Uri.encode(request.deviceId)}?autoStart=${ticket.isNotEmpty()}&nfcTicket=${Uri.encode(ticket)}") {
+                    launchSingleTop = entry.arguments?.getString("id") == request.deviceId
+                }
             }
-            vm.consumeNfcDevice(id)
+            vm.consumeNfcDevice(request)
         }
     }
 
@@ -477,9 +493,10 @@ private fun AppRoot(
                         }
                     }
                     composable(
-                        "device/{id}?autoStart={autoStart}&cardOrigin={cardOrigin}&cardEntry={cardEntry}",
+                        "device/{id}?autoStart={autoStart}&nfcTicket={nfcTicket}&cardOrigin={cardOrigin}&cardEntry={cardEntry}",
                         arguments = listOf(
                             navArgument("id") { type = NavType.StringType },
+                            navArgument("nfcTicket") { type = NavType.StringType; defaultValue = "" },
                             navArgument("autoStart") {
                                 type = NavType.BoolType
                                 defaultValue = false
@@ -507,6 +524,7 @@ private fun AppRoot(
                                     vm = vm,
                                     deviceId = id,
                                     autoStart = autoStart,
+                                    nfcTicket = entry.arguments?.getString("nfcTicket").orEmpty(),
                                     onBack = { navController.popBackStack() },
                                     onOpenOrders = {
                                         navController.popBackStack()

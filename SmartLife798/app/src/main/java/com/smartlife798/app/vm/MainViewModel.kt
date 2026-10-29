@@ -614,7 +614,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val liveUpdatedAt: StateFlow<Long> = _liveUpdatedAt.asStateFlow()
 
     @Volatile private var appResumed = true
-    @Volatile private var detailDevice: String? = null
+    private val detailPage = com.smartlife798.app.core.DevicePageOwner()
     private var watchJob: Job? = null
     private var masterJob: Job? = null
     private val accountReads = mutableMapOf<String, Deferred<Unit>>()
@@ -771,12 +771,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _message.value = text
     }
 
-    private val _nfcDevice = MutableStateFlow<String?>(null)
-    val nfcDevice: StateFlow<String?> = _nfcDevice.asStateFlow()
+    data class NfcOpen(val event: String, val deviceId: String, val autoStartTicket: String?)
+    private val nfcAutoStart = com.smartlife798.app.core.NfcAutoStart()
+    private val _nfcDevice = MutableStateFlow<NfcOpen?>(null)
+    val nfcDevice: StateFlow<NfcOpen?> = _nfcDevice.asStateFlow()
     private var nfcResolveJob: Job? = null
+    private var scannedEntry: Device? = null
 
-    /** A deliberate card tap resolves a QR through the server; it never starts a device. */
-    fun acceptNfcUris(uris: List<String>) {
+    /** Resolve first. Only a verified card event can issue one volatile automatic-start ticket. */
+    fun acceptNfcUris(uris: List<String>, autoStart: Boolean = false) {
         viewModelScope.launch {
             if (Preview.enabled || !session.isLoggedIn || !appResumed || nfcResolveJob?.isActive == true) return@launch
             when (val route = com.smartlife798.app.core.NfcRoutes.parseAll(uris)) {
@@ -792,7 +795,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 response.data?.dev, response.data?.qr?.type, com.smartlife798.app.core.QR_TYPE_DEVICE)) {
                                 is com.smartlife798.app.core.QrResolution.Resolved -> {
                                     rememberScan(resolved.device)
-                                    _nfcDevice.value = resolved.device.id
+                                    val event = java.util.UUID.randomUUID().toString()
+                                    nfcAutoStart.clear()
+                                    if (autoStart) nfcAutoStart.issue(event, resolved.device.id)
+                                    _nfcDevice.value = NfcOpen(event, resolved.device.id, event.takeIf { autoStart })
                                 }
                                 else -> notify("卡片未返回可用设备，请移开后重新碰卡")
                             }
@@ -807,9 +813,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun consumeNfcDevice(id: String) {
-        if (_nfcDevice.value == id) _nfcDevice.value = null
+    fun consumeNfcDevice(request: NfcOpen) {
+        if (_nfcDevice.value == request) _nfcDevice.value = null
     }
+
+    fun claimNfcAutoStart(ticket: String, deviceId: String): Boolean =
+        !Preview.enabled && session.isLoggedIn && appResumed && nfcAutoStart.claim(ticket, deviceId)
 
     // ------------------------------------------------------------------ auth
 
@@ -895,6 +904,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cancelAccountReads()
         nfcResolveJob?.cancel()
         _nfcDevice.value = null
+        nfcAutoStart.clear()
+        scannedEntry = null
+        detailPage.clear()
         deviceRevision += 1
         profileRevision += 1
         _pendingStart.value = null
@@ -1328,6 +1340,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cancelAccountReads()
         nfcResolveJob?.cancel()
         _nfcDevice.value = null
+        nfcAutoStart.clear()
+        scannedEntry = null
+        detailPage.clear()
         deviceRevision += 1
         profileRevision += 1
         _pendingStart.value = null
@@ -1377,9 +1392,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Synchronous memory read for the first frame; no disk, network or new account cache. */
+    /** Presentation-only first frame from memory; one QR seed is cleared with the account. */
     fun deviceEntry(did: String): Device? = deviceEntrySnapshot(
-        did, _favorites.value, _recents.value, _active.value, _liveStatus.value,
+        did, _favorites.value, _recents.value, _active.value, _liveStatus.value, scannedEntry,
     )
 
     suspend fun loadDevice(did: String): Res<DeviceDetail> = withContext(Dispatchers.IO) {
@@ -1495,6 +1510,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun rememberScan(device: Device) {
+        scannedEntry = device
         Store.touchRecent(device, used = false)
         _recents.value = Store.recents()
     }
@@ -1507,6 +1523,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             meRefreshJob?.cancel()
             nfcResolveJob?.cancel()
             _nfcDevice.value = null
+            nfcAutoStart.clear()
         }
         appResumed = value
         if (value && allowAutoCheckIn) requestAutoCheckIn() else checkInJob?.cancel()
@@ -1514,14 +1531,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 设备详情页自己有 2s 轮询，这里让位，避免同一设备双倍请求。 */
-    fun setDetailDeviceOpen(id: String?) {
-        detailDevice = id
+    fun setDetailDeviceOpen(id: String, owner: Any) {
+        detailPage.enter(owner, id)
         ensureWatch()
+    }
+
+    fun releaseDetailDevice(owner: Any) {
+        if (detailPage.leave(owner)) ensureWatch()
     }
 
     private fun ensureWatch() {
         val usage = _active.value ?: _pendingStart.value
-        if (usage == null || !appResumed || detailDevice == usage.deviceId || Preview.enabled ||
+        if (usage == null || !appResumed || detailPage.deviceId == usage.deviceId || Preview.enabled ||
             deviceCommand.isLocked
         ) {
             watchJob?.cancel()

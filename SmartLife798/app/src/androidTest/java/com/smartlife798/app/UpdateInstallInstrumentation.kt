@@ -21,6 +21,14 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "nfc-auto-reject") {
+            NfcNavigationChecks.run(this, automatic = true, rejectStart = true)
+            return
+        }
+        if (mode == "nfc-auto-start") {
+            NfcNavigationChecks.run(this, automatic = true)
+            return
+        }
         if (mode == "nfc-navigation") {
             NfcNavigationChecks.run(this)
             return

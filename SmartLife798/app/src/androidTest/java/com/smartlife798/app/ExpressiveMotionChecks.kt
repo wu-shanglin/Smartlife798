@@ -272,6 +272,40 @@ object ExpressiveMotionChecks {
                 }
             }
 
+            stage = "hidden indicator appears on real pull and refreshes once"
+            counts.set(0)
+            test.runOnMainSync {
+                screen.setContent {
+                    SmartLifeTheme(darkTheme = false) {
+                        ExpressiveRefreshBox(false, { counts.incrementAndGet() }, Modifier.fillMaxSize()) {
+                            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) {
+                                items(30) { index -> Text("刷新手势夹具 $index", Modifier.padding(24.dp)) }
+                            }
+                        }
+                    }
+                }
+            }
+            test.waitForIdleSync()
+            await { find(test, "刷新手势夹具 0") != null }
+            val display = test.targetContext.resources.displayMetrics
+            val start = display.heightPixels * 0.25f
+            val end = display.heightPixels * 0.78f
+            val x = display.widthPixels * 0.5f
+            val began = SystemClock.uptimeMillis()
+            downTime = began
+            downPoint = x to start
+            touch(test, MotionEvent.ACTION_DOWN, began, x to start)
+            for (step in 1..16) {
+                SystemClock.sleep(16)
+                touch(test, MotionEvent.ACTION_MOVE, began, x to (start + (end - start) * step / 16))
+            }
+            touch(test, MotionEvent.ACTION_UP, began, x to end)
+            downTime = null
+            downPoint = null
+            await { counts.get() == 1 }
+            SystemClock.sleep(400)
+            check(counts.get() == 1)
+
             stage = "light and dark refresh indicator captures"
             for (dark in listOf(false, true)) {
                 test.runOnMainSync {

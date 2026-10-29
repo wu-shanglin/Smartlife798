@@ -7,9 +7,11 @@ fun deviceEntrySnapshot(
     recents: List<RecentDevice>,
     active: ActiveUsage?,
     live: Device?,
+    resolved: Device? = null,
 ): Device? {
     if (id.isBlank()) return null
     favorites.firstOrNull { it.id == id }?.let { return it }
+    resolved?.takeIf { it.id == id }?.let { return it }
     live?.takeIf { it.id == id }?.let { return it }
     recents.firstOrNull { it.id == id }?.let {
         return Device(id = id, name = it.name, bm = DeviceModel(dtype = it.dtype))
