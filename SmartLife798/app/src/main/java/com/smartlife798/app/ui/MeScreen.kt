@@ -117,7 +117,6 @@ fun MeScreen(
     val coroutineScope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var checkResult by remember { mutableStateOf<String?>(null) }
-    var refreshing by remember { mutableStateOf(false) }
     var developerTapCount by remember { mutableStateOf(0) }
     var lastDeveloperTap by remember { mutableStateOf(0L) }
     var confirmClearRecents by remember { mutableStateOf(false) }
@@ -126,18 +125,8 @@ fun MeScreen(
     var nicknameError by remember { mutableStateOf<String?>(null) }
 
     ExpressiveRefreshBox(
-        isRefreshing = refreshing,
         onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                coroutineScope.launch {
-                    try {
-                        vm.refreshMePage(force = true)?.join()
-                    } finally {
-                        refreshing = false
-                    }
-                }
-            }
+            vm.refreshMePage(force = true)?.join()
         },
         modifier = Modifier
             .fillMaxSize()

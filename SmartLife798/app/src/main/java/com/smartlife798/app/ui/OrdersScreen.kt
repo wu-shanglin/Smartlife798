@@ -100,7 +100,6 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     var filter by remember { mutableStateOf(OrderFilter.ALL) }
     var bills by remember { mutableStateOf<List<Bill>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var page by remember { mutableIntStateOf(1) }
     var endReached by remember { mutableStateOf(false) }
@@ -165,19 +164,9 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     }
 
     ExpressiveRefreshBox(
-        isRefreshing = refreshing,
         onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                scope.launch {
-                    try {
-                        // loadBills() already refreshes the unpaid badge from page 0.
-                        loadBills(true)
-                    } finally {
-                        refreshing = false
-                    }
-                }
-            }
+            // loadBills also refreshes the unpaid badge from page 0.
+            loadBills(true)
         },
         modifier = Modifier
             .fillMaxSize()

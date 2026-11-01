@@ -34,6 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -178,6 +182,34 @@ private fun AdaptiveChoiceGroup(
             }
         }
     }
+}
+
+/** Page refreshes share one immediate re-entry guard and composition-bound cleanup. */
+@Composable
+fun ExpressiveRefreshBox(
+    onRefresh: suspend () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    ExpressiveRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            if (!refreshing) {
+                refreshing = true
+                scope.launch {
+                    try {
+                        onRefresh()
+                    } finally {
+                        refreshing = false
+                    }
+                }
+            }
+        },
+        modifier = modifier,
+        content = content,
+    )
 }
 
 /** Keep drag progress in the official indicator's layout/draw phases. */
