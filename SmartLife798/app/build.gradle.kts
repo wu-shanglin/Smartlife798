@@ -32,8 +32,8 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 51
-        versionName = "1.17.2"
+        versionCode = 52
+        versionName = "1.18.0"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -62,6 +62,15 @@ android {
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
+
+    buildTypes.create("performance") {
+        initWith(buildTypes.getByName("release"))
+        isDebuggable = false
+        signingConfig = signingConfigs.getByName("debug")
+        matchingFallbacks += "release"
+    }
+
+    testBuildType = if (providers.gradleProperty("performanceTests").orNull == "true") "performance" else "debug"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

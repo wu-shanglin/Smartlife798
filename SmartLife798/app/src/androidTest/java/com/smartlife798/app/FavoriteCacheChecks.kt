@@ -10,14 +10,16 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.*
+import com.smartlife798.app.core.Device
+import com.smartlife798.app.core.Res
 import kotlinx.coroutines.runBlocking
 import okhttp3.Protocol
 import okhttp3.Response
@@ -41,12 +43,22 @@ object FavoriteCacheChecks {
         val reads = AtomicInteger()
         val otherReads = AtomicInteger()
         val unexpected = AtomicInteger()
-        val fixture = original.newBuilder().addInterceptor { chain ->
+        val mutations = AtomicInteger()
+        val mutationEntered = CountDownLatch(1)
+        val mutationRelease = CountDownLatch(1)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val fixture = original.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
             val request = chain.request()
             val body = when {
                 request.method != "GET" -> {
                     unexpected.incrementAndGet()
                     """{"code":-1}"""
+                }
+                request.url.encodedPath == "/api/v1/dev/favo" -> {
+                    mutations.incrementAndGet()
+                    mutationEntered.countDown()
+                    check(mutationRelease.await(8, TimeUnit.SECONDS))
+                    """{"code":0}"""
                 }
                 request.url.encodedPath == "/api/v1/ui/app/master" -> {
                     reads.incrementAndGet()
@@ -70,17 +82,18 @@ object FavoriteCacheChecks {
             started = true
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             test.runOnMainSync {
                 activity!!.setContent { }
                 activity!!.viewModelStore.clear()
-                Preview.enabled = false
+
                 Store.saveAutoCheckIn(false)
                 clientField.set(null, fixture)
                 session.saveLogin(LoginInfo(token = "offline-cache-token", uid = "offline-cache-user"), "")
             }
-            for (scenario in listOf("restore", "master", "preview", "account", "malformed")) {
+            for (scenario in listOf("restore", "master", "logout", "account", "malformed")) {
                 stage = scenario
+                session.token = "offline-cache-token"
                 val entered = CountDownLatch(1)
                 val release = CountDownLatch(1).also { gate = it }
                 Store.saveFavoritesCache(if (scenario == "malformed") "[invalid" else
@@ -99,7 +112,7 @@ object FavoriteCacheChecks {
                 lateinit var vm: MainViewModel
                 test.runOnMainSync {
                     activity!!.viewModelStore.clear()
-                    Preview.enabled = false
+
                     vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
                 }
                 check(entered.await(5, TimeUnit.SECONDS))
@@ -112,8 +125,8 @@ object FavoriteCacheChecks {
                     test.runOnMainSync { refresh = vm.refreshMaster() }
                     runBlocking { refresh.join() }
                     check(reads.get() == 1)
-                } else if (scenario == "preview") {
-                    test.runOnMainSync { vm.startPreview() }
+                } else if (scenario == "logout") {
+                    test.runOnMainSync { session.clear(); vm.logout() }
                 }
                 if (scenario == "account") {
                     test.runOnMainSync {
@@ -134,17 +147,33 @@ object FavoriteCacheChecks {
                 if (scenario == "master") check(Store.favoritesCacheJson() == "[]")
             }
             check(reads.get() == 1 && otherReads.get() == 1 && unexpected.get() == 0)
-            result.putString("stream", "PASS: cache read/parse off Main; stalled IO does not block UI; empty server snapshot, account change and Preview defeat late restore; malformed cache ignored; only intercepted master/bills GETs, no business writes\n")
+            stage = "duplicate favorite and logout"
+            lateinit var mutationVm: MainViewModel
+            test.runOnMainSync {
+                activity!!.viewModelStore.clear()
+                session.token = "offline-cache-token"
+                mutationVm = ViewModelProvider(activity!!)[MainViewModel::class.java]
+            }
+            val mutation = scope.async { mutationVm.toggleFavorite(Device(id = "offline-mutation")) }
+            check(mutationEntered.await(5, TimeUnit.SECONDS))
+            runBlocking { check(mutationVm.toggleFavorite(Device(id = "offline-mutation")) is Res.Fail) }
+            test.runOnMainSync { mutationVm.logout() }
+            mutationRelease.countDown()
+            runBlocking { check(runCatching { mutation.await() }.exceptionOrNull() is CancellationException) }
+            check(mutations.get() == 1 && mutationVm.favorites.value.isEmpty() && Store.favoritesCacheJson() == null)
+            result.putString("stream", "PASS: duplicate favorite rejected; logout defeats late mutation/cache write; cache read/parse off Main; stalled IO does not block UI; empty server snapshot, account change and logout defeat late restore; malformed cache ignored; only terminal master/bills/favorite fixtures, no real business writes\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
-            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
+            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; source=${error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }}\n")
         } finally {
             gate?.countDown()
+            mutationRelease.countDown()
+            scope.cancel()
             prefsField.set(null, prefs)
             test.runOnMainSync {
                 activity?.let { it.setContent { }; it.viewModelStore.clear(); it.finish() }
             }
-            Preview.enabled = false
+
             if (started) {
                 session.clear()
                 val editor = prefs.edit()

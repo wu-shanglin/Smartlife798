@@ -12,7 +12,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.google.gson.Gson
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
@@ -29,6 +29,7 @@ object NfcNavigationChecks {
         var code = Activity.RESULT_CANCELED
         var stage = "empty account guard"
         var started = false
+        val backTrace = mutableListOf<String>()
         val application = test.targetContext.applicationContext as Application
         val screen = AtomicReference<MainActivity?>()
         val qrReads = AtomicInteger()
@@ -43,7 +44,7 @@ object NfcNavigationChecks {
         val originalClient = Api.client
         val clientField = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
         val gson = Gson()
-        val sample = Preview.devices.first()
+        val sample = FixtureData.devices.first()
         fun device(warm: Boolean) = sample.copy(id = if (warm) "fixture-warm-device" else "fixture-cold-device",
             name = if (warm) "NFC热启动离线设备" else "NFC冷启动离线设备",
             gene = sample.gene?.copy(status = deviceStates[if (warm) "fixture-warm-device" else "fixture-cold-device"] ?: 99))
@@ -64,7 +65,7 @@ object NfcNavigationChecks {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         }
-        val fixture = originalClient.newBuilder().addInterceptor { chain ->
+        val fixture = originalClient.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
             val request = chain.request()
             if (request.method != "GET") {
                 forbidden.incrementAndGet()
@@ -97,7 +98,7 @@ object NfcNavigationChecks {
                         detailEntered.getAndSet(null)?.countDown()
                         check(it.await(10, java.util.concurrent.TimeUnit.SECONDS))
                     }
-                    gson.toJson(Preview.detail(sample.id).copy(
+                    gson.toJson(FixtureData.detail(sample.id).copy(
                         user = com.smartlife798.app.core.User(id = "offline-nfc-navigation-user"),
                         device = device(request.url.queryParameter("did") == "fixture-warm-device")))
                 }
@@ -106,6 +107,11 @@ object NfcNavigationChecks {
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
                 .body("""{"code":0,"data":$data}""".toResponseBody()).build()
         }.build()
+        fun root(): android.view.accessibility.AccessibilityNodeInfo? {
+            if (android.os.Build.VERSION.SDK_INT >= 33) test.uiAutomation.clearCache()
+            else test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo
+            return test.uiAutomation.rootInActiveWindow
+        }
         fun find(label: String, visibleOnly: Boolean = true): android.view.accessibility.AccessibilityNodeInfo? {
             fun search(node: android.view.accessibility.AccessibilityNodeInfo?): android.view.accessibility.AccessibilityNodeInfo? {
                 if (node == null) return null
@@ -113,8 +119,11 @@ object NfcNavigationChecks {
                 for (index in 0 until node.childCount) search(node.getChild(index))?.let { return it }
                 return null
             }
-            return search(test.uiAutomation.rootInActiveWindow)
+            return search(root())
         }
+        fun labels(node: android.view.accessibility.AccessibilityNodeInfo?): List<String> =
+            if (node == null) emptyList() else listOfNotNull(node.text?.toString(), node.contentDescription?.toString()) +
+                (0 until node.childCount).flatMap { labels(node.getChild(it)) }
         fun visible(label: String) = find(label) != null
         fun click(label: String) {
             var node = checkNotNull(find(label))
@@ -126,7 +135,7 @@ object NfcNavigationChecks {
             check(Store.token.isNullOrBlank() && session.token.isNullOrBlank() && Store.profileJson == null)
             started = true
             test.runOnMainSync {
-                Preview.enabled = false
+
                 Store.saveAutoCheckIn(false)
                 session.saveLogin(LoginInfo(token = "offline-nfc-navigation", uid = "offline-nfc-navigation-user"), "")
                 clientField.set(null, fixture)
@@ -198,9 +207,10 @@ object NfcNavigationChecks {
                 stage = "diagnostic NFC child cannot resolve or start from an incoming intent"
                 test.runOnMainSync { vm.setDeveloperToolsEnabled(true) }
                 repeat(4) {
+                    backTrace.add("before$it=${labels(root())}")
                     if (!visible("我的")) {
-                        test.runOnMainSync { screen.get()!!.onBackPressedDispatcher.onBackPressed() }
-                        SystemClock.sleep(900) // Let the shared return settle before another Back.
+                        check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+                        SystemClock.sleep(1_500) // Allow the system/predictive return to finish before another Back.
                     }
                 }
                 stage = "diagnostic test returns to bottom navigation"
@@ -211,7 +221,7 @@ object NfcNavigationChecks {
                 repeat(12) {
                     if (!visible("开发者工具")) {
                         val bounds = android.graphics.Rect()
-                        checkNotNull(test.uiAutomation.rootInActiveWindow).getBoundsInScreen(bounds)
+                        checkNotNull(root()).getBoundsInScreen(bounds)
                         val x = bounds.centerX()
                         val from = bounds.top + (bounds.height() * 0.75f).toInt()
                         val to = bounds.top + (bounds.height() * 0.47f).toInt()
@@ -240,13 +250,14 @@ object NfcNavigationChecks {
             }
             code = Activity.RESULT_OK
         } catch (e: Exception) {
-            result.putString("stream", "FAIL at $stage: ${e.javaClass.simpleName}; qr=${qrReads.get()},forbidden=${forbidden.get()},path=${unexpectedPath.get()},start=${startCalls.get()},line=${e.stackTrace.firstOrNull { it.className.contains("NfcNavigationChecks") }?.lineNumber}\n")
+            val visibleLabels = labels(root())
+            result.putString("stream", "FAIL at $stage: ${e.javaClass.simpleName}; labels=$visibleLabels; backs=$backTrace; finishing=${screen.get()?.isFinishing}; qr=${qrReads.get()},forbidden=${forbidden.get()},path=${unexpectedPath.get()},start=${startCalls.get()},line=${e.stackTrace.firstOrNull { it.className.contains("NfcNavigationChecks") }?.lineNumber}\n")
         } finally {
             activeGate?.countDown()
             if (started) test.runOnMainSync {
                 screen.get()?.viewModelStore?.clear()
                 application.unregisterActivityLifecycleCallbacks(callbacks)
-                Preview.enabled = false
+
                 session.clear()
                 Store.clearAccount()
                 clientField.set(null, originalClient)

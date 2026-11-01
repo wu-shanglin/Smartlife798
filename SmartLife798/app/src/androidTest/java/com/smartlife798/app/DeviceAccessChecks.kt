@@ -68,13 +68,13 @@ object DeviceAccessChecks {
                     .code(200).message("fixture").body("""{"code":0,"data":$data}""".toResponseBody()).build()
             }.build())
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK).putExtra("preview", true)) as MainActivity
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK).putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             lateinit var vm: MainViewModel
             var scroll = LazyListState()
             var render = 0
             fun show(auto: Boolean = false) = test.runOnMainSync {
-                Preview.enabled = false
+
                 session.token = "offline-access-fixture"
                 session.uid = "me"
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
@@ -156,7 +156,7 @@ object DeviceAccessChecks {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
         } finally {
             test.runOnMainSync { activity?.finish() }
-            Preview.enabled = false
+
             if (fixtureStarted) Store.clearAccount()
             session.token = originalToken
             session.uid = originalUid

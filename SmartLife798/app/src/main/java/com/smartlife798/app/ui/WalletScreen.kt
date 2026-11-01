@@ -72,8 +72,11 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
     var creating by remember { mutableStateOf(false) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
 
-    LaunchedEffect(vm) {
-        collectRefreshRequests(vm.refreshTick) {
+    var reading by remember { mutableStateOf(false) }
+    suspend fun reload() {
+        if (reading) return
+        reading = true
+        try {
             kotlinx.coroutines.coroutineScope {
                 launch { vm.refreshWallet() }
                 when (val res = vm.rechargeProducts()) {
@@ -81,8 +84,9 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                     is Res.Fail -> error = res.msg
                 }
             }
-        }
+        } finally { reading = false }
     }
+    LaunchedEffect(vm) { collectRefreshRequests(vm.refreshTick) { reload() } }
 
     Scaffold(
         topBar = {
@@ -117,7 +121,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                         )
                         Text(
-                            Fmt.money(wallet?.total ?: 0.0),
+                            wallet?.let { Fmt.money(it.total) } ?: "—",
                             modifier = Modifier.sharedCardPageElement(CardPart.AMOUNT),
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
@@ -147,7 +151,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Text("充值金额", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
             }
             when {
-                error != null -> item { ErrorState(error!!) { scope.launch { vm.refreshWallet() } } }
+                error != null -> item { ErrorState(error!!) { scope.launch { reload() } } }
                 products == null -> item { LoadingBlock("正在获取充值商品…") }
                 products!!.isEmpty() -> item { EmptyState("暂无可充值商品", "服务端没有返回 type=1 的充值商品。") }
                 else -> items(products!!, key = { it.id }) { product ->

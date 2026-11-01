@@ -21,7 +21,7 @@ object NfcCaptureLog {
 
     suspend fun save(context: Context, tag: Tag, version: String, active: () -> Boolean): String =
         withContext(Dispatchers.IO) {
-            if (Preview.enabled || !Store.developerToolsEnabled() || !active()) return@withContext "采集已暂停"
+            if (!Store.developerToolsEnabled() || !active()) return@withContext "采集已暂停"
             val ndef = Ndef.get(tag)
             // Reader mode without SKIP_NDEF_CHECK supplies this snapshot; no additional card command.
             val message = ndef?.cachedNdefMessage
@@ -42,7 +42,7 @@ object NfcCaptureLog {
             )
             writes.withLock {
                 currentCoroutineContext().ensureActive()
-                if (Preview.enabled || !Store.developerToolsEnabled() || !active()) return@withLock "采集已暂停"
+                if (!Store.developerToolsEnabled() || !active()) return@withLock "采集已暂停"
                 val file = File(context.filesDir, FILE_NAME)
                 val line = Gson().toJson(event) + "\n"
                 if (file.length() + line.toByteArray(Charsets.UTF_8).size > 131_072) {
@@ -54,19 +54,19 @@ object NfcCaptureLog {
         }
 
     suspend fun read(context: Context): String = withContext(Dispatchers.IO) {
-        if (Preview.enabled || !Store.developerToolsEnabled()) return@withContext ""
+        if (!Store.developerToolsEnabled()) return@withContext ""
         writes.withLock {
             currentCoroutineContext().ensureActive()
-            if (Preview.enabled || !Store.developerToolsEnabled()) return@withLock ""
+            if (!Store.developerToolsEnabled()) return@withLock ""
             val file = File(context.filesDir, FILE_NAME)
             if (file.exists() && file.length() <= 131_072) file.readText(Charsets.UTF_8) else ""
         }
     }
 
     suspend fun clear(context: Context) = withContext(Dispatchers.IO) {
-        if (!Preview.enabled && Store.developerToolsEnabled()) writes.withLock {
+        if (Store.developerToolsEnabled()) writes.withLock {
             currentCoroutineContext().ensureActive()
-            if (Preview.enabled || !Store.developerToolsEnabled()) return@withLock
+            if (!Store.developerToolsEnabled()) return@withLock
             for (file in listOf(File(context.filesDir, FILE_NAME), File(context.cacheDir, "diagnostics/nfc-diagnostics.jsonl"))) {
                 if (file.exists() && !file.delete()) throw java.io.IOException("Diagnostic file deletion failed")
             }
@@ -75,10 +75,10 @@ object NfcCaptureLog {
     }
 
     suspend fun shareFile(context: Context): File? = withContext(Dispatchers.IO) {
-        if (Preview.enabled || !Store.developerToolsEnabled()) return@withContext null
+        if (!Store.developerToolsEnabled()) return@withContext null
         writes.withLock {
             currentCoroutineContext().ensureActive()
-            if (Preview.enabled || !Store.developerToolsEnabled()) return@withLock null
+            if (!Store.developerToolsEnabled()) return@withLock null
             val source = File(context.filesDir, FILE_NAME)
             if (!source.exists() || source.length() == 0L || source.length() > 131_072) return@withLock null
             val folder = File(context.cacheDir, "diagnostics").apply { mkdirs() }

@@ -78,13 +78,8 @@ class OriginalAppVersionTest {
         catch (_: IOException) { }
     }
 
-    @Test fun previewRejectsPublicFetchBeforeAnyNetwork() = runBlocking {
-        Preview.enabled = true
-        try {
-            try { OriginalAppVersion.fetch(); fail("Preview fetched original version") }
-            catch (_: IllegalStateException) { }
-            try { AppUpdate.fetch(); fail("Preview fetched update metadata") }
-            catch (_: IllegalStateException) { }
-        } finally { Preview.enabled = false }
+    @Test fun demoRuntimeIsAbsent() {
+        try { Class.forName("com.smartlife798.app.core.Preview"); fail("Demo runtime is packaged") }
+        catch (_: ClassNotFoundException) { }
     }
 }

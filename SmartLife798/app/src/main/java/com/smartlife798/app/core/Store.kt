@@ -53,14 +53,14 @@ object Store {
     var updatePolicyJson: String?
         get() = prefs.getString("updatePolicy", null)
         set(value) {
-            if (!Preview.enabled) prefs.edit { putString("updatePolicy", value) }
+            prefs.edit { putString("updatePolicy", value) }
         }
 
     /** Public original-app version; installation-wide and retained on logout. */
     var originalAppVersion: String?
         get() = prefs.getString("originalAppVersion", null)
         set(value) {
-            if (!Preview.enabled) prefs.edit { putString("originalAppVersion", value) }
+            prefs.edit { putString("originalAppVersion", value) }
         }
 
     fun init(context: Context) {
@@ -71,7 +71,7 @@ object Store {
     fun developerToolsEnabled(): Boolean = prefs.getBoolean("developerToolsEnabled", false)
 
     fun saveDeveloperToolsEnabled(enabled: Boolean) {
-        if (!Preview.enabled) prefs.edit { putBoolean("developerToolsEnabled", enabled) }
+        prefs.edit { putBoolean("developerToolsEnabled", enabled) }
     }
 
     var token: String?
@@ -105,6 +105,11 @@ object Store {
                 object : TypeToken<List<RecentDevice>>() {}.type,
             ).toMutableList()
         }.getOrElse { mutableListOf() }
+
+    @Synchronized
+    fun saveRecentsForAccount(list: List<RecentDevice>, token: String?, current: () -> Boolean) {
+        if (!token.isNullOrBlank() && session.token == token && current()) saveRecents(list)
+    }
 
     fun saveRecents(list: List<RecentDevice>) {
         prefs.edit { putString("recents", gson.toJson(list.take(60))) }
@@ -169,10 +174,15 @@ object Store {
     }
 
     fun setPendingStart(usage: ActiveUsage?) {
-        if (!Preview.enabled) prefs.edit { putString("pendingStart", usage?.let(gson::toJson)) }
+        prefs.edit { putString("pendingStart", usage?.let(gson::toJson)) }
     }
 
     fun favoritesCacheJson(): String? = prefs.getString("favcache", null)
+
+    @Synchronized
+    fun saveFavoritesForAccount(json: String, token: String, current: () -> Boolean) {
+        if (session.token == token && current()) saveFavoritesCache(json)
+    }
 
     fun saveFavoritesCache(v: String?) {
         prefs.edit { putString("favcache", v) }
@@ -184,27 +194,27 @@ object Store {
     fun themeModeName(): String? = prefs.getString("themeMode", null)
 
     fun saveThemeMode(mode: ThemeMode) {
-        if (!Preview.enabled) prefs.edit { putString("themeMode", mode.name) }
+        prefs.edit { putString("themeMode", mode.name) }
     }
 
     /** True when the user opted into wallpaper-based dynamic colour (API 31+). */
     fun dynamicColor(): Boolean = prefs.getBoolean("dynamicColor", false)
 
     fun saveDynamicColor(enabled: Boolean) {
-        if (!Preview.enabled) prefs.edit { putBoolean("dynamicColor", enabled) }
+        prefs.edit { putBoolean("dynamicColor", enabled) }
     }
 
     fun startupPage(): StartupPage = StartupPage.fromName(prefs.getString("startupPage", null))
 
     fun saveStartupPage(page: StartupPage) {
-        if (!Preview.enabled) prefs.edit { putString("startupPage", page.name) }
+        prefs.edit { putString("startupPage", page.name) }
     }
 
     /** Installation preference; the daily state itself always comes from the server. */
     fun autoCheckIn(): Boolean = prefs.getBoolean("autoCheckIn", true)
 
     fun saveAutoCheckIn(enabled: Boolean) {
-        if (!Preview.enabled) prefs.edit { putBoolean("autoCheckIn", enabled) }
+        prefs.edit { putBoolean("autoCheckIn", enabled) }
     }
 
     fun confirmedCheckIn(): ConfirmedCheckIn? = prefs.getString("confirmedCheckIn", null)?.let {
@@ -213,20 +223,20 @@ object Store {
 
     @Synchronized
     fun saveConfirmedCheckIn(serverTime: Long, token: String) {
-        if (!Preview.enabled && session.token == token) prefs.edit {
+        if (session.token == token) prefs.edit {
             putString("confirmedCheckIn", gson.toJson(ConfirmedCheckIn(serverTime, System.currentTimeMillis())))
         }
     }
 
     @Synchronized
     fun clearConfirmedCheckIn(token: String) {
-        if (!Preview.enabled && session.token == token) prefs.edit { remove("confirmedCheckIn") }
+        if (session.token == token) prefs.edit { remove("confirmedCheckIn") }
     }
 
     fun checkInNoticeDay(): String? = prefs.getString("checkInNoticeDay", null)
 
     fun saveCheckInNoticeDay(day: String) {
-        if (!Preview.enabled) prefs.edit { putString("checkInNoticeDay", day) }
+        prefs.edit { putString("checkInNoticeDay", day) }
     }
 
     /** Record before submission, so an uncertain write is never auto-replayed after a crash. */
@@ -234,12 +244,12 @@ object Store {
 
     @Synchronized
     fun markCheckInAttempt(day: String, token: String, allowExisting: Boolean = false): Boolean =
-        !Preview.enabled && session.token == token && (allowExisting || prefs.getString("checkInAttemptDay", null) != day) &&
+        session.token == token && (allowExisting || prefs.getString("checkInAttemptDay", null) != day) &&
             prefs.edit().putString("checkInAttemptDay", day).commit()
 
     @Synchronized
     fun clearUnsentCheckInAttempt(day: String, token: String) {
-        if (!Preview.enabled && session.token == token && prefs.getString("checkInAttemptDay", null) == day) {
+        if (session.token == token && prefs.getString("checkInAttemptDay", null) == day) {
             prefs.edit().remove("checkInAttemptDay").commit()
         }
     }
@@ -302,7 +312,6 @@ object session {
     fun saveLogin(info: LoginInfo, phone: String) {
         val storedUid = Store.uid
         if (storedUid.isNullOrBlank() || info.uid.isNullOrBlank() || storedUid != info.uid) {
-            // Preview suspends memory credentials while retaining disk caches.
             // Only a proven same-account login may inherit those account keys.
             Store.clearAccount()
         }
@@ -319,18 +328,6 @@ object session {
         uid = null
         phone = null
         Store.clearAccount()
-    }
-
-    /**
-     * Drops the in-memory credentials without touching persisted storage.
-     *
-     * Preview mode uses this so that even a code path which forgot its
-     * `Preview.enabled` check cannot reach the real account with a live token.
-     */
-    fun suspendForPreview() {
-        token = null
-        uid = null
-        phone = null
     }
 
     @Synchronized

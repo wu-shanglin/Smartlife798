@@ -31,8 +31,8 @@ class WXPayEntryActivity : Activity(), IWXAPIEventHandler {
     override fun onReq(req: BaseReq?) = Unit
 
     override fun onResp(resp: BaseResp?) {
-        Diag.event("wxpay.outcome", "errCode" to (resp?.errCode ?: -1), "errStr" to resp?.errStr)
-        WxPay.deliver(resp?.errCode ?: -1, resp?.errStr)
+        Diag.event("wxpay.outcome", "errCode" to (resp?.errCode ?: -1))
+        WxPay.deliver(resp?.errCode ?: -1, resp?.transaction)
         finish()
     }
 }

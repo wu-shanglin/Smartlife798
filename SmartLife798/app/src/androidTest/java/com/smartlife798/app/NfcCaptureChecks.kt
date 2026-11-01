@@ -11,7 +11,7 @@ import android.os.Parcel
 import androidx.core.content.FileProvider
 import com.google.gson.JsonParser
 import com.smartlife798.app.core.NfcCaptureLog
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import java.io.File
@@ -31,13 +31,13 @@ object NfcCaptureChecks {
         test.runOnMainSync { ServiceLocator.init(context) }
         val preferences = context.getSharedPreferences("smartlife798", 0)
         val priorEnabled = preferences.all["developerToolsEnabled"] as? Boolean
-        val priorPreview = Preview.enabled
+        val priorPreview = false
         var started = false
         try {
             check(Store.token.isNullOrBlank() && session.token.isNullOrBlank() && Store.profileJson == null &&
                 Store.active() == null && Store.pendingStart() == null && !file.exists() && !shared.exists())
             started = true
-            Preview.enabled = false
+
             val message = NdefMessage(arrayOf(
                 NdefRecord.createUri("alipay://nfc/app?id=123456789012345&t=1&token=fixture-secret"),
                 NdefRecord.createApplicationRecord("local.fixture.nfc"),
@@ -85,16 +85,16 @@ object NfcCaptureChecks {
                 check(uri.scheme == "content" && uri.authority == "${context.packageName}.updates")
                 check(uri.path.orEmpty().startsWith("/diagnostics/"))
 
-                stage = "Preview cannot read share clear persist or change the installation switch"
-                Preview.enabled = true
+                stage = "disabled tools cannot read share clear or persist"
+
                 Store.saveDeveloperToolsEnabled(false)
-                check(Store.developerToolsEnabled())
+                check(!Store.developerToolsEnabled())
                 check(NfcCaptureLog.save(context, tag, "offline-fixture") { true }.contains("暂停"))
                 check(NfcCaptureLog.read(context).isEmpty() && NfcCaptureLog.shareFile(context) == null)
                 NfcCaptureLog.clear(context)
                 check(file.readText() == saved && shared.readText() == saved)
-                Preview.enabled = false
 
+                Store.saveDeveloperToolsEnabled(true)
                 stage = "clear removes source and shared copy and size limit refuses further append"
                 NfcCaptureLog.clear(context)
                 check(!file.exists() && !shared.exists())
@@ -104,21 +104,21 @@ object NfcCaptureChecks {
                 NfcCaptureLog.clear(context)
                 check(!file.exists())
             }
-            result.putString("stream", "PASS: synthetic cached NDEF raw URI/text/payload and full message round-trip; disabled/Preview/inactive/late-active guards; no ambient card UID stored; arbitrary NDEF text retained by explicit owner request; 128KiB cap; clear and private FileProvider share; no NFC hardware polling, URI launches or business requests\n")
+            result.putString("stream", "PASS: synthetic cached NDEF raw URI/text/payload and full message round-trip; disabled/inactive/late-active guards; no ambient card UID stored; arbitrary NDEF text retained by explicit owner request; 128KiB cap; clear and private FileProvider share; no NFC hardware polling, URI launches or business requests\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             val frame = error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; source=${frame?.fileName}:${frame?.lineNumber}\n")
         } finally {
             if (started) {
-                Preview.enabled = false
+
                 Store.saveDeveloperToolsEnabled(true)
                 runBlocking { NfcCaptureLog.clear(context) }
                 val editor = preferences.edit()
                 if (priorEnabled == null) editor.remove("developerToolsEnabled") else editor.putBoolean("developerToolsEnabled", priorEnabled)
                 check(editor.commit())
             }
-            Preview.enabled = priorPreview
+
         }
         test.finish(code, result)
     }

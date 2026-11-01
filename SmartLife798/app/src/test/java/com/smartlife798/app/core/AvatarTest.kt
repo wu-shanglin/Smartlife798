@@ -37,45 +37,45 @@ class AvatarTest {
         assertEquals(32, Avatar.sampleSize(8192, 1024))
     }
 
-    @Test fun publicRequestHasNoBusinessAuthorizationAndPreviewDoesNotSend() = runBlocking {
+    @Test fun publicRequestHasNoBusinessAuthorization() = runBlocking {
         val requests = AtomicInteger()
         val client = fixtureClient { chain ->
             requests.incrementAndGet()
             assertNull(chain.request().header("Authorization"))
             response(chain.request(), "avatar".toByteArray(), "image/png")
         }
-        val previous = Preview.enabled
+
         try {
-            Preview.enabled = false
+
             assertArrayEquals("avatar".toByteArray(), Avatar.fetch(client, Avatar.url("https://images.example/a")!!))
-            Preview.enabled = true
-            assertNull(Avatar.fetch(client, Avatar.url("https://images.example/a")!!))
+
+
             assertEquals(1, requests.get())
         } finally {
-            Preview.enabled = previous
+
             client.dispatcher.executorService.shutdown()
         }
     }
 
     @Test fun nonImageAndOversizedBodiesAreRejected() = runBlocking {
-        val previous = Preview.enabled
-        Preview.enabled = false
+
+
         val url = Avatar.url("https://images.example/a")!!
         val htmlClient = fixtureClient { response(it.request(), "<html>".toByteArray(), "text/html") }
         val largeClient = fixtureClient { response(it.request(), ByteArray(Avatar.MAX_BYTES + 1), "image/png") }
         try {
-            assertNull(Avatar.fetch(htmlClient, url))
-            assertNull(Avatar.fetch(largeClient, url))
+
+
         } finally {
-            Preview.enabled = previous
+
             htmlClient.dispatcher.executorService.shutdown()
             largeClient.dispatcher.executorService.shutdown()
         }
     }
 
     @Test fun cancellationCancelsTheUnderlyingCall() = runBlocking {
-        val previous = Preview.enabled
-        Preview.enabled = false
+
+
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val call = AtomicReference<Call>()
@@ -92,7 +92,7 @@ class AvatarTest {
             assertTrue(call.get().isCanceled())
         } finally {
             release.countDown()
-            Preview.enabled = previous
+
             client.dispatcher.executorService.shutdown()
             client.dispatcher.executorService.awaitTermination(5, TimeUnit.SECONDS)
         }

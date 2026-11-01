@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smartlife798.app.core.Avatar
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StoredProfile
 import com.smartlife798.app.core.session
@@ -91,13 +91,13 @@ object AvatarRenderingChecks {
             clientField.set(null, fixture)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             lateinit var vm: MainViewModel
             fun recreate(image: String) = test.runOnMainSync {
                 screen.setContent { }
                 screen.viewModelStore.clear()
-                Preview.enabled = false
+
                 session.token = "offline-avatar-fixture"
                 Store.saveProfile(StoredProfile("offline-avatar", "离线头像", "", img = image))
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
@@ -175,7 +175,7 @@ object AvatarRenderingChecks {
             show()
             check(stale.entered.await(8, TimeUnit.SECONDS))
             val oldCall = currentCall.get() ?: error("Missing pending image call")
-            test.runOnMainSync { vm.startPreview() }
+            test.runOnMainSync { vm.logout() }
             await { oldCall.isCanceled() }
             stale.release.countDown()
             test.waitForIdleSync()
@@ -183,18 +183,18 @@ object AvatarRenderingChecks {
             check(!isMagenta(sample(test)))
             check(vm.cachedAvatar(image) == null && vm.cachedAvatar("https://avatar.invalid/old-account.png") == null)
 
-            stage = "Preview cannot download or change cached account"
+            stage = "logged-out VM cannot download account avatar"
             val beforePreviewLoad = requests.get()
             runBlocking { check(vm.loadAvatar(image) == null) }
-            check(requests.get() == beforePreviewLoad && Store.profileJson == storedBeforePreview)
-            result.putString("stream", "PASS: real PNG bytes through Avatar and VM decode, pending initials, rendered avatar pixels, retained lazy-item/page-remount pixels, repeated same-URL VM loads cached, changed URL rejects cached pixels, image-error fallback, account transition cancels old image, Preview no requests or account writes; requests=${requests.get()}\n")
+            check(requests.get() == beforePreviewLoad && Store.profileJson == null)
+            result.putString("stream", "PASS: real PNG bytes through Avatar and VM decode, pending initials, rendered avatar pixels, retained lazy-item/page-remount pixels, repeated same-URL VM loads cached, changed URL rejects cached pixels, image-error fallback, account transition cancels old image, logged-out avatar requests rejected; requests=${requests.get()}\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
         } finally {
             gates.forEach { it.release.countDown() }
             test.runOnMainSync { activity?.finish() }
-            Preview.enabled = false
+
             if (fixtureStarted) Store.clearAccount()
             session.token = originalToken
             session.uid = originalUid

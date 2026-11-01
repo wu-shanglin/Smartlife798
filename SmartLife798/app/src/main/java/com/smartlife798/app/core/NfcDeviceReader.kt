@@ -15,7 +15,7 @@ class NfcDeviceReader(private val activity: Activity, private val onUris: (List<
     private val handler = Handler(Looper.getMainLooper())
 
     fun start() {
-        if (Preview.enabled || !session.isLoggedIn || adapter?.isEnabled != true) return
+        if (!session.isLoggedIn || adapter?.isEnabled != true) return
         if (activity.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true) return
         try {
             val current = gate.start()
@@ -28,7 +28,7 @@ class NfcDeviceReader(private val activity: Activity, private val onUris: (List<
     }
 
     private fun discovered(tag: Tag, current: Long) {
-        if (Preview.enabled || !session.isLoggedIn || !gate.claim(current)) return
+        if (!session.isLoggedIn || !gate.claim(current)) return
         val uris = try {
             val message = Ndef.get(tag)?.cachedNdefMessage
             if (message == null || message.byteArrayLength > 65_536 || message.records.size > 16) emptyList()
@@ -36,7 +36,7 @@ class NfcDeviceReader(private val activity: Activity, private val onUris: (List<
         } catch (_: RuntimeException) {
             emptyList()
         }
-        if (gate.isCurrent(current) && !Preview.enabled && session.isLoggedIn) onUris(uris)
+        if (gate.isCurrent(current) && session.isLoggedIn) onUris(uris)
         // Suppress repeated discovery while a card remains on the antenna. A
         // later physical removal permits a new deliberate tap, including retry.
         try {

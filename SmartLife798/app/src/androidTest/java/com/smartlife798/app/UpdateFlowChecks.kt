@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.smartlife798.app.core.OriginalAppVersion
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.UpdatePolicy
 import com.smartlife798.app.vm.MainViewModel
@@ -133,26 +133,12 @@ object UpdateFlowChecks {
                     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                     awaitRemoved(second)
                     check(Store.updatePolicyJson == json)
-                    stage = "preview ignores mandatory policy without modifying cache"
+                    stage = "legacy preview extra cannot bypass mandatory update"
                     activity = launch(preview = true)
-                    awaitText(instrumentation, "演示模式", true)
-                    check(!nodeText(instrumentation.uiAutomation.rootInActiveWindow).contains("需要更新至 $latest"))
+                    awaitText(instrumentation, "需要更新至 $latest", true)
+                    check(!nodeText(instrumentation.uiAutomation.rootInActiveWindow).contains("演示模式"))
                     check(Store.updatePolicyJson == json)
-                    result.putString("stream", "PASS: outside tap stays mandatory, back removes task, relaunch preserves restriction, busy back exits, ordinary policy cache and preview isolation\n")
-                }
-                "preview" -> {
-                    stage = "preview refresh isolation"
-                    instrumentation.runOnMainSync {
-                        val vm = MainViewModel(instrumentation.targetContext.applicationContext as android.app.Application)
-                        vm.startPreview()
-                        vm.checkAppUpdate(manual = true)
-                        check(!vm.checkingUpdate.value)
-                        check(!vm.showUpdate.value)
-                    }
-                    check(Store.updatePolicyJson == cachedPolicy && Store.originalAppVersion == cachedOriginal)
-                    try { runBlocking { OriginalAppVersion.fetch() }; error("Preview fetched version") }
-                    catch (_: IllegalStateException) { }
-                    result.putString("stream", "PASS: preview rejects update/version refresh and leaves installation caches unchanged\n")
+                    result.putString("stream", "PASS: mandatory policy survives task exit, download busy exit and legacy intent extra; no demo bypass\n")
                 }
                 else -> error("Unknown test mode")
             }
@@ -161,7 +147,7 @@ object UpdateFlowChecks {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
         } finally {
             activity?.let { instrumentation.runOnMainSync { it.finish() } }
-            Preview.enabled = false
+
             Store.updatePolicyJson = cachedPolicy
             Store.originalAppVersion = cachedOriginal
             OriginalAppVersion.restore(cachedOriginal)

@@ -28,7 +28,6 @@ import com.smartlife798.app.core.Master
 import com.smartlife798.app.core.Paging
 import com.smartlife798.app.core.PayChannel
 import com.smartlife798.app.core.PaymentFlow
-import com.smartlife798.app.core.Preview
 import com.smartlife798.app.core.QrData
 import com.smartlife798.app.core.RecentDevice
 import com.smartlife798.app.core.Res
@@ -76,6 +75,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class PayRequest(val bill: Bill?, val note: String, val createdAt: Long = System.currentTimeMillis())
 
     private val gson = Gson()
+    private val transaction = Mutex()
+    private val transactionJobs = mutableSetOf<Job>()
+    private var recentSaveJob: Job? = null
 
     private val _autoCheckIn = MutableStateFlow(Store.autoCheckIn())
     val autoCheckIn: StateFlow<Boolean> = _autoCheckIn.asStateFlow()
@@ -105,7 +107,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Store.saveAutoCheckIn(enabled)
         if (enabled) {
             if (!_checkingIn.value) _checkInStatus.value =
-                if (Preview.enabled) "演示模式下不执行签到" else "尚未检查签到"
+                "尚未检查签到"
             requestAutoCheckIn()
         } else {
             checkInResumePending = false
@@ -153,10 +155,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun requestCheckIn(manual: Boolean, statusOnly: Boolean = false) {
-        if (Preview.enabled) {
-            if (manual) publishCheckIn("演示模式下不执行签到", manual = true)
-            return
-        }
+
         if (!session.isLoggedIn || !appResumed) {
             if (manual) publishCheckIn(if (!session.isLoggedIn) "请先登录后再签到" else "请在应用前台签到", manual = true)
             return
@@ -184,7 +183,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val task = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val token = session.token ?: return@launch
             val generation = accountGeneration
-            fun current() = !Preview.enabled && session.token == token && accountGeneration == generation
+            fun current() = session.token == token && accountGeneration == generation
             fun allowed() = current() && appResumed && (statusOnly || manual || _autoCheckIn.value)
             var locked = false
             var submitted = false
@@ -352,7 +351,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setDeveloperToolsEnabled(enabled: Boolean) {
         _developerToolsEnabled.value = enabled
-        if (!Preview.enabled) Store.saveDeveloperToolsEnabled(enabled)
+        Store.saveDeveloperToolsEnabled(enabled)
     }
 
     private val _startupPage: MutableStateFlow<StartupPage> = MutableStateFlow(Store.startupPage())
@@ -369,7 +368,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var protocolCheckInterval = 300_000L
 
     private fun refreshProtocolVersion(manual: Boolean) {
-        if (Preview.enabled || protocolJob?.isActive == true) return
+        if (protocolJob?.isActive == true) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (!manual && lastProtocolCheck != 0L && now - lastProtocolCheck < protocolCheckInterval) return
         lastProtocolCheck = now
@@ -377,7 +376,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         protocolJob = viewModelScope.launch {
             try {
                 val version = withContext(Dispatchers.IO) { com.smartlife798.app.core.OriginalAppVersion.fetch() }
-                if (Preview.enabled) return@launch
                 com.smartlife798.app.core.OriginalAppVersion.accept(version)
                 protocolCheckInterval = 21_600_000L
             } catch (e: CancellationException) {
@@ -414,7 +412,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun downloadAppUpdate() {
-        if (Preview.enabled || downloadJob?.isActive == true) return
+        if (downloadJob?.isActive == true) return
         val policy = _updatePolicy.value ?: return
         if (!policy.available(BuildConfig.VERSION_CODE)) return
         downloadJob = viewModelScope.launch {
@@ -423,7 +421,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val file = com.smartlife798.app.core.UpdatePackage.download(getApplication(), policy) { percent ->
                     _updateDownload.value = UpdateDownload(busy = true, percent = percent)
                 }
-                if (!Preview.enabled && _updatePolicy.value == policy) {
+                if (_updatePolicy.value == policy) {
                     _updateDownload.value = UpdateDownload(ready = file, percent = 100)
                 } else {
                     _updateDownload.value = UpdateDownload()
@@ -443,12 +441,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun updateInstallIntent(): android.content.Intent? {
-        if (Preview.enabled) return null
         val policy = _updatePolicy.value ?: return null
         val file = _updateDownload.value.ready ?: return null
         return try {
             withContext(Dispatchers.IO) { com.smartlife798.app.core.UpdatePackage.verify(getApplication(), file, policy) }
-            if (Preview.enabled || policy != _updatePolicy.value) null
+            if (policy != _updatePolicy.value) null
             else com.smartlife798.app.core.UpdatePackage.installIntent(getApplication(), file)
         } catch (e: CancellationException) {
             throw e
@@ -462,10 +459,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun checkAppUpdate(manual: Boolean = false) {
-        if (Preview.enabled) {
-            if (manual) notify("演示模式下不检查更新")
-            return
-        }
+
         refreshProtocolVersion(manual)
         if (updateJob?.isActive == true || downloadJob?.isActive == true) return
         val now = android.os.SystemClock.elapsedRealtime()
@@ -479,7 +473,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _checkingUpdate.value = true
             try {
                 val fetched = withContext(Dispatchers.IO) { com.smartlife798.app.core.AppUpdate.fetch() }
-                if (Preview.enabled) return@launch
                 val json = com.smartlife798.app.core.AppUpdate.retainHistory(fetched, Store.updatePolicyJson)
                 val policy = com.smartlife798.app.core.UpdatePolicy.parse(json)
                 if (policy != _updatePolicy.value) _updateDownload.value = UpdateDownload()
@@ -509,7 +502,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _loggedIn = MutableStateFlow(session.isLoggedIn)
     val loggedIn: StateFlow<Boolean> = _loggedIn.asStateFlow()
 
-    private val _profile = MutableStateFlow(Store.profile())
+    private val _profile = MutableStateFlow<StoredProfile?>(null)
     val profile: StateFlow<StoredProfile?> = _profile.asStateFlow()
 
     private val profileMutation = Mutex()
@@ -529,6 +522,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun setUseScore(enabled: Boolean): Res<Unit> = changeProfile(ProfilePatch.useScore(enabled))
 
     private suspend fun changeProfile(patch: ProfilePatch): Res<Unit> = withContext(Dispatchers.Main.immediate) {
+        accountRestoreJob?.join()
         if (!profileMutation.tryLock()) return@withContext Res.Fail(-1, "账号设置正在保存，请稍后再试")
         if (deviceCommand.isLocked) {
             profileMutation.unlock()
@@ -544,23 +538,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         profileRevision += 1
         val token = session.token
         val generation = accountGeneration
-        val preview = Preview.enabled
         val before = _profile.value
         try {
             if (before == null) return Res.Fail(-1, "请先刷新账号资料")
-            val result = if (Preview.enabled) Res.Ok(Unit) else {
+            val result = run {
                 if (!session.isLoggedIn) return Res.Fail(-99, "请先登录")
                 Api.updateProfile(patch)
             }
             currentCoroutineContext().ensureActive()
-            if (Preview.enabled != preview || accountGeneration != generation || session.token != token) {
+            if (accountGeneration != generation || session.token != token) {
                 throw CancellationException("Account changed")
             }
             if (result is Res.Ok) {
                 val current = _profile.value ?: return Res.Fail(-1, "账号资料已变更，请刷新后重试")
                 val updated = current.copy(name = patch.name ?: current.name, useScore = patch.useScore ?: current.useScore)
                 _profile.value = updated
-                if (!Preview.enabled) Store.saveProfile(updated)
+                Store.saveProfile(updated)
             }
             return result
         } finally {
@@ -575,46 +568,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** One small account-scoped bitmap; a recreated page can render it on its first frame. */
     fun cachedAvatar(image: String?): android.graphics.Bitmap? {
-        if (Preview.enabled || !session.isLoggedIn || image == null || image != _profile.value?.img) return null
+        if (!session.isLoggedIn || image == null || image != _profile.value?.img) return null
         return avatarCache?.takeIf { it.generation == accountGeneration && it.image == image }?.bitmap
     }
 
     suspend fun loadAvatar(image: String): android.graphics.Bitmap? {
-        if (Preview.enabled || !session.isLoggedIn || image != _profile.value?.img) return null
+        if (!session.isLoggedIn || image != _profile.value?.img) return null
         cachedAvatar(image)?.let { return it }
         val token = session.token
         val generation = accountGeneration
         val bitmap = com.smartlife798.app.core.Avatar.load(image)
         return bitmap?.takeIf {
-            !Preview.enabled && session.token == token && generation == accountGeneration && image == _profile.value?.img
+            session.token == token && generation == accountGeneration && image == _profile.value?.img
         }?.also { avatarCache = CachedAvatar(generation, image, it) }
     }
 
     private val _wallet = MutableStateFlow<Wallet?>(null)
     val wallet: StateFlow<Wallet?> = _wallet.asStateFlow()
 
+    private var accountRestoreJob: Job? = null
+    private data class AccountCache(val profile: StoredProfile?, val recents: List<RecentDevice>,
+        val pinned: Set<String>, val active: ActiveUsage?, val pending: ActiveUsage?)
+    private fun readAccountCache() = AccountCache(Store.profile(), Store.recents(), Store.pinned(), Store.active(), Store.pendingStart())
+    private fun publishAccountCache(cache: AccountCache) {
+        _profile.value = cache.profile
+        _recents.value = cache.recents
+        _pinned.value = cache.pinned
+        _active.value = cache.active
+        _pendingStart.value = cache.pending
+    }
+
     private val favoritesLock = Any()
     private var favoriteRestoreJob: Job? = null
+    private val favoriteMutation = Mutex()
+    private var favoriteRevision = 0L
     private val _favorites = MutableStateFlow<List<Device>>(emptyList())
     val favorites: StateFlow<List<Device>> = _favorites.asStateFlow()
 
-    private val _recents = MutableStateFlow<List<RecentDevice>>(Store.recents())
+    private val _recents = MutableStateFlow<List<RecentDevice>>(emptyList())
     val recents: StateFlow<List<RecentDevice>> = _recents.asStateFlow()
 
-    private val _pinned = MutableStateFlow<Set<String>>(Store.pinned())
+    private val _pinned = MutableStateFlow<Set<String>>(emptySet())
     val pinned: StateFlow<Set<String>> = _pinned.asStateFlow()
 
-    private val _active = MutableStateFlow(Store.active())
+    private val _active = MutableStateFlow<ActiveUsage?>(null)
     val active: StateFlow<ActiveUsage?> = _active.asStateFlow()
 
-    private val _pendingStart: MutableStateFlow<ActiveUsage?> = MutableStateFlow(Store.pendingStart())
+    private val _pendingStart: MutableStateFlow<ActiveUsage?> = MutableStateFlow<ActiveUsage?>(null)
     val pendingStart: StateFlow<ActiveUsage?> = _pendingStart.asStateFlow()
     private val deviceCommand = Mutex()
     private var startJob: Job? = null
     private var deviceRevision = 0L
 
     private fun checkDeviceSession(token: String?) {
-        if (Preview.enabled || !session.isLoggedIn || session.token != token) {
+        if (!session.isLoggedIn || session.token != token) {
             throw CancellationException("Device session changed")
         }
     }
@@ -634,6 +641,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Share only concurrent read requests, never cache business results or retry writes. */
     private suspend fun accountRead(key: String, read: suspend () -> Unit) = withContext(Dispatchers.Main.immediate) {
+        accountRestoreJob?.join()
         val task = accountReads[key]?.takeIf { it.isActive }
             ?: viewModelScope.async(start = CoroutineStart.LAZY) { read() }.also {
                 accountReads[key] = it
@@ -692,7 +700,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * the current read, or starts a new read once it has completed.
      */
     fun refreshMePage(force: Boolean = false): Job? {
-        if (Preview.enabled || !session.isLoggedIn || !appResumed) return null
+        if (!session.isLoggedIn || !appResumed) return null
         meRefreshJob?.takeIf { it.isActive }?.let { return it }
         val day = checkInServerTime.takeIf { it > 0L }?.let {
             CheckIn.dayKey(it + android.os.SystemClock.elapsedRealtime() - checkInSnapshotElapsed)
@@ -713,7 +721,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             masterRead.await()
             walletRead.await()
             statusRead?.join()
-            if (accountGeneration == generation && !Preview.enabled) {
+            if (accountGeneration == generation) {
                 // The first mission response may supply the previously unknown
                 // server day. Adopt it without turning the next nav tick into a read.
                 val loadedDay = checkInServerTime.takeIf { it > 0L }?.let {
@@ -758,6 +766,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Disk/JSON work must not block the first UI frame. Live data always wins.
         val restoreGeneration = accountGeneration
         val restoreToken = session.token
+        accountRestoreJob = viewModelScope.launch {
+            val cache = withContext(Dispatchers.IO) { readAccountCache() }
+            if (restoreGeneration == accountGeneration && restoreToken == session.token) publishAccountCache(cache)
+        }
         favoriteRestoreJob = viewModelScope.launch {
             val cached = withContext(Dispatchers.IO) {
                 runCatching {
@@ -767,7 +779,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrNull()
             }
             synchronized(favoritesLock) {
-                if (isActive && !Preview.enabled && restoreGeneration == accountGeneration && session.token == restoreToken) {
+                if (isActive && restoreGeneration == accountGeneration && session.token == restoreToken) {
                     cached?.let { _favorites.value = it }
                 }
             }
@@ -808,14 +820,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Resolve first. Only a verified card event can issue one volatile automatic-start ticket. */
     fun acceptNfcUris(uris: List<String>, autoStart: Boolean = false) {
         viewModelScope.launch {
-            if (Preview.enabled || !session.isLoggedIn || !appResumed || nfcResolveJob?.isActive == true) return@launch
+            if (!session.isLoggedIn || !appResumed || nfcResolveJob?.isActive == true) return@launch
             when (val route = com.smartlife798.app.core.NfcRoutes.parseAll(uris)) {
                 is com.smartlife798.app.core.NfcRoute.Qr -> {
                     val generation = accountGeneration
                     val token = session.token
                     nfcResolveJob = viewModelScope.launch {
                         val response = resolveQr(route.id)
-                        if (Preview.enabled || !appResumed || accountGeneration != generation || session.token != token)
+                        if (!appResumed || accountGeneration != generation || session.token != token)
                             return@launch
                         when (response) {
                             is Res.Ok -> when (val resolved = com.smartlife798.app.core.resolveQr(
@@ -834,7 +846,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val token = session.token
                     nfcResolveJob = viewModelScope.launch {
                         val response = loadDevice(route.id)
-                        if (Preview.enabled || !appResumed || accountGeneration != generation || session.token != token)
+                        if (!appResumed || accountGeneration != generation || session.token != token)
                             return@launch
                         val device = (response as? Res.Ok)?.data?.device
                         val resolved = com.smartlife798.app.core.resolveQr(device,
@@ -864,7 +876,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun claimNfcAutoStart(ticket: String, deviceId: String): Boolean =
-        !Preview.enabled && session.isLoggedIn && appResumed && nfcAutoStart.claim(ticket, deviceId)
+        session.isLoggedIn && appResumed && nfcAutoStart.claim(ticket, deviceId)
 
     // ------------------------------------------------------------------ auth
 
@@ -877,8 +889,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun login(phone: String, sms: String): Res<LoginData> {
         val loginGeneration = accountGeneration
-        val previewAtStart = Preview.enabled
-        if (previewAtStart) throw CancellationException("Login unavailable in Preview")
         return withContext(Dispatchers.IO) {
             val res = Api.login(phone, sms)
             if (res is Res.Ok) {
@@ -887,23 +897,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         return@withContext Res.Fail(-1, "登录响应缺少令牌")
                     }
                     withContext(Dispatchers.Main.immediate) {
-                        if (accountGeneration != loginGeneration || Preview.enabled) {
+                        if (accountGeneration != loginGeneration) {
                             throw CancellationException("Login session changed")
                         }
                         // Invalidate old-account jobs before publishing a replacement
                         // session; saveLogin clears caches unless their uid matches.
                         resetAccountState()
                         session.saveLogin(info, phone)
-                        _profile.value = Store.profile()
-                        _recents.value = Store.recents()
-                        _pinned.value = Store.pinned()
-                        _active.value = Store.active()
-                        _pendingStart.value = Store.pendingStart()
+                        val generation = accountGeneration
+                        accountRestoreJob = viewModelScope.launch {
+                            val cache = withContext(Dispatchers.IO) { readAccountCache() }
+                            if (generation == accountGeneration) publishAccountCache(cache)
+                        }
+                        viewModelScope.launch {
+                            accountRestoreJob?.join()
+                            if (generation != accountGeneration) return@launch
+                            refreshAll()
+                            requestAutoCheckIn()
+                        }
+                        // Start account-owned initialization before removing the login composition.
                         _loggedIn.value = true
                     }
-                    refreshMasterInternal()
-                    refreshBillsDerived()
-                    withContext(Dispatchers.Main.immediate) { requestAutoCheckIn() }
                 }
             }
             res
@@ -911,18 +925,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun logout() {
-        val wasPreview = Preview.enabled
         val oldToken = session.token
-        Preview.enabled = false
-        if (wasPreview) {
-            // Leaving a demonstration must not touch the retained real account.
-            session.suspendForPreview()
-        } else {
-            // Stop old-account work immediately, before waiting for remote logout.
-            session.clear()
-        }
+        session.clear()
         resetAccountState()
-        if (wasPreview || oldToken.isNullOrBlank()) return
+        if (oldToken.isNullOrBlank()) return
         viewModelScope.launch {
             // A late response belongs to this captured token and must never
             // clear a newer login established while this request was pending.
@@ -932,6 +938,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun resetAccountState() {
         accountGeneration += 1
+        accountRestoreJob?.cancel()
+        accountRestoreJob = null
+        recentSaveJob?.cancel()
+        transactionJobs.toList().forEach { it.cancel() }
         _developerToolsEnabled.value = Store.developerToolsEnabled()
         meRefreshJob?.cancel()
         meRefreshKey = null
@@ -969,9 +979,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _payRequest.value = null
         _historySyncedAt.value = 0L
         _masterError.value = null
+        profileReadAt = 0L
     }
 
     // ---------------------------------------------------------------- master
+
+    private var profileReadAt = 0L
+    fun ensureProfileFresh() {
+        if (_profile.value == null || android.os.SystemClock.elapsedRealtime() - profileReadAt > 60_000L) {
+            viewModelScope.launch { refreshMasterInternal() }
+        }
+    }
 
     fun refreshMaster(): Job {
         masterJob?.takeIf { it.isActive }?.let { return it }
@@ -998,10 +1016,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Account wallet of the enterprise; drives the recharge screen and payment defaults. */
     suspend fun refreshWallet() = accountRead("wallet") {
-        if (Preview.enabled) {
-            _wallet.value = Preview.wallet()
-            return@accountRead
-        }
+
         if (!session.isLoggedIn) {
             _wallet.value = null
             return@accountRead
@@ -1009,7 +1024,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val tokenAtStart = session.token
         val generation = accountGeneration
         val res = withContext(Dispatchers.IO) { Api.wallet() }
-        if (!Preview.enabled && generation == accountGeneration && session.token == tokenAtStart && res is Res.Ok)
+        if (generation == accountGeneration && session.token == tokenAtStart && res is Res.Ok)
             _wallet.value = res.data
     }
 
@@ -1022,8 +1037,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      *
      * 客户端不判断「已签约」：该状态没有可靠的用户级查询，签约结果以支付宝页面/服务端为准。
      */
-    suspend fun alipaySignPayload(): Res<String> {
-        if (Preview.enabled) return Res.Fail(-1, "演示模式下不执行签约")
+    suspend fun signAlipay(activity: android.app.Activity): Res<String> = accountTransaction(Res.Fail(-1, "请先登录或等待当前交易完成")) {
+        when (val response = alipaySignPayload()) {
+            is Res.Fail -> response
+            is Res.Ok -> {
+                val payload = response.data.orEmpty()
+                if (!appResumed) Res.Fail(-1, "请返回前台后重新打开签约")
+                else if (payload.startsWith("alipays://")) {
+                    try {
+                        activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(payload)))
+                        Res.Ok("请在支付宝页面确认签约结果")
+                    } catch (_: android.content.ActivityNotFoundException) { Res.Fail(-1, "未安装支付宝，无法完成签约") }
+                    catch (_: SecurityException) { Res.Fail(-1, "系统拒绝打开签约页面") }
+                } else {
+                    val result = com.smartlife798.app.core.AlipaySdk.pay(activity, payload)
+                    Res.Ok(if (result.success) "已从支付宝返回，请在支付宝页面确认签约结果" else "签约未完成（${result.status}）${result.memo}")
+                }
+            }
+        }
+    }
+
+    private suspend fun alipaySignPayload(): Res<String> {
         val res = withContext(Dispatchers.IO) { Api.signPga(AGREEMENT_TYPE_ALIPAY) }
         return when (res) {
             is Res.Ok -> {
@@ -1047,7 +1081,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Recharge products (`prd/lst type=1`); the enterprise id comes from the wallet. */
     suspend fun rechargeProducts(): Res<List<Product>> {
-        if (Preview.enabled) return Res.Ok(Preview.rechargeProducts())
         if (_wallet.value?.ep?.id.isNullOrBlank()) refreshWallet()
         val eid = _wallet.value?.ep?.id
             ?: return Res.Fail(-1, "未能读取企业钱包，请下拉刷新后重试")
@@ -1061,8 +1094,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * owner/contact user refs, `cata=1` (payment direction), note = product name.
      * The server computes the amount; the client never sends a price.
      */
-    suspend fun createRechargeBill(product: Product): Res<String> {
-        if (Preview.enabled) return Res.Ok("preview-recharge-bill")
+    private suspend fun <T> accountTransaction(busy: T, run: suspend () -> T): T = withContext(Dispatchers.Main.immediate) {
+        if (!session.isLoggedIn || !transaction.tryLock()) return@withContext busy
+        val token = session.token
+        val generation = accountGeneration
+        val task = viewModelScope.async(start = CoroutineStart.LAZY) {
+            val result = run()
+            if (token != session.token || generation != accountGeneration) throw CancellationException("Account changed")
+            result
+        }
+        transactionJobs.add(task)
+        task.invokeOnCompletion {
+            transaction.unlock()
+            viewModelScope.launch { transactionJobs.remove(task) }
+        }
+        task.start()
+        task.await()
+    }
+
+    suspend fun createRechargeBill(product: Product): Res<String> = accountTransaction(Res.Fail(-1, "请先登录或等待当前交易完成")) {
+        createRechargeBillInternal(product)
+    }
+    private suspend fun createRechargeBillInternal(product: Product): Res<String> {
         if (_wallet.value?.ep?.id.isNullOrBlank()) refreshWallet()
         val wallet = _wallet.value ?: return Res.Fail(-1, "未能读取企业钱包，请下拉刷新后重试")
         val epId = wallet.ep?.id ?: return Res.Fail(-1, "未能读取企业信息，请下拉刷新后重试")
@@ -1078,7 +1131,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
         val res = withContext(Dispatchers.IO) { Api.saveRechargeBill(body) }
         return when (res) {
-            is Res.Ok -> Res.Ok(res.data.toString())
+            is Res.Ok -> res.data?.takeIf { it > 0L }?.let { Res.Ok(it.toString()) }
+                ?: Res.Fail(-1, "服务端未返回有效账单，请先查询订单，勿重复充值")
             is Res.Fail -> res
         }
     }
@@ -1093,10 +1147,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * used to cost two identical requests on every navigation.
      */
     private suspend fun refreshBillsDerived() = withContext(Dispatchers.Main.immediate) {
-        if (Preview.enabled) {
-            _unpaidCount.value = Preview.bills().count(::isUnpaidBill)
-            return@withContext
-        }
+
         if (!session.isLoggedIn) {
             _unpaidCount.value = 0
             return@withContext
@@ -1108,14 +1159,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Kept for callers that only need the history index. */
     suspend fun syncCloudHistory() = withContext(Dispatchers.Main.immediate) {
-        if (Preview.enabled || !session.isLoggedIn) return@withContext
+        if (!session.isLoggedIn) return@withContext
         fetchRecentBills()?.let(::applyCloudHistory)
     }
 
     private suspend fun fetchRecentBills(): List<Bill>? = withContext(Dispatchers.Main.immediate) {
         val generation = accountGeneration
         val token = session.token
-        if (Preview.enabled || token.isNullOrBlank()) return@withContext null
+        if (token.isNullOrBlank()) return@withContext null
         val task = recentBillsRead?.takeIf { it.isActive } ?: viewModelScope.async {
             withContext(Dispatchers.IO) { Api.bills(page = 0, size = HISTORY_PAGE_SIZE) }.let { res ->
                 when (res) {
@@ -1125,7 +1176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }.also { recentBillsRead = it }
         try {
-            task.await().takeIf { !Preview.enabled && token == session.token && generation == accountGeneration }
+            task.await().takeIf { token == session.token && generation == accountGeneration }
         } finally {
             if (task.isCompleted && recentBillsRead === task) recentBillsRead = null
         }
@@ -1151,8 +1202,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val localOnly = _recents.value.filter { it.id !in cloudIds }
         val merged = (cloud + localOnly).take(60)
         if (_recents.value != merged) {
-            Store.saveRecents(merged)
-            _recents.value = merged
+            saveRecentSnapshot(merged)
         }
         _historySyncedAt.value = System.currentTimeMillis()
     }
@@ -1171,10 +1221,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * the orders screen still pages through the complete cloud list.
      */
     suspend fun refreshOrderBadge() = withContext(Dispatchers.Main.immediate) {
-        if (Preview.enabled) {
-            _unpaidCount.value = Preview.bills().count(::isUnpaidBill)
-            return@withContext
-        }
+
         if (!session.isLoggedIn) {
             _unpaidCount.value = 0
             return@withContext
@@ -1187,9 +1234,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val pending = _payRequest.value
         if (pending != null && System.currentTimeMillis() - pending.createdAt < PAY_REQUEST_TTL_MS) return
         viewModelScope.launch {
-            val unpaid = if (Preview.enabled) {
-                Preview.bills().filter(::isUnpaidBill).maxByOrNull { it.ctime }
-            } else {
+            val unpaid = run {
                 withContext(Dispatchers.IO) {
                     when (val res = Api.bills(page = 0, size = HISTORY_PAGE_SIZE)) {
                         is Res.Ok -> res.data.orEmpty().filter(::isUnpaidBill).maxByOrNull { it.ctime }
@@ -1211,16 +1256,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --------------------------------------------------------------- payments
 
+    private suspend fun <T> accountResponse(read: suspend () -> Res<T>): Res<T> {
+        accountRestoreJob?.join()
+        val token = session.token ?: return Res.Fail(-99, "请先登录")
+        val generation = accountGeneration
+        val result = read()
+        currentCoroutineContext().ensureActive()
+        if (token != session.token || generation != accountGeneration) throw CancellationException("Account changed")
+        return result
+    }
+
     suspend fun loadChannels(billId: String): Res<List<PayChannel>> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            Res.Ok(
-                listOf(
-                    PayChannel(21, "支付宝", "需真实账号验证"),
-                    PayChannel(92, "账户余额", "服务端扣款"),
-                ),
-            )
-        } else {
-            when (val r = Api.payChannels(billId)) {
+        run {
+            when (val r = accountResponse { Api.payChannels(billId) }) {
                 is Res.Ok -> Res.Ok(r.data?.channels.orEmpty())
                 is Res.Fail -> r
             }
@@ -1235,10 +1283,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         activity: android.app.Activity,
         billId: String,
         channel: PayChannel,
-    ): PaymentFlow.Outcome = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            return@withContext PaymentFlow.Outcome.Unavailable("演示模式下不执行任何支付操作")
-        }
+    ): PaymentFlow.Outcome = accountTransaction(PaymentFlow.Outcome.Unavailable("请先登录或等待当前交易完成")) {
+        payBillInternal(activity, billId, channel)
+    }
+    private suspend fun payBillInternal(activity: android.app.Activity, billId: String, channel: PayChannel): PaymentFlow.Outcome = withContext(Dispatchers.IO) {
+
         val type = channel.type
         val alipay = type == com.smartlife798.app.core.PayType.ALIPAY
         val wechat = type == com.smartlife798.app.core.PayType.WECHAT
@@ -1261,7 +1310,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // `wxapi.WXPayEntryActivity`, and only `trans/confirm` decides success.
             val raw = Api.prepayJson(type, billId)
             if (raw is Res.Fail) {
-                Diag.event("prepay.fail", "billId" to billId, "payType" to type, "code" to raw.code, "msg" to raw.msg)
+                Diag.event("prepay.fail", "billId" to billId, "payType" to type, "code" to raw.code)
                 return@withContext PaymentFlow.Outcome.Failed(raw.msg)
             }
             val order = com.smartlife798.app.core.WxPay.parse((raw as Res.Ok).data)
@@ -1271,7 +1320,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             Diag.event("wxpay.begin", "billId" to billId)
             val wx = com.smartlife798.app.core.WxPay.pay(activity, order)
-            Diag.event("wxpay.outcome", "billId" to billId, "errCode" to wx.code, "errStr" to wx.message)
+            Diag.event("wxpay.outcome", "billId" to billId, "errCode" to wx.code)
             if (!wx.success) {
                 return@withContext PaymentFlow.Outcome.Failed(
                     "微信未完成支付（${wx.code}）${wx.message.orEmpty()}",
@@ -1280,7 +1329,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             val prepay = Api.prepay(type, billId)
             if (prepay is Res.Fail) {
-                Diag.event("prepay.fail", "billId" to billId, "payType" to type, "code" to prepay.code, "msg" to prepay.msg)
+                Diag.event("prepay.fail", "billId" to billId, "payType" to type, "code" to prepay.code)
                 return@withContext PaymentFlow.Outcome.Failed(prepay.msg)
             }
             Diag.event("prepay.ok", "billId" to billId, "payType" to type, "orderBytes" to ((prepay as Res.Ok).data?.length ?: 0))
@@ -1298,7 +1347,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         "billId" to billId,
                         "success" to result.success,
                         "resultStatus" to result.status,
-                        "memo" to result.memo,
                     )
                     if (!result.success) {
                         return@withContext PaymentFlow.Outcome.Failed(
@@ -1321,20 +1369,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             is Res.Fail -> {
-                Diag.event("confirm.fail", "billId" to billId, "code" to confirm.code, "msg" to confirm.msg)
+                Diag.event("confirm.fail", "billId" to billId, "code" to confirm.code)
                 PaymentFlow.Outcome.Failed("支付结果待确认：${confirm.msg}")
             }
         }
     }
 
     private suspend fun refreshMasterInternal() = accountRead("master") {
-        // 预览模式只用本地示例数据，不请求服务端，避免“演示模式”里混入真实账号数据。
-        if (Preview.enabled) return@accountRead
         if (!session.isLoggedIn) return@accountRead
         _loadingMaster.value = true
         _masterError.value = null
         val tokenAtStart = session.token
         val revisionAtStart = profileRevision
+        val favoritesAtStart = favoriteRevision
         val generation = accountGeneration
         try {
             val (res, favoritesJson) = withContext(Dispatchers.IO) {
@@ -1342,9 +1389,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val favorites = (response as? Res.Ok)?.data?.favos.orEmpty()
                 response to if (response is Res.Ok) gson.toJson(favorites) else null
             }
-            if (Preview.enabled || session.token != tokenAtStart || generation != accountGeneration) return@accountRead
+            if (session.token != tokenAtStart || generation != accountGeneration) return@accountRead
             when (res) {
                 is Res.Ok -> {
+                    profileReadAt = android.os.SystemClock.elapsedRealtime()
                     val master: Master? = res.data
                     val p = master?.storedProfile(session.phone)
                     if (p != null && revisionAtStart == profileRevision && !_savingProfile.value) {
@@ -1355,9 +1403,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     val favorites = master?.favos.orEmpty()
                     // A fast empty response must replace stale disk data even before restoration finishes.
-                    val changed = _favorites.value != favorites || favoriteRestoreJob?.isActive == true
-                    publishFavorites(favorites)
-                    if (changed) favoritesJson?.let(Store::saveFavoritesCache)
+                    if (favoritesAtStart == favoriteRevision && !favoriteMutation.isLocked) {
+                        val changed = _favorites.value != favorites || favoriteRestoreJob?.isActive == true
+                        publishFavorites(favorites)
+                        if (changed) favoritesJson?.let(Store::saveFavoritesCache)
+                    }
                 }
                 is Res.Fail -> {
                     _masterError.value = res.msg
@@ -1370,59 +1420,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- device
 
-    /** Enables the clearly-labelled UI preview (static sample data, no network). */
-    fun startPreview() {
-        accountGeneration += 1
-        meRefreshJob?.cancel()
-        meRefreshKey = null
-        avatarCache = null
-        clearCheckInNotice()
-        profileJob?.cancel()
-        checkInJob?.cancel()
-        checkInDoneDay = null
-        checkInServerTime = 0L
-        _signedInToday.value = null
-        _availableScore.value = null
-        _checkInStatus.value = "演示模式下不执行签到"
-        startJob?.cancel()
-        watchJob?.cancel()
-        masterJob?.cancel()
-        cancelAccountReads()
-        nfcResolveJob?.cancel()
-        _nfcDevice.value = null
-        nfcAutoStart.clear()
-        scannedEntry = null
-        detailPage.clear()
-        deviceRevision += 1
-        profileRevision += 1
-        _pendingStart.value = null
-        protocolJob?.cancel()
-        updateJob?.cancel()
-        downloadJob?.cancel()
-        _updateDownload.value = UpdateDownload()
-        _checkingUpdate.value = false
-        _showUpdate.value = false
-        Preview.enabled = true
-        // 预览模式不携带任何真实会话：即使某条路径漏判 Preview，也不会打到真实账号。
-        session.suspendForPreview()
-        _loggedIn.value = true
-        _availableScore.value = Preview.profile.totalScore
-        _wallet.value = Preview.wallet()
-        _profile.value = Preview.profile
-        publishFavorites(Preview.filterFavorites())
-        _recents.value = Preview.devices.mapIndexed { i, d ->
-            RecentDevice(d.id, d.name, d.dtype, System.currentTimeMillis() - i * 3_600_000L, uses = 3 - i)
-        }
-        _active.value = null
-        _liveStatus.value = null
-        _liveUpdatedAt.value = 0L
-        _masterError.value = null
-        _unpaidCount.value = Preview.bills().count(::isUnpaidBill)
-    }
 
-    /** Read-only diagnostics stay in the VM, including preview and account/cancellation guards. */
+
+    /** Read-only diagnostics stay in the VM, including account/cancellation guards. */
     suspend fun checkConnection(): String = withContext(Dispatchers.IO) {
-        if (Preview.enabled) return@withContext "演示模式下不发起网络请求"
         val tokenAtStart = session.token
         if (!session.isLoggedIn) return@withContext "请先登录后再测试连通性"
         val result = try {
@@ -1448,16 +1449,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     fun deviceAccess(detail: DeviceDetail): com.smartlife798.app.core.DeviceAccess = detail.access(
-        if (Preview.enabled) detail.user?.id else session.uid,
-        if (Preview.enabled) detail.device?.id else (_active.value ?: _pendingStart.value)?.deviceId,
+        session.uid,
+        (_active.value ?: _pendingStart.value)?.deviceId,
     )
 
     suspend fun loadDevice(did: String): Res<DeviceDetail> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            val detail = Preview.detail(did)
-            Res.Ok(detail.copy(device = _liveStatus.value?.takeIf { it.id == did } ?: detail.device))
-        } else {
-            val token = session.token
+        accountRestoreJob?.join()
+        run {
+            val token = session.token ?: return@withContext Res.Fail(-99, "请先登录")
             val revision = deviceRevision
             val result = Api.deviceDetail(did)
             checkDeviceSession(token)
@@ -1504,13 +1503,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * fixes the "已付款账单明明存在但消费记录为空" symptom.
      */
     suspend fun bills(page: Int, size: Int = Paging.PAGE_SIZE): Res<List<Bill>> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            return@withContext if (page <= 1) Res.Ok(Preview.bills()) else Res.Ok(emptyList())
-        }
+
+        val token = session.token ?: return@withContext Res.Fail(-99, "请先登录")
+        val generation = accountGeneration
         val res = Api.bills(page = Paging.toApiPage(page), size = size)
+        withContext(Dispatchers.Main.immediate) {
+            if (session.token != token || accountGeneration != generation) throw CancellationException("Account changed")
+            if (res is Res.Ok && page <= 1) updateUnpaid(res.data.orEmpty())
+        }
         if (res is Res.Ok && page <= 1) {
             val list = res.data.orEmpty()
-            updateUnpaid(list)
             Diag.event(
                 "bills.page",
                 "page" to page,
@@ -1523,25 +1525,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun billDetail(id: String): Res<BillDetail> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            Res.Ok(BillDetail(bill = Preview.bills().firstOrNull { it.id == id }))
-        } else {
-            Api.billDetail(id)
-        }
+        accountResponse { Api.billDetail(id) }
     }
 
     /** Resolves a scanned QR payload through the original service. */
     suspend fun resolveQr(id: String): Res<QrData> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            Res.Ok(
-                QrData(
-                    qr = com.smartlife798.app.core.QrInfo(id = id, type = 3),
-                    dev = Preview.devices.first(),
-                ),
-            )
-        } else {
-            Api.qrUse(id)
-        }
+        accountResponse { Api.qrUse(id) }
     }
 
     /**
@@ -1552,9 +1541,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * `bm`/`name`/`ep` and only takes status/gene/subs/ext from the server.
      */
     suspend fun pollDevice(did: String, base: Device): Res<Device> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) {
-            return@withContext Res.Ok(_liveStatus.value?.takeIf { it.id == did } ?: base)
-        }
+
         val token = session.token
         val revision = deviceRevision
         when (val res = Api.deviceStatus(did, false)) {
@@ -1570,23 +1557,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    suspend fun toggleFavorite(device: Device): Res<Unit> = withContext(Dispatchers.IO) {
-        val isFav = _favorites.value.any { it.id == device.id }
-        if (Preview.enabled) {
-            val list = _favorites.value.toMutableList()
-            if (isFav) list.removeAll { it.id == device.id } else list.add(0, device)
-            publishFavorites(list)
-            return@withContext Res.Ok(Unit)
+    suspend fun toggleFavorite(device: Device): Res<Unit> = withContext(Dispatchers.Main.immediate) {
+        accountRestoreJob?.join()
+        favoriteRestoreJob?.join()
+        val token = session.token
+        val generation = accountGeneration
+        if (token.isNullOrBlank()) return@withContext Res.Fail(-99, "请先登录")
+        if (!favoriteMutation.tryLock()) return@withContext Res.Fail(-1, "收藏操作处理中，请稍候")
+        favoriteRevision += 1
+        try {
+            val isFav = _favorites.value.any { it.id == device.id }
+            val res = withContext(Dispatchers.IO) { Api.favorite(device.id, if (isFav) 1 else 0) }
+            if (session.token != token || accountGeneration != generation) throw CancellationException("Account changed")
+            if (res is Res.Ok) {
+                val list = _favorites.value.toMutableList()
+                if (isFav) list.removeAll { it.id == device.id }
+                else if (list.none { it.id == device.id }) list.add(0, device)
+                publishFavorites(list)
+                withContext(Dispatchers.IO) {
+                    val json = gson.toJson(list)
+                    val job = currentCoroutineContext()
+                    Store.saveFavoritesForAccount(json, token) {
+                        job.isActive && accountGeneration == generation && _favorites.value == list
+                    }
+                }
+            }
+            res
+        } finally {
+            favoriteRevision += 1
+            favoriteMutation.unlock()
         }
-        val res = Api.favorite(device.id, if (isFav) 1 else 0)
-        if (res is Res.Ok) {
-            val list = _favorites.value.toMutableList()
-            if (isFav) list.removeAll { it.id == device.id }
-            else if (list.none { it.id == device.id }) list.add(0, device)
-            publishFavorites(list)
-            Store.saveFavoritesCache(gson.toJson(list))
-        }
-        res
     }
 
     fun isFavorite(id: String): Boolean = _favorites.value.any { it.id == id }
@@ -1597,10 +1597,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _pinned.value = Store.pinned()
     }
 
+    private fun touchRecent(device: Device, used: Boolean) {
+        val old = _recents.value.firstOrNull { it.id == device.id }
+        val row = RecentDevice(device.id, device.name.ifBlank { old?.name ?: "未命名设备" }, device.dtype,
+            System.currentTimeMillis(), (old?.uses ?: 0) + if (used) 1 else 0,
+            if (used) false else old?.scannedOnly ?: true)
+        saveRecentSnapshot((listOf(row) + _recents.value.filterNot { it.id == device.id }).take(60))
+    }
+    private fun saveRecentSnapshot(rows: List<RecentDevice>) {
+        _recents.value = rows
+        val token = session.token
+        recentSaveJob?.cancel()
+        recentSaveJob = viewModelScope.launch(Dispatchers.IO) {
+            val job = currentCoroutineContext()
+            Store.saveRecentsForAccount(rows, token) { job.isActive && _recents.value == rows }
+        }
+    }
     fun rememberScan(device: Device) {
         scannedEntry = device
-        Store.touchRecent(device, used = false)
-        _recents.value = Store.recents()
+        touchRecent(device, used = false)
     }
 
     // One foreground watch for this install's confirmed usage or unresolved start.
@@ -1630,7 +1645,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun ensureWatch() {
         val usage = _active.value ?: _pendingStart.value
-        if (usage == null || !appResumed || detailPage.deviceId == usage.deviceId || Preview.enabled ||
+        if (usage == null || !appResumed || detailPage.deviceId == usage.deviceId ||
             deviceCommand.isLocked
         ) {
             watchJob?.cancel()
@@ -1639,9 +1654,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (watchJob?.isActive == true) return
         watchJob = viewModelScope.launch {
+            var failures = 0
             while (isActive && (_active.value != null || _pendingStart.value != null)) {
-                syncActiveStatus()
-                delay(2_000L)
+                failures = if (syncActiveStatus()) 0 else (failures + 1).coerceAtMost(4)
+                delay((2_000L shl failures).coerceAtMost(30_000L))
             }
         }
     }
@@ -1720,22 +1736,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun rememberUse(device: Device) {
-        Store.touchRecent(device, used = true)
-        _recents.value = Store.recents()
+        touchRecent(device, used = true)
     }
 
     fun clearRecent(id: String) {
-        Store.clearRecent(id)
-        _recents.value = Store.recents()
+        saveRecentSnapshot(_recents.value.filterNot { it.id == id })
     }
 
     fun clearAllRecents() {
-        Store.clearRecents()
-        _recents.value = emptyList()
+        saveRecentSnapshot(emptyList())
     }
 
     /** Confirmation survives navigation; account reset or ViewModel disposal cancels it. */
     suspend fun startDevice(device: Device, payType: Int, args: String): Res<Unit> = withContext(Dispatchers.Main.immediate) {
+        accountRestoreJob?.join()
         if (!deviceCommand.tryLock()) return@withContext Res.Fail(-1, "设备操作处理中，请勿重复操作")
         val task = viewModelScope.async(start = CoroutineStart.UNDISPATCHED) {
             try {
@@ -1753,18 +1767,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun startDeviceInternal(device: Device, payType: Int, args: String): Res<Unit> = withContext(Dispatchers.Main.immediate) {
         if (_savingProfile.value) return@withContext Res.Fail(-1, "账号设置正在保存，请完成后再使用设备")
-        if (Preview.enabled) {
-            // 预览模式只在内存里模拟，不落盘：避免演示设备的“进行中”记录
-            // 在退出预览后继续出现在真实界面里。预览不轮询，所以这里直接给出
-            // 一个“运行中”的服务端快照，卡片才有状态可显示。
-            _active.value = ActiveUsage(device.id, device.name, device.dtype, System.currentTimeMillis(), payType)
-            _liveStatus.value = device.copy(
-                gene = (device.gene ?: com.smartlife798.app.core.Gene())
-                    .copy(status = com.smartlife798.app.core.DeviceType.Status.WORK),
-            )
-            _liveUpdatedAt.value = System.currentTimeMillis()
-            return@withContext Res.Ok(Unit)
-        }
+
         // Defence in depth: the detail screen disables the button for these
         // states, but a stale recomposition must never queue a command on a
         // machine that cannot run (and must not start a polling loop for it).
@@ -1832,7 +1835,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val pending = ActiveUsage(device.id, device.name, device.dtype, System.currentTimeMillis(), payType)
         Store.setPendingStart(pending)
         _pendingStart.value = pending
-        val signal = awaitStartSignal(device, token)
+        val signal = kotlinx.coroutines.withTimeoutOrNull(20_000L) { awaitStartSignal(device, token) } ?: StartSignal.UNKNOWN
         val snapshot = _liveStatus.value?.takeIf { it.id == device.id }
         val label = snapshot?.stateLabel()?.label ?: "未知"
         if (signal == StartSignal.STARTED) {
@@ -1932,20 +1935,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * on resume and once at startup so an ended session — or a start that never
      * took effect — cannot leave a 「使用中」 card behind.
      */
-    suspend fun syncActiveStatus() {
-        val usage = _active.value ?: _pendingStart.value ?: return
-        if (Preview.enabled || !session.isLoggedIn || deviceCommand.isLocked) return
+    suspend fun syncActiveStatus(): Boolean {
+        val usage = _active.value ?: _pendingStart.value ?: return false
+        if (!session.isLoggedIn || deviceCommand.isLocked) return false
         val token = session.token
         val revision = deviceRevision
         val res = withContext(Dispatchers.IO) { Api.deviceStatus(usage.deviceId, false) }
         checkDeviceSession(token)
-        val fresh = (res as? Res.Ok)?.data?.device ?: return
+        val fresh = (res as? Res.Ok)?.data?.device ?: return false
         val base = baseDeviceFor(usage.deviceId, usage.name, usage.dtype)
         checkDeviceSession(token)
         if (revision != deviceRevision || deviceCommand.isLocked ||
             (_active.value ?: _pendingStart.value) != usage
-        ) return
+        ) return false
         reconcileDevice(base.mergeStatus(fresh), StartWatch.classify(base, fresh), token, revision)
+        return true
     }
 
     /**
@@ -1964,6 +1968,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun stopDevice(device: Device): Res<Device> = withContext(Dispatchers.Main.immediate) {
+        accountRestoreJob?.join()
         if (!deviceCommand.tryLock()) return@withContext Res.Fail(-1, "设备操作处理中，请勿重复操作")
         try {
             deviceRevision += 1
@@ -1990,14 +1995,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun stopDeviceInternal(device: Device): Res<Device> = withContext(Dispatchers.Main.immediate) {
-        if (Preview.enabled) {
-            // 预览模式只在内存里结束，不写任何本地状态。
-            val standby = device.copy(gene = (device.gene ?: com.smartlife798.app.core.Gene())
-                .copy(status = com.smartlife798.app.core.DeviceType.Status.LOCKED))
-            if (activeBelongsTo(_active.value?.deviceId, device.id)) _active.value = null
-            publishLive(standby)
-            return@withContext Res.Ok(standby)
-        }
+
         if (!session.isLoggedIn) return@withContext Res.Fail(ErrorCodes.TOKEN_EXPIRED, "请先登录")
         val token = session.token
         when (val checked = checkedDeviceAccess(device.id)) {
@@ -2050,14 +2048,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 "dev.end.fail",
                 "did" to device.id,
                 "code" to res.code,
-                "msg" to res.msg,
             )
         }
         res
     }
 
     suspend fun changeMode(device: Device, mode: Int, args: String): Res<Unit> = withContext(Dispatchers.IO) {
-        if (Preview.enabled) Res.Ok(Unit) else Api.setMode(device.id, mode, args)
+        Api.setMode(device.id, mode, args)
     }
 
     fun errorText(code: Int, msg: String): String = when (code) {

@@ -9,7 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
@@ -37,9 +37,9 @@ object ReadPerformanceChecks {
         val active = AtomicInteger()
         val peak = AtomicInteger()
         val unexpected = AtomicInteger()
-        val fixture = original.newBuilder().addInterceptor { chain ->
+        val fixture = original.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
             val request = chain.request()
-            check(request.method == "GET" && request.header("Authorization") == "offline-reads-token")
+            check(request.method == "GET" && request.header("Authorization") == "offline-reads-token") { "Unexpected path=${request.url.encodedPath}, method=${request.method}, authMatches=${request.header("Authorization") == "offline-reads-token"}" }
             val index = when (request.url.encodedPath) {
                 "/api/v1/ui/app/master" -> 0
                 "/api/v1/acc/wallet/owner" -> 1
@@ -68,12 +68,12 @@ object ReadPerformanceChecks {
             started = true
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             lateinit var vm: MainViewModel
             test.runOnMainSync {
                 activity!!.setContent { }
                 activity!!.viewModelStore.clear()
-                Preview.enabled = false
+
                 Store.saveAutoCheckIn(false)
                 clientField.set(null, fixture)
                 session.saveLogin(LoginInfo(token = "offline-reads-token", uid = "offline-reads-user"), "")
@@ -106,10 +106,11 @@ object ReadPerformanceChecks {
                     withContext(Dispatchers.Main) {
                         val pending = async { vm.refreshAll() }
                         kotlinx.coroutines.delay(30)
-                        vm.startPreview()
+                        session.clear()
+                        vm.logout()
                         try { pending.await() } catch (_: kotlinx.coroutines.CancellationException) { }
                         kotlinx.coroutines.delay(200)
-                        check(vm.profile.value?.name != "离线性能用户")
+                        check(vm.profile.value == null)
                         val after = counts.map { it.get() }
                         vm.refreshAll()
                         check(counts.map { it.get() } == after)
@@ -125,7 +126,7 @@ object ReadPerformanceChecks {
             if (started) test.runOnMainSync {
                 activity?.viewModelStore?.clear()
                 session.clear()
-                Preview.enabled = false
+
                 Store.clearAccount()
                 clientField.set(null, original)
                 activity?.finish()

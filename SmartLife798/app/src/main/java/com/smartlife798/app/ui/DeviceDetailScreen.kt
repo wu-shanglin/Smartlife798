@@ -109,7 +109,7 @@ fun DeviceDetailScreen(
     val pinned by vm.pinned.collectAsStateWithLifecycle()
     val profile by vm.profile.collectAsStateWithLifecycle()
     val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { vm.refreshMaster() }
+    LaunchedEffect(Unit) { vm.ensureProfileFresh() }
     var detail by remember { mutableStateOf<DeviceDetail?>(null) }
     var autoStartSnapshot by remember(deviceId, nfcTicket) { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
@@ -122,6 +122,8 @@ fun DeviceDetailScreen(
     var payType by remember { mutableStateOf(0) }
     var signingAli by remember(deviceId) { mutableStateOf(false) }
     var mode by remember { mutableStateOf<Int?>(null) }
+    var statusError by remember { mutableStateOf<String?>(null) }
+    var pollFailures by remember { mutableStateOf(0) }
     var lastUpdate by remember { mutableStateOf(0L) }
     // A successful dev/start is not reflected by the server instantly, so the
     // START button is locked while a command is in flight. The lock is a
@@ -214,8 +216,9 @@ fun DeviceDetailScreen(
                 is Res.Ok -> if (revision == statusRevision && !busy && res.data?.device?.id == deviceId) {
                     if (res.data != current) detail = res.data
                     lastUpdate = System.currentTimeMillis()
+                    statusError = null; pollFailures = 0
                 }
-                is Res.Fail -> Unit
+                is Res.Fail -> { statusError = "状态同步中断，请检查网络；显示上次成功状态"; pollFailures = (pollFailures + 1).coerceAtMost(4) }
             }
             return
         }
@@ -227,8 +230,9 @@ fun DeviceDetailScreen(
                 if (res.data != device) detail = current.copy(device = res.data,
                     user = if (res.data?.isStandby == true && device.isInUse) null else current.user)
                 lastUpdate = System.currentTimeMillis()
+                statusError = null; pollFailures = 0
             }
-            is Res.Fail -> Unit
+            is Res.Fail -> { statusError = "状态同步中断，请检查网络；显示上次成功状态"; pollFailures = (pollFailures + 1).coerceAtMost(4) }
         }
     }
 
@@ -285,7 +289,7 @@ fun DeviceDetailScreen(
                     if (pendingStartUntil != 0L) pendingStartUntil = 0L
                     break
                 }
-                delay(2_000L)
+                delay((2_000L shl pollFailures).coerceAtMost(30_000L))
                 pollOnce()
                 noteObservedState()
                 if (pendingStartUntil > 0 && System.currentTimeMillis() >= pendingStartUntil) {
@@ -469,6 +473,9 @@ fun DeviceDetailScreen(
                     }
                 }
 
+                statusError?.let { notice ->
+                    item(key = "sync-error", contentType = "sync-error") { HintBanner(notice) }
+                }
                 if (error != null && device != null) {
                     item(key = "error", contentType = "error") {
                         Card(
@@ -530,40 +537,11 @@ fun DeviceDetailScreen(
                                     signingAli = true
                                     scope.launch {
                                         try {
-                                            when (val res = vm.alipaySignPayload()) {
-                                                is Res.Ok -> {
-                                                    val payload = res.data.orEmpty()
-                                                    if (payload.startsWith("alipays://")) {
-                                                        try {
-                                                            context.startActivity(
-                                                                android.content.Intent(
-                                                                    android.content.Intent.ACTION_VIEW,
-                                                                    android.net.Uri.parse(payload),
-                                                                ),
-                                                            )
-                                                        } catch (e: android.content.ActivityNotFoundException) {
-                                                            vm.notify("未安装支付宝，无法完成签约")
-                                                        }
-                                                    } else {
-                                                        val host = context as? android.app.Activity
-                                                        if (host == null) {
-                                                            vm.notify("无法打开支付宝签约页")
-                                                        } else {
-                                                            val outcome = com.smartlife798.app.core.AlipaySdk.pay(host, payload)
-                                                            Diag.event(
-                                                                "sign.alipay",
-                                                                "success" to outcome.success,
-                                                                "resultStatus" to outcome.status,
-                                                                "memo" to outcome.memo,
-                                                            )
-                                                            vm.notify(
-                                                                if (outcome.success) "已从支付宝返回，请在支付宝页面确认签约结果"
-                                                                else "签约未完成（${outcome.status}）${outcome.memo}",
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                                is Res.Fail -> vm.notify(res.msg)
+                                            val host = context as? android.app.Activity
+                                            if (host == null) vm.notify("无法打开签约页面")
+                                            else when (val response = vm.signAlipay(host)) {
+                                                is Res.Ok -> response.data?.let(vm::notify)
+                                                is Res.Fail -> vm.notify(response.msg)
                                             }
                                         } finally {
                                             signingAli = false

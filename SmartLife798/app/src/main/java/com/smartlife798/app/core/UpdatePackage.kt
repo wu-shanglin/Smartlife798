@@ -31,13 +31,13 @@ object UpdatePackage {
 
     suspend fun download(context: Context, policy: UpdatePolicy, progress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
-            check(!Preview.enabled)
             val directory = File(context.cacheDir, "updates").apply { mkdirs() }
             val partial = File(directory, "update.part")
             val complete = File(directory, "update.apk")
             var success = false
+            val downloadContext = currentCoroutineContext()
             try {
-                client.newCall(Request.Builder().url(policy.apkUrl).build()).execute().use { response ->
+                Api.awaitResponse(client.newCall(Request.Builder().url(policy.apkUrl).build())) { response ->
                     if (!response.isSuccessful) throw IOException("APK unavailable")
                     val body = response.body ?: throw IOException("Empty APK")
                     val length = body.contentLength()
@@ -48,8 +48,7 @@ object UpdatePackage {
                         partial.outputStream().use { output ->
                             val buffer = ByteArray(64 * 1024)
                             while (true) {
-                                currentCoroutineContext().ensureActive()
-                                check(!Preview.enabled)
+                                downloadContext.ensureActive()
                                 val count = input.read(buffer)
                                 if (count == -1) break
                                 received += count
@@ -118,7 +117,6 @@ object UpdatePackage {
         Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
 
     fun installIntent(context: Context, file: File): Intent {
-        check(!Preview.enabled)
         require(file.isFile)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
         return Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")

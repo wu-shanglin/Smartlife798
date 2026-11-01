@@ -45,7 +45,7 @@
 
 - 支付、账单和设备执行结果只认服务端；SDK 回调成功仍需 `trans/confirm`。超时/受理/取消不能报成功。
 - 不绕过鉴权、不内置真实账号或 token、不复用原 APK 签名私钥。
-- `Preview.enabled` 时不联网、不写 SharedPreferences、不创建真实进行中记录、不拉起支付/签约 SDK 或更新下载/安装；新增路径必须验证演示隔离。
+- 交付 APK 不提供演示模式或业务模拟分支。离线夹具仅放在 androidTest，并强制使用独立测试包；终止所有网络请求，不访问真实账号或执行真实业务。
 - 日志、异常、截图和提交不得包含 token、手机号、完整签名订单串、支付签名或真实账号资料；SDK 原始 `result`、任意异常消息也不能直接当作安全日志。
 - 涉及扣费、创建账单、支付/签约、启停的操作需要入口防重入和 `finally` 释放状态；仅按钮 `enabled=false` 不足。不得自动重试可能产生副作用的请求。
 - 本地测试不自动操作真实账号、发短信、建充值单、支付/签约或启停真实设备。执行前须有用户对该具体业务操作的授权，不能把 GET 当成只读。
@@ -57,7 +57,7 @@
 `MainActivity / ui → MainViewModel → core → 服务端`；共享状态通过 `StateFlow` 返回。
 
 - `core/` 不依赖 Compose、`ui/`、`vm/`。其中 `Store`、支付桥、`Diag` 等有 Android 依赖；解析、映射、金额、分页、状态机须保持可在 JVM 单测。
-- `vm/` 不依赖 Compose；统一登录态、演示分支、网络编排与用户错误。`ui/` 不直接调用 `Api`、OkHttp 或 SharedPreferences。
+- `vm/` 不依赖 Compose；统一登录态、网络编排与用户错误。`ui/` 不直接调用 `Api`、OkHttp 或 SharedPreferences。
 - 账号共享状态放 VM；页面临时状态用 `remember` / `rememberSaveable`。不为小改动引入另一套全局状态或 DI 框架。
 - 网络与阻塞 SDK 调用放 IO；协程绑定生命周期，重抛 `CancellationException`，不得用宽泛 `catch` / `runCatching` 吞取消。
 - 切换账号或登出须取消旧任务、清账号数据，防止旧响应写回新会话。安装级数据按 docs/06 的存储分类保留，不随账号数据一并清除。
@@ -119,8 +119,8 @@ Android 相关改动进入 `SmartLife798/`，使用 wrapper：
 ./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lint --console=plain
 ```
 
-- JDK、SDK 要求以 Gradle 与 CI 配置为准，本机 `local.properties` 须可用；环境准备、安装/演示/抓日志命令见 docs/03。
-- 新增或修改纯逻辑须有对应单测。行为变更还须在模拟器/设备验证；真实资金、物理出水、支付签约是各自独立的验收，不能由 Demo 或编译代替。
+- JDK、SDK 要求以 Gradle 与 CI 配置为准，本机 `local.properties` 须可用；环境准备、安装/离线测试/抓日志命令见 docs/03。
+- 新增或修改纯逻辑须有对应单测。行为变更还须在模拟器/设备验证；真实资金、物理出水、支付签约是各自独立的验收，不能由离线夹具或编译代替。
 - 纯文档/工具/CI 改动跑根目录检查；构建或依赖改动跑完整 Gradle 检查。不得把 `UP-TO-DATE` 或历史证据说成本次重新执行的测试。
 - 凡进入 APK 的变更按 docs/06 准备语义版本并重建产物；纯维护不消耗版本号。版本与产物准备不授权远端发布，不在本文件重复维护版本副本。
-- 仓库检查是静态兜底，不能证明演示隔离、脱敏、并发防重或真实支付正确，相关路径仍需评审与行为验证。
+- 仓库检查是静态兜底，不能证明脱敏、并发防重或真实支付正确，相关路径仍需评审与行为验证。

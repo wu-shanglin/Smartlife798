@@ -12,7 +12,7 @@ import com.google.gson.JsonParser
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
 import com.smartlife798.app.core.OriginalAppVersion
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
@@ -55,7 +55,7 @@ object CheckInFlowChecks {
         val originalAuto = preferences.all["autoCheckIn"] as? Boolean
         val originalCachedProtocol = preferences.all["originalAppVersion"] as? String
         val originalProtocol = OriginalAppVersion.current.value
-        val originalPreview = Preview.enabled
+
         val viewModels = ViewModelStore()
         val scenario = AtomicReference(Scenario.SUCCESS)
         val signed = AtomicBoolean()
@@ -69,7 +69,7 @@ object CheckInFlowChecks {
         var fixtureStarted = false
         lateinit var vm: MainViewModel
         var vmCreated = false
-        val fixture = originalClient.newBuilder().dispatcher(okhttp3.Dispatcher()).addInterceptor { chain ->
+        val fixture = originalClient.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.dispatcher(okhttp3.Dispatcher()).addInterceptor { chain ->
             val request = chain.request()
             val path = request.url.encodedPath
             val activeScenario = scenario.get()
@@ -129,7 +129,7 @@ object CheckInFlowChecks {
         fun create(clearAttempt: Boolean = true) {
             test.runOnMainSync {
                 viewModels.clear()
-                Preview.enabled = false
+
                 if (clearAttempt) {
                     Store.clearAccount()
                     check(Store.confirmedCheckIn() == null && Store.checkInNoticeDay() == null)
@@ -247,27 +247,28 @@ object CheckInFlowChecks {
             create()
             check(!vm.autoCheckIn.value)
             test.runOnMainSync {
-                vm.startPreview()
+                session.clear()
+                vm.logout()
                 vm.setAutoCheckIn(true)
                 vm.setAppResumed(true)
             }
             test.waitForIdleSync()
-            check(reads.get() == 0 && posts.get() == 0 && !Store.autoCheckIn())
-            check(vm.checkInStatus.value == "演示模式下不执行签到")
-            Preview.enabled = false
+            check(reads.get() == 0 && posts.get() == 0 && Store.autoCheckIn())
+            check(vm.checkInStatus.value == "尚未检查签到")
+
             Store.saveAutoCheckIn(true)
 
             for (failure in listOf(Scenario.REJECTED, Scenario.TIMEOUT)) {
                 stage = "$failure never replays after foreground or VM recreation"
                 reset(failure)
                 foreground()
-                await { vm.checkInStatus.value.startsWith("自动签到未确认") }
+                await { vm.checkInStatus.value.startsWith("自动签到未确认") && readJobComplete(vm) }
                 check(posts.get() == 1 && Store.checkInAttemptDay() == "2026-10-26")
                 foreground()
-                await { vm.checkInStatus.value.startsWith("今日签到已提交过") }
+                await { vm.checkInStatus.value.startsWith("今日签到已提交过") && readJobComplete(vm) }
                 create(clearAttempt = false)
                 foreground()
-                await { vm.checkInStatus.value.startsWith("今日签到已提交过") }
+                await { vm.checkInStatus.value.startsWith("今日签到已提交过") && readJobComplete(vm) }
                 check(posts.get() == 1)
             }
 
@@ -278,7 +279,7 @@ object CheckInFlowChecks {
             check(posts.get() == 1 && reads.get() == 2)
             await { !vm.checkingIn.value }
             foreground()
-            await { vm.checkInStatus.value.startsWith("今日签到已提交过") }
+            await { vm.checkInStatus.value.startsWith("今日签到已提交过") && readJobComplete(vm) }
             check(posts.get() == 1)
 
             stage = "switching off during a pending read never submits"
@@ -328,16 +329,16 @@ object CheckInFlowChecks {
             await { readJobComplete(vm) }
             check(posts.get() == 0 && Store.checkInAttemptDay() == null)
 
-            stage = "Preview cancels the previous status result"
+            stage = "logout cancels the previous status result"
             reset(Scenario.SUCCESS)
             val previewRead = Gate().also { gates.add(it); missionGate.set(it) }
             foreground()
             check(previewRead.entered.await(8, TimeUnit.SECONDS))
-            test.runOnMainSync { vm.startPreview() }
+            test.runOnMainSync { session.clear(); vm.logout() }
             previewRead.release.countDown()
             await { readJobComplete(vm) }
             check(posts.get() == 0 && Store.checkInAttemptDay() == null)
-            check(vm.checkInStatus.value == "演示模式下不执行签到")
+            check(vm.checkInStatus.value == "登录后检查签到")
 
             stage = "logout immediately cancels pending check-in and late logout preserves replacement session"
             reset(Scenario.SUCCESS)
@@ -532,11 +533,12 @@ object CheckInFlowChecks {
             reset(Scenario.SUCCESS)
             val savedBeforePreview = preferences.all
             test.runOnMainSync {
-                vm.startPreview()
+                session.clear()
+                vm.logout()
                 vm.checkInNow()
             }
             check(reads.get() == 0 && posts.get() == 0 && !vm.checkingIn.value)
-            check(vm.message.value == "演示模式下不执行签到" && preferences.all == savedBeforePreview)
+            check(vm.message.value == "请先登录后再签到" && Store.checkInAttemptDay() == null)
 
             stage = "logout clears attempt and preserves disabled installation preference"
             reset(Scenario.ALREADY)
@@ -548,7 +550,7 @@ object CheckInFlowChecks {
             }
             await { !vm.loggedIn.value && session.token == null }
             check(Store.checkInAttemptDay() == null && !Store.autoCheckIn())
-            result.putString("stream", "PASS: confirmed day persists across VM recreation with zero requests/notices; expiry rechecks; manual bypass; account reset clears cache; default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; unknown 3.1.11 protocol reads status but sends zero POSTs or attempt markers and restores 3.1.10; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and Preview responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
+            result.putString("stream", "PASS: confirmed day persists across VM recreation with zero requests/notices; expiry rechecks; manual bypass; account reset clears cache; default enabled; global success/error notices; manual works with automation off, fresh signed read and explicit retry; unknown 3.1.11 protocol reads status but sends zero POSTs or attempt markers and restores 3.1.10; original absent-week fallback prepares once but strict read-back never fabricates success; failed durable commit blocks auto/manual POST; automatic lock waits; rapid toggle recovery; read-post-confirm; concurrent foreground coalescing; rejection/timeout never auto replay across VM recreation; missing time/reward blocks submit; missing first score account prepares once but never fabricates confirmation; old token and logged-out responses rejected; pending logout cancels check-in and preserves replacement session; logout retains install preference; entirely offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("state", "reads=${reads.get()},posts=${posts.get()},busy=${if (vmCreated) vm.checkingIn.value else false},status=${if (vmCreated) vm.checkInStatus.value else "not initialized"}")
@@ -558,7 +560,7 @@ object CheckInFlowChecks {
             gates.forEach { it.release.countDown() }
             test.runOnMainSync { viewModels.clear() }
             if (fixtureStarted) {
-                Preview.enabled = false
+
                 Store.clearAccount()
                 val editor = preferences.edit()
                 if (originalAuto == null) editor.remove("autoCheckIn") else editor.putBoolean("autoCheckIn", originalAuto)
@@ -573,7 +575,7 @@ object CheckInFlowChecks {
             session.token = originalToken
             session.uid = originalUid
             session.phone = originalPhone
-            Preview.enabled = originalPreview
+
             clientField.set(null, originalClient)
             fixture.dispatcher.executorService.shutdown()
         }

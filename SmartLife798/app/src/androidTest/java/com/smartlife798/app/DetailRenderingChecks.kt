@@ -33,7 +33,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.gson.Gson
 import com.smartlife798.app.core.Api
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.CardOrigin
@@ -96,8 +96,8 @@ object DetailRenderingChecks {
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
             if (!measureOnly) check(android.provider.Settings.Global.getFloat(test.targetContext.contentResolver,
                 android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) >= 6f)
-            val sample = Preview.devices.first()
-            val fixture = Gson().toJson(Preview.detail(sample.id))
+            val sample = FixtureData.devices.first()
+            val fixture = Gson().toJson(FixtureData.detail(sample.id))
             clientField.set(null, OkHttpClient.Builder().addInterceptor { chain ->
                 val body = if (chain.request().url.encodedPath.endsWith("/dev/home/1")) {
                     entered.countDown()
@@ -109,7 +109,7 @@ object DetailRenderingChecks {
             }.build())
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             test.runOnMainSync {
                 val vm = ViewModelProvider(screen)[MainViewModel::class.java]
@@ -171,7 +171,7 @@ object DetailRenderingChecks {
                 tracing = true
             }
             test.runOnMainSync {
-                Preview.enabled = false
+
                 session.token = "offline-render-fixture"
                 session.uid = "preview-user"
                 screen.window.addOnFrameMetricsAvailableListener(listener, Handler(frameThread.looper))
@@ -244,7 +244,7 @@ object DetailRenderingChecks {
             clientField.set(null, originalClient)
             session.token = originalToken
             session.uid = originalUid
-            Preview.enabled = false
+
         }
         test.finish(code, result)
     }

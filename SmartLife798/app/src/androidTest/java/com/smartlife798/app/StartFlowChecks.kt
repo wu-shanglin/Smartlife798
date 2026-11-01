@@ -82,7 +82,7 @@ object StartFlowChecks {
             clientField.set(null, fixture)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             lateinit var vm: MainViewModel
             fun home() = test.runOnMainSync {
@@ -94,7 +94,7 @@ object StartFlowChecks {
                 }
             }
             test.runOnMainSync {
-                Preview.enabled = false
+
                 session.token = "offline-start-fixture"
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 vm.setAppResumed(false)
@@ -156,7 +156,7 @@ object StartFlowChecks {
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 vm.setAppResumed(false)
             }
-            check(vm.pendingStart.value?.deviceId == device.id)
+            await { vm.pendingStart.value?.deviceId == device.id }
             responseMode.set(0)
             state.set(10)
             runBlocking { vm.syncActiveStatus() }
@@ -187,17 +187,14 @@ object StartFlowChecks {
                 check(vm.startDevice(device, 21, "") is Res.Fail)
             }
             check(Store.active() == null && Store.pendingStart() == null)
-            stage = "preview does not write or send"
-            val activeBefore = Store.activeUsageJson
-            val pendingBefore = Store.pendingStart()
-            test.runOnMainSync { vm.startPreview() }
+            stage = "logged-out commands do not send"
+            test.runOnMainSync { session.clear(); vm.logout() }
             runBlocking {
-                check(vm.startDevice(device, 21, "") is Res.Ok)
-                check(vm.stopDevice(device) is Res.Ok)
+                check(vm.startDevice(device, 21, "") is Res.Fail)
+                check(vm.stopDevice(device) is Res.Fail)
             }
-            check(Store.activeUsageJson == activeBefore && Store.pendingStart() == pendingBefore)
-            check(calls.get() == 3)
-            result.putString("stream", "PASS: pending/running home cards, cross-entry exclusion, page cancellation, foreign/incomplete reads, detail end reconciliation, unknown start recovery after recreation, no foreign adoption, logout drops late response, preview isolation\n")
+            check(Store.active() == null && Store.pendingStart() == null && calls.get() == 3)
+            result.putString("stream", "PASS: pending/running home cards, cross-entry exclusion, page cancellation, foreign/incomplete reads, detail end reconciliation, unknown start recovery after recreation, no foreign adoption, logout drops late response, logout isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
@@ -206,7 +203,7 @@ object StartFlowChecks {
             releaseRead.countDown()
             releaseStale.countDown()
             test.runOnMainSync { activity?.finish() }
-            Preview.enabled = false
+
             if (fixtureStarted) Store.clearAccount()
             session.token = originalToken
             clientField.set(null, originalClient)

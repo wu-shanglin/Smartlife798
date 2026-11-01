@@ -44,6 +44,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.sync.Mutex
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -96,8 +98,8 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     val payRequest by vm.payRequest.collectAsStateWithLifecycle()
 
     // Land on the cloud records; "使用中" is one tap away when a session exists.
-    var tab by remember { mutableStateOf(1) }
-    var filter by remember { mutableStateOf(OrderFilter.ALL) }
+    var tab by rememberSaveable { mutableStateOf(1) }
+    var filter by rememberSaveable { mutableStateOf(OrderFilter.ALL) }
     var bills by remember { mutableStateOf<List<Bill>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -108,30 +110,30 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     var loadingMore by remember { mutableStateOf(false) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
 
+    val billLoad = remember { Mutex() }
     suspend fun loadBills(reset: Boolean) {
-        if (reset) {
-            page = 1
-            endReached = false
-            loading = bills.isEmpty()
-        } else {
-            loadingMore = true
-        }
-        error = null
-        when (val res = vm.bills(page = page, size = 20)) {
-            is Res.Ok -> {
-                val list = res.data.orEmpty()
-                bills = if (reset) list else bills + list
-                if (list.size < 20) endReached = true
+        if (reset) billLoad.lock() else if (!billLoad.tryLock()) return
+        try {
+            val requestedPage = if (reset) 1 else page + 1
+            if (reset) loading = bills.isEmpty() else loadingMore = true
+            error = null
+            when (val res = vm.bills(page = requestedPage, size = 20)) {
+                is Res.Ok -> {
+                    val list = res.data.orEmpty()
+                    bills = (if (reset) list else bills + list).distinctBy { it.id }
+                    page = requestedPage
+                    endReached = list.size < 20
+                }
+                is Res.Fail -> {
+                    error = res.msg
+                    if (bills.isNotEmpty()) vm.notify("加载失败：${res.msg}")
+                }
             }
-            is Res.Fail -> {
-                error = res.msg
-                // Keep showing the cached rows, but say the refresh failed instead
-                // of silently presenting stale data as current.
-                if (bills.isNotEmpty()) vm.notify("刷新失败：${res.msg}")
-            }
+        } finally {
+            loading = false
+            loadingMore = false
+            billLoad.unlock()
         }
-        loading = false
-        loadingMore = false
     }
 
     // Bills plus the local session: the 「进行中」 card must not survive a refresh
@@ -188,7 +190,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                         if (unpaidBadge > 0) {
                             Spacer(Modifier.width(8.dp))
                             Badge(containerColor = MaterialTheme.colorScheme.error) {
-                                Text("$unpaidBadge 笔待付")
+                                Text("已发现 $unpaidBadge 笔待付")
                             }
                         }
                     }
@@ -278,12 +280,12 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                         EmptyState(
                             when (filter) {
                                 OrderFilter.UNPAID -> "没有待付款账单"
-                                OrderFilter.DONE -> "还没有已完成的订单"
+                                OrderFilter.DONE -> "已加载记录中暂无已完成订单"
                                 OrderFilter.ALL -> "暂无消费记录"
                             },
                             when (filter) {
-                                OrderFilter.UNPAID -> "当前账号没有未付款或付款失败的订单。"
-                                OrderFilter.DONE -> "设备结算完成后，已付款订单会显示在这里。"
+                                OrderFilter.UNPAID -> if (endReached) "已加载账单中没有待付款记录。" else "已加载账单中暂无匹配，请继续加载更多记录。"
+                                OrderFilter.DONE -> if (endReached) "已加载账单中没有已完成记录。" else "请继续加载查看更早记录。"
                                 OrderFilter.ALL -> "使用设备并完成结算后，云端订单会显示在这里。"
                             },
                         )
@@ -316,6 +318,10 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                 onPay = { payTarget = bill },
                             )
                         }
+
+                    }
+                }
+                if (bills.isNotEmpty()) {
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -332,7 +338,6 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                         shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                                         enabled = !loadingMore,
                                         onClick = {
-                                            page += 1
                                             scope.launch { loadBills(false) }
                                         },
                                     ) { Text(if (loadingMore) "加载中…" else "加载更多") }
@@ -350,14 +355,14 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                         }
                         item {
                             Text(
-                                "云端订单：${Api.BASE_URL}/api/v1/bill/lst-owner · " +
+                                "以下统计仅覆盖已加载记录 · " +
                                     "已加载 ${bills.size} 条（未付款 $unpaid / 已完成 $done）",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    }
                 }
+
             }
         }
     }
