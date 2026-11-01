@@ -16,7 +16,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.MeScreen
@@ -56,7 +56,7 @@ object ProfileRefreshChecks {
         val otherCalls = AtomicInteger()
         val walletGate = AtomicReference<CountDownLatch?>()
         val walletEntered = CountDownLatch(1)
-        val fixture = originalClient.newBuilder().addInterceptor { chain ->
+        val fixture = originalClient.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
             check(chain.request().header("Authorization") == TOKEN)
             check(chain.request().method == "GET")
             val body = when (chain.request().url.encodedPath) {
@@ -93,13 +93,13 @@ object ProfileRefreshChecks {
             clientField.set(null, fixture)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             lateinit var vm: MainViewModel
             test.runOnMainSync {
                 screen.setContent { }
                 screen.viewModelStore.clear()
-                Preview.enabled = false
+
                 Store.saveAutoCheckIn(false)
                 session.saveLogin(LoginInfo(token = TOKEN, uid = UID), "")
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
@@ -181,27 +181,28 @@ object ProfileRefreshChecks {
             stage = "Preview and account change discard the prior page refresh epoch"
             val installedDeveloperMode = Store.developerToolsEnabled()
             test.runOnMainSync {
-                vm.startPreview()
+                session.clear()
+                vm.logout()
                 vm.setDeveloperToolsEnabled(!installedDeveloperMode)
             }
-            check(Store.developerToolsEnabled() == installedDeveloperMode)
+            check(Store.developerToolsEnabled() == !installedDeveloperMode)
             val beforePreview = counts()
             test.runOnMainSync { check(vm.refreshMePage(force = true) == null) }
             check(counts() == beforePreview)
             test.runOnMainSync {
                 screen.setContent { }
                 vm.logout()
-                check(vm.developerToolsEnabled.value == installedDeveloperMode)
+                check(vm.developerToolsEnabled.value == !installedDeveloperMode)
                 session.saveLogin(LoginInfo(token = TOKEN, uid = UID), "")
                 vm.refreshMePage()
             }
             await { counts() == listOf(4, 4, 4, 0) && !vm.checkingIn.value }
-            result.putString("stream", "PASS: first Me entry reads once; delayed navigation ticks and three remounts make zero extra reads; one foreground change refreshes once; explicit refresh waits for gated wallet and coalesces duplicate entry; account change invalidates and Preview performs no requests; only terminal offline GET fixtures, no score-send/bill/device writes\n")
+            result.putString("stream", "PASS: first Me entry reads once; delayed navigation ticks and three remounts make zero extra reads; one foreground change refreshes once; explicit refresh waits for gated wallet and coalesces duplicate entry; account change invalidates and logged-out page performs no requests; only terminal offline GET fixtures, no score-send/bill/device writes\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             val frame = error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; counts=${counts()}; " +
-                "tickBefore=$tickAtForeground,tickNow=${currentTick()},preview=${Preview.enabled}," +
+                "tickBefore=$tickAtForeground,tickNow=${currentTick()},preview=${false}," +
                 "loggedIn=${session.isLoggedIn},activityState=${activity?.lifecycle?.currentState}," +
                 "source=${frame?.fileName}:${frame?.lineNumber}\n")
         } finally {
@@ -213,7 +214,7 @@ object ProfileRefreshChecks {
                     it.finish()
                 }
             }
-            Preview.enabled = false
+
             if (started) {
                 session.clear()
                 val editor = preferences.edit()

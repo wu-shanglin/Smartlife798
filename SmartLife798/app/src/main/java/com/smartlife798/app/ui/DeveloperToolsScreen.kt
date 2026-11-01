@@ -41,7 +41,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.smartlife798.app.BuildConfig
 import com.smartlife798.app.core.NfcCaptureLog
 import com.smartlife798.app.core.NfcDiagnosticReader
-import com.smartlife798.app.core.Preview
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -88,7 +87,7 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
             NfcDiagnosticReader(owner) { tag ->
                 // Reader callbacks arrive on a binder thread; serialize state changes on Main.
                 scope.launch {
-                    if (!active || busy || Preview.enabled) return@launch
+                    if (!active || busy) return@launch
                     busy = true
                     capture = scope.launch {
                         try {
@@ -119,7 +118,7 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
         }
     }
     LaunchedEffect(enabled) {
-        if (enabled && !Preview.enabled) {
+        if (enabled) {
             try { records = NfcCaptureLog.read(context) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { status = "暂时无法读取记录" }
@@ -136,13 +135,13 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("点击开始后保持本页前台再碰卡。离开本页或锁屏会停止采集；返回后需重新开始。")
             Text("原始 NDEF 内容只保存在本机，不自动打开链接或启停设备。导出文件包含卡片原始链接与参数。")
-            Text(if (Preview.enabled) "演示模式不读取或保存 NFC" else if (!enabled) "开发者工具已关闭" else status)
-            Button(enabled = enabled && !Preview.enabled && reader != null && !active,
+            Text(if (!enabled) "开发者工具已关闭" else status)
+            Button(enabled = enabled && reader != null && !active,
                 onClick = { status = reader?.start().orEmpty(); active = reader?.isActive() == true }) {
                 Text("开始采集")
             }
             OutlinedButton(enabled = active, onClick = ::stop) { Text("停止采集") }
-            OutlinedButton(enabled = enabled && !Preview.enabled && records.isNotBlank() && !busy,
+            OutlinedButton(enabled = enabled && records.isNotBlank() && !busy,
                 onClick = {
                     stop()
                     scope.launch {
@@ -158,7 +157,7 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
                         catch (_: Exception) { status = "暂时无法分享，请稍后重试" }
                     }
                 }) { Text("导出原始 NFC 记录") }
-            TextButton(enabled = enabled && !Preview.enabled && records.isNotBlank() && !busy, onClick = {
+            TextButton(enabled = enabled && records.isNotBlank() && !busy, onClick = {
                 stop()
                 scope.launch {
                     try { NfcCaptureLog.clear(context); records = ""; status = "记录已清空" }

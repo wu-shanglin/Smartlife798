@@ -63,6 +63,15 @@ android {
         }
     }
 
+    buildTypes.create("performance") {
+        initWith(buildTypes.getByName("release"))
+        isDebuggable = false
+        signingConfig = signingConfigs.getByName("debug")
+        matchingFallbacks += "release"
+    }
+
+    testBuildType = if (providers.gradleProperty("performanceTests").orNull == "true") "performance" else "debug"
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

@@ -9,7 +9,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.Api
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.DeviceDetailScreen
@@ -76,13 +76,13 @@ object EndFlowChecks {
             replaced = true
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             test.waitForIdleSync()
             val screen = activity
             lateinit var vm: MainViewModel
             fun render() {
                 test.runOnMainSync {
-                    Preview.enabled = false
+
                     session.token = "offline-end-fixture"
                     session.uid = "offline-end-user"
                     vm = ViewModelProvider(screen)[MainViewModel::class.java]
@@ -130,26 +130,21 @@ object EndFlowChecks {
             check(enabled(test, "结束使用并结算"))
             check(endCalls.get() == 2)
 
-            stage = "preview isolation and standby refresh"
-            val persisted = Store.active()
-            test.runOnMainSync { vm.startPreview() }
+            stage = "logout prevents another end command"
             val before = endCalls.get()
+            test.runOnMainSync { session.clear(); vm.logout() }
             kotlinx.coroutines.runBlocking {
-                val sample = Preview.devices.first()
-                check(vm.stopDevice(sample) is com.smartlife798.app.core.Res.Ok)
-                val detail = vm.loadDevice(sample.id) as com.smartlife798.app.core.Res.Ok
-                check(detail.data?.device?.geneStatus == 99)
-                check(vm.pollDevice(sample.id, sample) is com.smartlife798.app.core.Res.Ok)
+                check(vm.stopDevice(FixtureData.devices.first()) is com.smartlife798.app.core.Res.Fail)
             }
-            check(Store.active() == persisted && endCalls.get() == before)
-            result.putString("stream", "PASS: delayed standby without stop-button rebound, duplicate tap, late full response, server rejection, preview no-request/no-account-write\n")
+            check(Store.active() == null && endCalls.get() == before)
+            result.putString("stream", "PASS: delayed standby without stop-button rebound, duplicate tap, late full response, server rejection, logout rejects further commands\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
         } finally {
             releaseFull.countDown()
             test.runOnMainSync { activity?.finish() }
-            Preview.enabled = false
+
             session.token = originalToken
             session.uid = originalUid
             if (replaced) clientField.set(null, originalClient)

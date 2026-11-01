@@ -1,9 +1,10 @@
 package com.smartlife798.app
 
+import androidx.activity.compose.setContent
 import android.app.Activity
 import android.app.Instrumentation
 import android.os.Bundle
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.UpdatePackage
 import com.smartlife798.app.core.UpdatePolicy
 import java.io.File
@@ -12,15 +13,49 @@ import java.io.File
 class UpdateInstallInstrumentation : Instrumentation() {
     private var expectedHash = ""
     private var mode = ""
+    private var collectProfile = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         expectedHash = arguments?.getString("sha256").orEmpty()
         mode = arguments?.getString("mode").orEmpty()
+        collectProfile = arguments?.getString("collectProfile") == "true"
+        check(targetContext.packageName.endsWith(".offline")) { "Use the isolated offline test package" }
+        OfflineTransport.install(originalVersionLive = mode == "original-live")
         start()
     }
 
+    override fun callActivityOnCreate(activity: Activity, state: Bundle?) {
+        val appRoot = mode in setOf("ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
+        if (appRoot && activity.intent?.getBooleanExtra("offlineFixture", false) == true) {
+            ServiceLocator.init(activity)
+            com.smartlife798.app.core.Store.saveAutoCheckIn(false)
+            com.smartlife798.app.core.session.token = "offline-ui-token"
+            com.smartlife798.app.core.session.uid = "preview-user"
+        }
+        super.callActivityOnCreate(activity, state)
+        if (!appRoot && activity is MainActivity && mode !in setOf("update-ui", "forced-exit")) {
+            activity.setContent { }
+        }
+    }
+
+    override fun finish(resultCode: Int, results: Bundle) {
+        if (collectProfile && resultCode == Activity.RESULT_OK) {
+            android.os.SystemClock.sleep(5_000L)
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(
+                "am broadcast -a androidx.profileinstaller.action.SAVE_PROFILE -n ${targetContext.packageName}/androidx.profileinstaller.ProfileInstallReceiver"
+            )).use { it.readBytes() }
+            android.os.SystemClock.sleep(1_000L)
+        }
+        super.finish(resultCode, results)
+    }
+
     override fun onStart() {
+        if (mode == "login-init") { LoginInitializationChecks.run(this); return }
+        if (mode == "transactions") { TransactionChecks.run(this); return }
+        if (mode == "wx-callback") { WxCallbackChecks.run(this); return }
+        if (mode == "recovery") { RecoveryChecks.run(this); return }
+
         if (mode == "refresh") {
             RefreshChecks.run(this)
             return
@@ -148,18 +183,8 @@ class UpdateInstallInstrumentation : Instrumentation() {
             check(intent.data?.scheme == "content")
             check(intent.data?.authority == "${targetContext.packageName}.updates")
             check(intent.flags and android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
-            Preview.enabled = true
-            stage = "preview"
-            var previewRejected = false
-            try {
-                UpdatePackage.installIntent(targetContext, apk)
-            } catch (_: IllegalStateException) {
-                previewRejected = true
-            } finally {
-                Preview.enabled = false
-            }
-            check(previewRejected)
-            result.putString("stream", "PASS: APK hash/package/version/signature, mismatches, FileProvider URI and preview install isolation\n")
+
+            result.putString("stream", "PASS: APK hash/package/version/signature, mismatches, FileProvider URI\n")
             finish(Activity.RESULT_OK, result)
         } catch (error: Exception) {
             val reason = (error as? com.smartlife798.app.core.UpdateVerificationException)?.reason?.name.orEmpty()

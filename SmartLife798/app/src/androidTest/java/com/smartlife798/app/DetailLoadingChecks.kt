@@ -9,7 +9,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.lifecycle.ViewModelProvider
 import com.google.gson.Gson
 import com.smartlife798.app.core.Api
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
@@ -39,17 +39,17 @@ object DetailLoadingChecks {
         var replaced = false
         try {
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
-            val sample = Preview.devices.first()
+            val sample = FixtureData.devices.first()
             val fixture = OkHttpClient.Builder().addInterceptor { chain ->
                 val body = when {
                     chain.request().url.encodedPath.endsWith("/dev/home/1") -> {
                         reads.incrementAndGet()
                         entered.countDown()
                         check(release.await(20, TimeUnit.SECONDS))
-                        """{"code":0,"data":${Gson().toJson(Preview.detail(sample.id))}}"""
+                        """{"code":0,"data":${Gson().toJson(FixtureData.detail(sample.id))}}"""
                     }
                     chain.request().url.encodedPath.endsWith("/master") ->
-                        """{"code":0,"data":{"favos":${Gson().toJson(Preview.devices)}}}"""
+                        """{"code":0,"data":{"favos":${Gson().toJson(FixtureData.devices)}}}"""
                     else -> """{"code":0,"data":[]}"""
                 }
                 Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
@@ -59,7 +59,7 @@ object DetailLoadingChecks {
             replaced = true
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             stage = "open source list in preview"
             // A selected tab no longer exposes a redundant click action in Compose 1.10.
             // A Devices startup preference already satisfies this navigation precondition.
@@ -72,7 +72,7 @@ object DetailLoadingChecks {
             // Let source refresh settle before testing the destination's own navigation tick.
             Thread.sleep(800)
             test.runOnMainSync {
-                Preview.enabled = false
+
                 session.token = "offline-detail-fixture"
                 session.uid = "preview-user"
             }
@@ -116,7 +116,7 @@ object DetailLoadingChecks {
             if (replaced) field.set(null, original)
             session.token = originalToken
             session.uid = originalUid
-            Preview.enabled = false
+
         }
         test.finish(code, result)
     }

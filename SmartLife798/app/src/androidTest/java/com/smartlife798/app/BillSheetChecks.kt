@@ -16,7 +16,7 @@ import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Bill
 import com.smartlife798.app.core.BillDetail
 import com.smartlife798.app.core.BillStatus
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Product
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
@@ -49,7 +49,7 @@ object BillSheetChecks {
         val measurements = mutableListOf<String>()
         var overflowSelections = 0
         val short = Bill(id = "offline-short", msg = "短账单夹具", status = BillStatus.PAID, payment = 1.0)
-        val long = Preview.bills().first().copy(
+        val long = FixtureData.bills().first().copy(
             id = "offline-long", msg = "长账单夹具", status = BillStatus.UNPAID,
             note = "长备注用于验证换行与滚动。".repeat(16),
             prds = (1..18).map { Product(name = "商品明细 $it：离线测试长商品名称", count = 2, curPrice = 0.5) },
@@ -88,10 +88,10 @@ object BillSheetChecks {
             }.build())
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             test.runOnMainSync {
-                Preview.enabled = false
+
                 session.token = "offline-bill-fixture"
                 val vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 screen.setContent { SmartLifeTheme { OrdersScreen(vm) { _, _ -> } } }
@@ -130,10 +130,11 @@ object BillSheetChecks {
                     screenshot(test, "bill-payment.png")
                     check(channels.get() == 2 && writes.get() == 0)
                 }
+                stage = "Back closes sheet for $label"
                 test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 await { find(test, "账单详情") == null && find(test, "支付账单") == null && find(test, "短账单夹具") != null }
             }
-            stage = "reopen and preview isolation"
+            stage = "reopen and logout isolation"
             click(test, "短账单夹具")
             await { find(test, "账单详情") != null }
             stableTitle(test, "账单详情", measurements)
@@ -145,12 +146,14 @@ object BillSheetChecks {
             result.putString("stream", "PASS: rapid taps coalesce, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
-            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; reads=${details.get()}, channels=${channels.get()}, writes=${writes.get()}; ${measurements.joinToString()}\n")
+            screenshot(test, "bill-sheet-failure.png")
+            result.putString("visible", nodes(root(test)).filter { it.isVisibleToUser }.mapNotNull { it.text?.toString() }.joinToString(" | "))
+            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}:${error.message}; source=${error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }}; reads=${details.get()}, channels=${channels.get()}, writes=${writes.get()}; ${measurements.joinToString()}; visible=${nodes(root(test)).filter { it.isVisibleToUser }.mapNotNull { it.text?.toString() }.joinToString(" | ")}\n")
         } finally {
             test.runOnMainSync { activity?.finish() }
             clientField.set(null, originalClient)
             session.token = originalToken
-            Preview.enabled = false
+
         }
         test.finish(code, result)
     }
@@ -167,7 +170,7 @@ object BillSheetChecks {
         check(spread <= 1)
         val window = root(test) ?: error("missing sheet window")
         val pane = nodes(window).firstOrNull { it.paneTitle != null } ?: error("missing sheet pane")
-        check(kotlin.math.abs(bounds(pane).bottom - bounds(window).bottom) <= 1)
+        check(kotlin.math.abs(bounds(pane).bottom - bounds(window).bottom) <= 1) { "pane=${bounds(pane)},window=${bounds(window)}" }
         return samples.last()
     }
 
@@ -179,6 +182,7 @@ object BillSheetChecks {
 
     private fun root(test: Instrumentation): AccessibilityNodeInfo? {
         if (android.os.Build.VERSION.SDK_INT >= 33) test.uiAutomation.clearCache()
+        else test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo
         return test.uiAutomation.rootInActiveWindow
     }
 

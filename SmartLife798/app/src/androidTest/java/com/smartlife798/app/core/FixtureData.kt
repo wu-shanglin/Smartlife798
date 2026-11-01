@@ -1,12 +1,7 @@
 package com.smartlife798.app.core
 
-/**
- * UI preview data. It exists ONLY to review the redesigned screens without a
- * real account; every screen shows a banner while it is active and no value is
- * ever sent to, or read from, the server.
- */
-object Preview {
-    @Volatile var enabled: Boolean = false
+/** Static data for the isolated instrumentation APK; never packaged in the application. */
+object FixtureData {
 
     val profile = StoredProfile(
         id = "preview-user",

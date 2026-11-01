@@ -10,7 +10,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.UpdatePackage
 import com.smartlife798.app.core.UpdatePolicy
@@ -51,7 +51,7 @@ object UpdateProgressChecks {
             replaced = true
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             test.waitForIdleSync()
             val screen = activity
             lateinit var vm: MainViewModel
@@ -60,7 +60,7 @@ object UpdateProgressChecks {
                 (1..45).joinToString("\n") { "更新说明 $it：优化设备详情加载与应用更新体验。" }, "a".repeat(64))
             test.runOnMainSync {
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
-                Preview.enabled = false
+
                 val policyField = MainViewModel::class.java.getDeclaredField("_updatePolicy").apply { isAccessible = true }
                 @Suppress("UNCHECKED_CAST")
                 (policyField.get(vm) as MutableStateFlow<UpdatePolicy?>).value = policy
@@ -119,7 +119,7 @@ object UpdateProgressChecks {
             test.runOnMainSync { activity?.finish() }
             test.waitForIdleSync()
             if (replaced) field.set(null, original)
-            Preview.enabled = false
+
         }
         test.finish(code, result)
     }

@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.lifecycle.ViewModelProvider
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Appearance
 import com.smartlife798.app.core.ThemeMode
 import com.smartlife798.app.core.StartupPage
@@ -34,16 +34,16 @@ object UxFlowChecks {
             accountFree = true
             for (page in StartupPage.entries) {
                 stage = "persist $page across account cleanup"
-                Preview.enabled = false
+
                 Store.saveStartupPage(page)
                 Store.clearAccount()
                 check(Store.startupPage() == page)
                 stage = "launch $page"
                 activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    .putExtra("preview", true)) as MainActivity
+                    .putExtra("offlineFixture", true)) as MainActivity
                 await(test, if (page == StartupPage.HOME) "扫码即刻使用" else "我的设备")
-                check(text(test).contains("演示模式"))
+                check(!text(test).contains("演示模式"))
                 stage = "open settings and retain the wallet metric"
                 click(test, "我的")
                 await(test, "36.50")
@@ -58,7 +58,7 @@ object UxFlowChecks {
                     val vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
                     check(vm.startupPage.value != page)
                 }
-                check(Store.startupPage() == page) // preview choice is in-memory only
+                check(Store.startupPage() != page)
                 if (!settingsOnly) {
                     stage = "wallet open and return"
                     scrollToTop(test)
@@ -96,7 +96,7 @@ object UxFlowChecks {
                 await(test, "启动页面", present = false)
                 stage = "settings survive background"
                 android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
-                    "am start -W -n ${test.targetContext.packageName}/com.smartlife798.app.MainActivity --ez preview true --activity-single-top",
+                    "am start -W -n ${test.targetContext.packageName}/com.smartlife798.app.MainActivity --ez offlineFixture true --activity-single-top",
                 )).use { it.readBytes() }
                 await(test, "启动页面")
                 stage = "settings survive recreation"
@@ -119,24 +119,24 @@ object UxFlowChecks {
                     }
                     stage = "reveal appearance choices"
                     reveal(test, "跟随系统")
-                    stage = "dark selection preview isolation"
+                    stage = "dark selection logout isolation"
                     click(test, "深色")
                     test.runOnMainSync { check(Appearance.mode.value == ThemeMode.DARK) }
-                    check(Store.themeModeName() == theme)
-                    stage = "light selection preview isolation"
+                    check(Store.themeModeName() == Appearance.mode.value.name)
+                    stage = "light selection logout isolation"
                     click(test, "浅色")
                     test.runOnMainSync { check(Appearance.mode.value == ThemeMode.LIGHT) }
-                    check(Store.themeModeName() == theme)
-                    stage = "system selection preview isolation"
+                    check(Store.themeModeName() == Appearance.mode.value.name)
+                    stage = "system selection logout isolation"
                     click(test, "跟随系统")
                     test.runOnMainSync { check(Appearance.mode.value == ThemeMode.SYSTEM) }
                     if (android.os.Build.VERSION.SDK_INT >= 31) {
                         stage = "reveal dynamic color"
                         reveal(test, "动态取色")
-                        stage = "dynamic color preview isolation"
+                        stage = "dynamic color logout isolation"
                         click(test, "动态取色开关")
                         test.runOnMainSync { check(Appearance.dynamicColor.value != dynamicColor) }
-                        check(Store.dynamicColor() == dynamicColor)
+                        check(Store.dynamicColor() == Appearance.dynamicColor.value)
                         test.runOnMainSync { Appearance.setDynamicColor(dynamicColor) }
                     } else {
                         stage = "dynamic color unavailable before Android 12"
@@ -162,8 +162,8 @@ object UxFlowChecks {
             stage = "installation cache isolation"
             check(Store.updatePolicyJson == policy && Store.originalAppVersion == protocol)
             result.putString("stream", if (settingsOnly)
-                "PASS: settings-only startup choices, retention, background/recreation, appearance selection/toggle and preview/cache isolation\n"
-            else "PASS: both startup routes, account cleanup retention, preview preference isolation, no settings jump, wallet open/back, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
+                "PASS: settings-only startup choices, retention, background/recreation, appearance selection/toggle and installation preference persistence\n"
+            else "PASS: both startup routes, account cleanup retention, installation preference persistence, no settings jump, wallet open/back, tabs/detail/back, search/clear, settings recreation, appearance selection/toggle and installation cache isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             if (accountFree) test.uiAutomation.takeScreenshot()?.let { bitmap ->
@@ -175,7 +175,7 @@ object UxFlowChecks {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; source=${frame?.fileName}:${frame?.lineNumber}\n")
         } finally {
             test.runOnMainSync { activity?.finish() }
-            Preview.enabled = false
+
             if (accountFree) Store.saveStartupPage(original)
             if (accountFree) test.runOnMainSync { Appearance.restore() }
         }

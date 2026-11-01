@@ -13,7 +13,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.google.gson.JsonParser
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StoredProfile
@@ -59,7 +59,7 @@ object CheckInUiChecks {
         val originalToken = session.token
         val originalUid = session.uid
         val originalPhone = session.phone
-        val originalPreview = Preview.enabled
+
         val preferences = test.targetContext.getSharedPreferences("smartlife798", Context.MODE_PRIVATE)
         val originalAuto = preferences.all["autoCheckIn"] as? Boolean
         val originalStartup = preferences.all["startupPage"] as? String
@@ -71,7 +71,7 @@ object CheckInUiChecks {
         val unknown = Collections.synchronizedList(mutableListOf<String>())
         val postGate = AtomicReference<Gate?>()
         val gates = mutableListOf<Gate>()
-        val fixture = originalClient.newBuilder().dispatcher(Dispatcher()).addInterceptor { chain ->
+        val fixture = originalClient.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.dispatcher(Dispatcher()).addInterceptor { chain ->
             val request = chain.request()
             calls.incrementAndGet()
             check(request.header("Authorization") == TOKEN)
@@ -141,7 +141,7 @@ object CheckInUiChecks {
             clientField.set(null, fixture)
             val autoPost = Gate().also { gates.add(it); postGate.set(it) }
             test.runOnMainSync {
-                Preview.enabled = false
+
                 Store.saveAutoCheckIn(true)
                 Store.saveStartupPage(StartupPage.HOME)
                 session.saveLogin(LoginInfo(token = TOKEN, uid = UID), "")
@@ -154,14 +154,14 @@ object CheckInUiChecks {
             val screen = activity ?: error("MainActivity unavailable")
             lateinit var vm: MainViewModel
             test.runOnMainSync { vm = ViewModelProvider(screen)[MainViewModel::class.java] }
-            check(!screen.intent.getBooleanExtra("preview", false) && !Preview.enabled)
+            check(!screen.intent.getBooleanExtra("preview", false))
             check(autoPost.entered.await(8, TimeUnit.SECONDS))
             await { find(test, "扫码即刻使用") != null }
             autoPost.release.countDown()
             stage = "automatic success Snackbar is visible on Home"
             await { find(test, "自动签到成功") != null && !vm.checkingIn.value }
             check(posts.get() == 1 && vm.checkInStatus.value == "今日已自动签到")
-            check(find(test, "扫码即刻使用") != null && !Preview.enabled)
+            check(find(test, "扫码即刻使用") != null)
             await { find(test, "我的") != null }
             val noticeBounds = android.graphics.Rect().also { find(test, "自动签到成功")!!.getBoundsInScreen(it) }
             val navBounds = android.graphics.Rect().also { actionNode(test, "我的").getBoundsInScreen(it) }
@@ -228,7 +228,7 @@ object CheckInUiChecks {
                     matches(test, vm.checkInStatus.value).size >= 2
             }
             check(posts.get() == beforeFailure + 1 && actionNode(test, "签到").isEnabled)
-            check(!vm.autoCheckIn.value && !Store.autoCheckIn() && !Preview.enabled)
+            check(!vm.autoCheckIn.value && !Store.autoCheckIn())
             capture(test, "check-in-ui-rejected.png")
             stage = "full-screen wallet feedback remains above system navigation"
             signed.set(true)
@@ -278,7 +278,7 @@ object CheckInUiChecks {
                 }
             }
             if (fixtureStarted) {
-                Preview.enabled = false
+
                 Store.clearAccount()
                 val editor = preferences.edit()
                 if (originalAuto == null) editor.remove("autoCheckIn") else editor.putBoolean("autoCheckIn", originalAuto)
@@ -291,7 +291,7 @@ object CheckInUiChecks {
             session.token = originalToken
             session.uid = originalUid
             session.phone = originalPhone
-            Preview.enabled = originalPreview
+
             clientField.set(null, originalClient)
             fixture.dispatcher.executorService.shutdown()
         }

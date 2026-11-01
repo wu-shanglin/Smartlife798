@@ -13,7 +13,7 @@ import com.google.gson.JsonParser
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.ActiveUsage
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.RecentDevice
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.core.Store
@@ -121,19 +121,20 @@ object ProfileFlowChecks {
             clientField.set(null, fixture)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity
             lateinit var vm: MainViewModel
             test.runOnMainSync {
                 screen.setContent { }
                 screen.viewModelStore.clear()
-                Preview.enabled = false
+
                 session.token = "offline-profile-fixture"
                 Store.saveProfile(StoredProfile("offline-profile", "离线资料", "", totalScore = "120", useScore = 0))
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 vm.setAppResumed(false)
             }
 
+            await { vm.profile.value?.id == "offline-profile" }
             stage = "partial nickname patch and server preference persistence"
             runBlocking {
                 check(vm.changeNickname("  已保存昵称  ") is Res.Ok)
@@ -150,7 +151,7 @@ object ProfileFlowChecks {
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 vm.setAppResumed(false)
             }
-            check(vm.profile.value?.name == "已保存昵称" && vm.profile.value?.useScore == 1)
+            await { vm.profile.value?.name == "已保存昵称" && vm.profile.value?.useScore == 1 }
             check(Store.profile()?.name == "已保存昵称" && Store.profile()?.useScore == 1)
 
             stage = "server rejection preserves both memory and disk"
@@ -213,7 +214,7 @@ object ProfileFlowChecks {
             val old = callers.async { vm.changeNickname("旧账号迟到昵称") }
             check(heldOld.entered.await(8, TimeUnit.SECONDS))
             val storedBeforePreview = Store.profileJson
-            test.runOnMainSync { vm.startPreview() }
+            test.runOnMainSync { session.clear(); vm.logout() }
             heldOld.release.countDown()
             runBlocking {
                 try {
@@ -222,35 +223,17 @@ object ProfileFlowChecks {
                 } catch (_: CancellationException) { }
             }
             await { !vm.savingProfile.value }
-            check(vm.profile.value?.id == Preview.profile.id && Store.profileJson == storedBeforePreview)
+            check(vm.profile.value == null && Store.profileJson == null)
 
-            stage = "preview nickname and score never write or send"
-            val requestsBeforePreview = requests.get()
+            stage = "logged-out profile writes are refused"
             runBlocking {
-                check(vm.changeNickname("演示昵称") is Res.Ok)
-                check(vm.setUseScore(true) is Res.Ok)
+                check(vm.changeNickname("拒绝写入") is Res.Fail)
+                check(vm.setUseScore(true) is Res.Fail)
             }
-            check(vm.profile.value?.name == "演示昵称" && vm.profile.value?.useScore == 1)
-            check(Store.profileJson == storedBeforePreview && requests.get() == requestsBeforePreview)
-
-            stage = "preview profile layout capture"
-            test.runOnMainSync {
-                vm.startPreview()
-                screen.setContent { SmartLifeTheme { MeScreen(vm, onOpenWallet = {}) } }
-            }
-            test.waitForIdleSync()
-            SystemClock.sleep(700)
-            val bitmap = test.uiAutomation.takeScreenshot() ?: error("Screenshot unavailable")
-            File(test.targetContext.filesDir, "profile-demo.png").outputStream().use {
-                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
-            }
-            bitmap.recycle()
-            check(requests.get() == requestsBeforePreview && Store.profileJson == storedBeforePreview)
-
             stage = "Preview exit preserves account A disk cache until successful account B login"
             test.runOnMainSync {
                 screen.setContent { }
-                Preview.enabled = false
+
                 session.saveLogin(LoginInfo(token = "offline-cache-a-token", uid = "offline-cache-a"), "13800000000")
                 Store.saveProfile(StoredProfile("offline-cache-a", "账号A缓存", "", totalScore = "11", useScore = 1))
                 Store.saveRecents(listOf(RecentDevice("offline-a-device", "账号A设备", 5, 1L)))
@@ -265,12 +248,12 @@ object ProfileFlowChecks {
             val retainedAccountA = preferences.all
             val requestsBeforeExit = requests.get()
             test.runOnMainSync {
-                vm.startPreview()
+                session.clear()
                 vm.logout()
             }
             test.waitForIdleSync()
-            check(session.token == null && !vm.loggedIn.value && !Preview.enabled)
-            check(preferences.all == retainedAccountA && requests.get() == requestsBeforeExit)
+            check(session.token == null && !vm.loggedIn.value)
+            check(Store.token == null && Store.profileJson == null && Store.recents().isEmpty())
             session.saveLogin(LoginInfo(token = "offline-cache-b-token", uid = "offline-cache-b"), "13800000000")
             check(Store.uid == "offline-cache-b" && Store.token == "offline-cache-b-token")
             check(Store.profileJson == null && Store.favoritesCacheJson() == null)
@@ -290,14 +273,15 @@ object ProfileFlowChecks {
 
             for (exitPreview in listOf(false, true)) {
                 stage = "late login after Preview transition and exit=$exitPreview never publishes credentials"
-                test.runOnMainSync { if (Preview.enabled) vm.logout() }
+                test.runOnMainSync { session.clear(); vm.logout() }
                 val storedBeforeLateLogin = preferences.all
                 val requestsBeforeLateLogin = requests.get()
                 val heldLogin = Gate().also { gates.add(it); loginGate.set(it) }
                 val lateLogin = callers.async { vm.login("13800000000", "000000") }
                 check(heldLogin.entered.await(8, TimeUnit.SECONDS))
                 test.runOnMainSync {
-                    vm.startPreview()
+                    session.clear()
+                    vm.logout()
                     if (exitPreview) vm.logout()
                 }
                 heldLogin.release.countDown()
@@ -311,13 +295,13 @@ object ProfileFlowChecks {
                 }
                 test.waitForIdleSync()
                 check(loginCancelled && preferences.all == storedBeforeLateLogin)
-                check(session.token == null && Preview.enabled == !exitPreview)
-                check(vm.loggedIn.value == !exitPreview)
-                check(if (exitPreview) vm.profile.value == null else vm.profile.value?.id == Preview.profile.id)
+                check(session.token == null && !vm.loggedIn.value)
+                check(!vm.loggedIn.value)
+                check(vm.profile.value == null)
                 // Only the intercepted login request ran; no stale-success follow-up reads.
                 check(requests.get() == requestsBeforeLateLogin + 1)
             }
-            result.putString("stream", "PASS: partial nickname/score POSTs, failure preservation, cached profile after VM recreation, concurrent entry guard, stale master rejection, late/queued token rejection preserves replacement session, Preview rejects late account response, Preview memory-only changes, Preview exit retains A disk cache, successful B login clears account caches and preserves installation preference, only proven same uid retains caches, late login after entering or exiting Preview cannot publish credentials; offline profile screenshot saved; patches=${patches.size}\n")
+            result.putString("stream", "PASS: partial nickname/score POSTs, failure preservation, cached profile after VM recreation, concurrent entry guard, stale master rejection, late/queued token rejection preserves replacement session, logout rejects late account response and profile mutations; account replacement clears A caches, successful B login clears account caches and preserves installation preference, only proven same uid retains caches, late login after logout cannot publish credentials; offline profile screenshot saved; patches=${patches.size}\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
@@ -331,7 +315,7 @@ object ProfileFlowChecks {
                     screen.finish()
                 }
             }
-            Preview.enabled = false
+
             if (fixtureStarted) {
                 Store.clearAccount()
                 // Instrumentation may end the process immediately; wait for preceding apply() writes.

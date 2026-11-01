@@ -16,7 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.components.ExpressiveRefreshBox
@@ -41,7 +41,7 @@ object RefreshChecks {
             check(Store.token.isNullOrBlank() && session.token.isNullOrBlank() && Store.profileJson == null)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             var scroll = LazyListState()
             val compositions = AtomicInteger()
             fun mount() = test.runOnMainSync {
@@ -107,7 +107,7 @@ object RefreshChecks {
         } finally {
             release.complete(Unit)
             test.runOnMainSync { activity?.let { it.setContent { }; it.finish() } }
-            Preview.enabled = false
+
         }
         test.finish(code, result)
     }

@@ -10,7 +10,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.runtime.mutableStateOf
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.CameraPreview
@@ -31,7 +31,7 @@ object ScannerLifecycleChecks {
             check(Store.active() == null && Store.pendingStart() == null)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             stage = "camera provider"
             provider = ProcessCameraProvider.getInstance(test.targetContext).get(10, TimeUnit.SECONDS)
             val visible = mutableStateOf(false)
@@ -57,7 +57,7 @@ object ScannerLifecycleChecks {
             test.runOnMainSync {
                 activity?.let { it.setContent { }; provider?.unbind(sibling); it.finish() }
             }
-            Preview.enabled = false
+
         }
         test.finish(code, result)
     }

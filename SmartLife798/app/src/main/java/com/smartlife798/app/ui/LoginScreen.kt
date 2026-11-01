@@ -71,13 +71,18 @@ fun LoginScreen(vm: MainViewModel) {
     var error by remember { mutableStateOf<String?>(null) }
 
     suspend fun loadCaptcha() {
+        if (captchaLoading) return
         captchaLoading = true
-        val s = newSeed()
-        seed = s
-        val ts = System.currentTimeMillis().toString()
-        val bytes = vm.requestCaptcha(s.toString(), ts)
-        captchaBitmap = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-        captchaLoading = false
+        try {
+            val s = newSeed()
+            seed = s
+            val ts = System.currentTimeMillis().toString()
+            val bytes = vm.requestCaptcha(s.toString(), ts)
+            captchaBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+            }
+            captchaInput = ""
+        } finally { captchaLoading = false }
     }
 
     LaunchedEffect(Unit) { loadCaptcha() }
@@ -198,20 +203,22 @@ fun LoginScreen(vm: MainViewModel) {
                             shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                             enabled = countdown == 0 && !sending && phone.length == 11 && captchaInput.isNotBlank(),
                             onClick = {
+                                if (sending || captchaLoading || countdown > 0) return@TextButton
+                                sending = true
                                 scope.launch {
-                                    sending = true
-                                    error = null
-                                    when (val res = vm.sendSmsCode(phone, captchaInput, seed)) {
-                                        is Res.Ok -> countdown = 60
-                                        is Res.Fail -> {
-                                            error = res.msg
-                                            // The captcha is single-use on the server side;
-                                            // refresh it so the retry is not guaranteed to fail.
-                                            captchaInput = ""
-                                            loadCaptcha()
+                                    try {
+                                        error = null
+                                        when (val res = vm.sendSmsCode(phone, captchaInput, seed)) {
+                                            is Res.Ok -> countdown = 60
+                                            is Res.Fail -> {
+                                                error = res.msg
+                                                // The captcha is single-use on the server side;
+                                                // refresh it so the retry is not guaranteed to fail.
+                                                captchaInput = ""
+                                                loadCaptcha()
+                                            }
                                         }
-                                    }
-                                    sending = false
+                                    } finally { sending = false }
                                 }
                             },
                         ) {
@@ -221,16 +228,18 @@ fun LoginScreen(vm: MainViewModel) {
                     Button(
                         enabled = phone.length == 11 && smsInput.isNotBlank() && !submitting,
                         onClick = {
+                            if (submitting) return@Button
+                            submitting = true
                             scope.launch {
-                                submitting = true
-                                error = null
-                                // On success MainViewModel flips `loggedIn`, which swaps
-                                // the root composable over to the main UI.
-                                when (val res = vm.login(phone, smsInput)) {
-                                    is Res.Ok -> Unit
-                                    is Res.Fail -> error = res.msg
-                                }
-                                submitting = false
+                                try {
+                                    error = null
+                                    // On success MainViewModel flips `loggedIn`, which swaps
+                                    // the root composable over to the main UI.
+                                    when (val res = vm.login(phone, smsInput)) {
+                                        is Res.Ok -> Unit
+                                        is Res.Fail -> error = res.msg
+                                    }
+                                } finally { submitting = false }
                             }
                         },
                         modifier = Modifier
@@ -261,19 +270,6 @@ fun LoginScreen(vm: MainViewModel) {
                 "本客户端直接连接「慧生活798」官方服务端（${Api.BASE_URL}），登录、设备与计费数据均来自真实接口，" +
                     "不会在本地伪造业务状态。",
             )
-
-            TextButton(
-
-                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                onClick = { vm.startPreview() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    "仅预览界面（演示数据，不连接服务端）",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
 
             Text(
                 "登录即表示同意《慧生活798 服务协议》与《隐私政策》",

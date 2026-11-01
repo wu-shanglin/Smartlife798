@@ -47,6 +47,7 @@ object Api {
     private class RequestSession(val token: String?, val protocolVersion: String? = null)
 
     val client: OkHttpClient = OkHttpClient.Builder()
+        .callTimeout(30, TimeUnit.SECONDS)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)
@@ -73,7 +74,7 @@ object Api {
         path: String,
         params: Map<String, String?> = emptyMap(),
         body: Any? = null,
-        allowConnectionRetry: Boolean = true,
+        allowConnectionRetry: Boolean = false,
         accountToken: String? = session.token,
         protocolVersion: String? = null,
         dataType: Type,
@@ -91,7 +92,10 @@ object Api {
                 },
             )
             val request = builder.build()
-            val call = if (allowConnectionRetry) client.newCall(request) else singleAttemptWriteCall(client, request)
+            val call = if (allowConnectionRetry) client.newCall(request) else {
+                if (request.body == null) singleAttemptCall(client, request)
+                else singleAttemptWriteCall(client, request)
+            }
             awaitCall(call) { r, text ->
                 if (!r.isSuccessful) {
                     return@awaitCall Res.Fail(r.code, "服务异常（HTTP ${r.code}）")
@@ -113,6 +117,8 @@ object Api {
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
+        } catch (e: SingleResponse) {
+            Res.Fail(e.status, "服务异常（HTTP ${e.status}），请查询状态后再操作")
         } catch (e: IOException) {
             Res.Fail(ErrorCodes.NETWORK, "网络不可用，请检查网络连接")
         } catch (e: JsonParseException) {
@@ -124,6 +130,9 @@ object Api {
 
     /** Cancellation closes the socket; body ownership never escapes the callback. */
     internal suspend fun <T> awaitCall(call: Call, decode: (Response, String) -> T): T =
+        awaitResponse(call) { response -> decode(response, response.body?.string().orEmpty()) }
+
+    internal suspend fun <T> awaitResponse(call: Call, decode: (Response) -> T): T =
         suspendCancellableCoroutine { continuation ->
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
@@ -135,9 +144,7 @@ object Api {
                     try {
                         val value = response.use {
                             continuation.context.ensureActive()
-                            val text = it.body?.string().orEmpty()
-                            continuation.context.ensureActive()
-                            decode(it, text)
+                            decode(it)
                         }
                         continuation.context.ensureActive()
                         if (continuation.isActive) continuation.resume(value)
@@ -148,22 +155,34 @@ object Api {
             })
         }
 
-    /** Connection retries alone do not prevent OkHttp's 503 or redirect follow-ups. */
+    private class SingleResponse(val status: Int) : IOException()
+
+    /** Also protects legacy GET commands, without changing their protocol method. */
+    internal fun singleAttemptCall(transport: OkHttpClient, request: Request): Call = transport.newBuilder()
+        .retryOnConnectionFailure(false)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .addNetworkInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.code == 503 || response.code == 421) {
+                val status = response.code
+                response.close()
+                throw SingleResponse(status)
+            }
+            response
+        }.build().newCall(request)
+
     internal fun singleAttemptWriteCall(transport: OkHttpClient, request: Request): Call {
-        val payload = requireNotNull(request.body) { "A single-attempt write requires a request body" }
+        val payload = requireNotNull(request.body)
         val oneShot = object : RequestBody() {
             override fun contentType() = payload.contentType()
             override fun contentLength() = payload.contentLength()
             override fun isOneShot() = true
             override fun writeTo(sink: BufferedSink) = payload.writeTo(sink)
         }
-        val prepared = request.newBuilder().method(request.method, oneShot).build()
-        return transport.newBuilder()
-            .retryOnConnectionFailure(false)
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .build()
-            .newCall(prepared)
+        return transport.newBuilder().retryOnConnectionFailure(false).followRedirects(false)
+            .followSslRedirects(false).build()
+            .newCall(request.newBuilder().method(request.method, oneShot).build())
     }
 
     private inline fun <reified T> dataType(): Type = object : TypeToken<T>() {}.type
@@ -182,10 +201,12 @@ object Api {
                 val req = Request.Builder().url(url)
                     .header("ApplicationType", "1,1")
                     .get().build()
-                client.newCall(req).execute().use { if (it.isSuccessful) it.body?.bytes() else null }
-            } catch (e: Exception) {
-                null
-            }
+                awaitResponse(client.newCall(req)) { response ->
+                    if (response.isSuccessful) response.body?.byteStream()?.readBytesLimited(1_048_576) else null
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (_: IOException) { null }
+
         }
 
     /** POST /api/v1/acc/login/code  body {un, authCode, s} */

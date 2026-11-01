@@ -11,7 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.LoginInfo
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
@@ -39,7 +39,7 @@ object NfcEntryChecks {
         val directDeviceId = AtomicReference("123456789012345")
         val gate = AtomicReference<CountDownLatch?>()
         val entered = AtomicReference<CountDownLatch?>()
-        val fixture = original.newBuilder().addInterceptor { chain ->
+        val fixture = original.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
             val request = chain.request()
             if (request.method == "GET" && request.url.encodedPath == "/api/v1/ui/app/dev/home/1") {
                 check(request.header("Authorization") == "offline-nfc-token")
@@ -74,12 +74,12 @@ object NfcEntryChecks {
                 .resolveActivity(test.targetContext.packageManager) == null)
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             lateinit var vm: MainViewModel
             test.runOnMainSync {
                 activity!!.setContent { }
                 activity!!.viewModelStore.clear()
-                Preview.enabled = false
+
                 Store.saveAutoCheckIn(false)
                 session.saveLogin(LoginInfo(token = "offline-nfc-token", uid = "offline-nfc-user"), "")
                 clientField.set(null, fixture)
@@ -153,7 +153,8 @@ object NfcEntryChecks {
             check(vm.nfcDevice.value == null)
             stage = "Preview has no NFC business reads or account persistence"
             test.runOnMainSync {
-                vm.startPreview()
+                session.clear()
+                vm.logout()
                 vm.setAppResumed(true, allowAutoCheckIn = false)
                 vm.acceptNfcUris(listOf(uri))
                 vm.acceptNfcUris(listOf(direct))
@@ -167,7 +168,7 @@ object NfcEntryChecks {
                 .addCategory(Intent.CATEGORY_DEFAULT).resolveActivity(packageManager)?.packageName ?: "none"
             result.putString("dispatch", "implicitNdef=${defaultHandler(NfcAdapter.ACTION_NDEF_DISCOVERED)}," +
                 "implicitView=${defaultHandler(Intent.ACTION_VIEW)}; no antenna/AAR simulation")
-            result.putString("stream", "PASS: official URI/manifest, Alipay boundary, QR server resolution, duplicate guard, no start, background/Preview isolation\n")
+            result.putString("stream", "PASS: official URI/manifest, Alipay boundary, QR server resolution, duplicate guard, no start, background/logout isolation\n")
             code = Activity.RESULT_OK
         } catch (e: Exception) {
             result.putString("stream", "FAIL at $stage: ${e.javaClass.simpleName}\n")
@@ -175,7 +176,7 @@ object NfcEntryChecks {
             gate.getAndSet(null)?.countDown()
             if (started) test.runOnMainSync {
                 activity?.viewModelStore?.clear()
-                Preview.enabled = false
+
                 session.clear()
                 Store.clearAccount()
                 clientField.set(null, original)

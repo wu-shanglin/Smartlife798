@@ -40,19 +40,17 @@ object Avatar {
     }
 
     suspend fun load(image: String): Bitmap? = withContext(Dispatchers.IO) {
-        if (Preview.enabled) return@withContext null
         val url = url(image) ?: return@withContext null
         try {
             val bytes = fetch(client, url) ?: return@withContext null
             ensureActive()
-            if (Preview.enabled) return@withContext null
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             val sample = sampleSize(bounds.outWidth, bounds.outHeight) ?: return@withContext null
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
                 BitmapFactory.Options().apply { inSampleSize = sample })
             ensureActive()
-            if (Preview.enabled) null else bitmap
+            bitmap
         } catch (e: CancellationException) {
             throw e
         } catch (_: IOException) {
@@ -71,7 +69,6 @@ object Avatar {
     }
 
     internal suspend fun fetch(transport: OkHttpClient, url: HttpUrl): ByteArray? {
-        if (Preview.enabled) return null
         return suspendCancellableCoroutine { continuation ->
             val call = transport.newCall(Request.Builder().url(url).get().build())
             continuation.invokeOnCancellation { call.cancel() }
@@ -83,7 +80,7 @@ object Avatar {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         val bytes = response.use {
-                            if (!it.isSuccessful || Preview.enabled) return@use null
+                            if (!it.isSuccessful) return@use null
                             val body = it.body ?: return@use null
                             if (body.contentType()?.type != "image" || body.contentLength() > MAX_BYTES) return@use null
                             body.byteStream().use { input -> input.readBytesLimited(MAX_BYTES) }

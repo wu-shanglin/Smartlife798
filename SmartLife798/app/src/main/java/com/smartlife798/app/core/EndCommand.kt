@@ -1,5 +1,6 @@
 package com.smartlife798.app.core
 
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 
@@ -19,23 +20,25 @@ class EndCommand {
         try {
             val accepted = send()
             if (accepted is Res.Fail) return accepted
-            repeat(ATTEMPTS) { attempt ->
-                if (attempt > 0) pause(INTERVAL_MS)
-                when (val result = read()) {
-                    is Res.Ok -> {
-                        // Empty / foreign snapshots cannot confirm this command.
-                        val status = result.data?.takeIf { it.id == device.id } ?: return@repeat
-                        val snapshot = device.mergeStatus(status)
-                        observed(snapshot)
-                        if (status.gene?.status == DeviceType.Status.LOCKED && snapshot.isStandby) {
-                            return Res.Ok(snapshot)
+            return withTimeoutOrNull(30_000L) {
+                repeat(ATTEMPTS) { attempt ->
+                    if (attempt > 0) pause(INTERVAL_MS)
+                    when (val result = read()) {
+                        is Res.Ok -> {
+                            // Empty / foreign snapshots cannot confirm this command.
+                            val status = result.data?.takeIf { it.id == device.id } ?: return@repeat
+                            val snapshot = device.mergeStatus(status)
+                            observed(snapshot)
+                            if (status.gene?.status == DeviceType.Status.LOCKED && snapshot.isStandby) {
+                                return@withTimeoutOrNull Res.Ok(snapshot)
+                            }
+                            if (snapshot.isAbnormal) return@withTimeoutOrNull unconfirmed()
                         }
-                        if (snapshot.isAbnormal) return unconfirmed()
+                        is Res.Fail -> if (result.code == ErrorCodes.TOKEN_EXPIRED) return@withTimeoutOrNull result
                     }
-                    is Res.Fail -> if (result.code == ErrorCodes.TOKEN_EXPIRED) return result
                 }
-            }
-            return unconfirmed()
+                unconfirmed()
+            } ?: unconfirmed()
         } finally {
             mutex.unlock()
         }

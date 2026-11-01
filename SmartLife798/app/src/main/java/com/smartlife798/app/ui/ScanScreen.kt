@@ -88,6 +88,10 @@ fun ScanScreen(
                 PackageManager.PERMISSION_GRANTED,
         )
     }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        onPauseOrDispose { }
+    }
     var deniedOnce by remember { mutableStateOf(false) }
     var resolving by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -168,7 +172,7 @@ fun ScanScreen(
             .background(Color.Black),
     ) {
         if (granted) {
-            CameraPreview(onQr = { raw -> handle(raw) }, modifier = Modifier.fillMaxSize())
+            CameraPreview(onQr = { raw -> handle(raw) }, enabled = !resolving, onError = { error = "相机初始化失败，请重新进入扫码页或手动输入" }, modifier = Modifier.fillMaxSize())
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(
@@ -299,10 +303,12 @@ private fun ErrorBanner(error: String?, onDismiss: () -> Unit) {
 }
 
 @Composable
-internal fun CameraPreview(onQr: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun CameraPreview(onQr: (String) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, onError: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnQr by rememberUpdatedState(onQr)
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentOnError by rememberUpdatedState(onError)
     val previewView = remember(context) {
         PreviewView(context).apply {
             // TextureView follows Compose clipping during predictive back.
@@ -328,7 +334,7 @@ internal fun CameraPreview(onQr: (String) -> Unit, modifier: Modifier = Modifier
             .build()
         var provider: ProcessCameraProvider? = null
         analysis.setAnalyzer(executor) { proxy ->
-            if (disposed.get()) {
+            if (disposed.get() || !currentEnabled) {
                 proxy.close()
             } else {
                 process(proxy, scanner) { value ->
@@ -351,7 +357,7 @@ internal fun CameraPreview(onQr: (String) -> Unit, modifier: Modifier = Modifier
                 runCatching {
                     provider = future.get()
                     provider?.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-                }
+                }.onFailure { currentOnError() }
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {

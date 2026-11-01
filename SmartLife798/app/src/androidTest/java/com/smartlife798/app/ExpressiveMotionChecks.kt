@@ -26,7 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import com.smartlife798.app.core.Preview
+import com.smartlife798.app.core.FixtureData
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.components.ChoiceButtonGroup
@@ -41,13 +41,16 @@ import kotlin.math.abs
 /** Real touch events, accessibility layout bounds and screenshots on account-free preview content. */
 object ExpressiveMotionChecks {
     fun run(test: Instrumentation) {
+        test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
         val result = Bundle()
         var stage = "account-free guard"
         var code = Activity.RESULT_CANCELED
         var activity: MainActivity? = null
         var downTime: Long? = null
         var downPoint: Pair<Float, Float>? = null
-        val originalPreview = Preview.enabled
+
         val counts = AtomicInteger()
         val selected = Collections.synchronizedList(mutableListOf<Int>())
         val geometry = mutableListOf<String>()
@@ -61,7 +64,7 @@ object ExpressiveMotionChecks {
             check(Store.token.isNullOrBlank() && session.token.isNullOrBlank())
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                .putExtra("preview", true)) as MainActivity
+                .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity ?: error("Preview activity unavailable")
             for (settings in listOf(false, true)) {
                 val name = if (settings) "settings" else "choice"
@@ -173,12 +176,14 @@ object ExpressiveMotionChecks {
             check(selected.single() == longLabels.indexOf(firstVisible))
             selected.clear()
             for ((index, label) in longLabels.withIndex()) {
+                var popupWindow: Int? = null
                 stage = "overflow option $index resolve visible label"
                 if (find(test, label) == null) {
                     stage = "overflow option $index open menu"
                     click(test, "更多选项")
                     stage = "overflow option $index appears in menu"
                     await { find(test, label) != null }
+                    popupWindow = root(test)?.windowId
                 }
                 stage = "overflow option $index click"
                 click(test, label)
@@ -187,7 +192,7 @@ object ExpressiveMotionChecks {
                 check(selected.last() == index)
                 test.waitForIdleSync()
                 stage = "overflow option $index menu dismisses before next choice"
-                await { find(test, "更多选项") != null }
+                await { (popupWindow == null || test.uiAutomation.windows.none { it.id == popupWindow }) && find(test, "更多选项") != null }
             }
             capture(test, "expressive-overflow-large-font.png")
 
@@ -218,14 +223,16 @@ object ExpressiveMotionChecks {
             // A narrow large-font row must offer full labels through overflow,
             // rather than force every choice into a compressed multiline button.
             settingsLabels.forEachIndexed { index, label ->
+                var popupWindow: Int? = null
                 if (find(test, label) == null) {
                     click(test, "更多选项")
                     await { find(test, label) != null }
+                    popupWindow = root(test)?.windowId
                 }
                 click(test, label)
                 await { counts.get() == index + 1 }
-                // API 36 can expose the dismissed popup for another accessibility frame.
-                await { find(test, "更多选项") != null }
+                // The underlying button is exposed before the popup stops intercepting input.
+                await { (popupWindow == null || test.uiAutomation.windows.none { it.id == popupWindow }) && find(test, "更多选项") != null }
             }
             capture(test, "expressive-settings-large-font.png")
             geometry.add("settings-large-font=${settingBounds.map { "${it.width()}x${it.height()}" }}")
@@ -388,7 +395,7 @@ object ExpressiveMotionChecks {
             val point = downPoint
             if (started != null && point != null) touch(test, MotionEvent.ACTION_CANCEL, started, point)
             test.runOnMainSync { activity?.finish() }
-            Preview.enabled = originalPreview
+
         }
         test.finish(code, result)
     }

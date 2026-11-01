@@ -97,7 +97,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import com.smartlife798.app.core.Preview
 import com.smartlife798.app.ui.CardDestination
 import com.smartlife798.app.ui.CardOrigin
 import com.smartlife798.app.ui.CardSource
@@ -131,7 +130,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun acceptNfcIntent(intent: Intent?) {
-        if (intent == null || (BuildConfig.DEBUG && intent.getBooleanExtra("preview", false))) return
+        if (intent == null) return
         nfcIntent = if (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED || intent.action == Intent.ACTION_VIEW)
             Intent(intent) else null
     }
@@ -155,8 +154,6 @@ class MainActivity : ComponentActivity() {
             }
             SmartLifeTheme(darkTheme = dark, dynamicColor = dynamicColor) {
                 AppRoot(
-                    forcePreview = BuildConfig.DEBUG &&
-                        intent?.getBooleanExtra("preview", false) == true,
                     onExitApp = ::finishAndRemoveTask,
                     incomingNfc = nfcIntent,
                     onNfcConsumed = {
@@ -175,7 +172,6 @@ private data class Tab(val route: String, val label: String, val icon: @Composab
 
 @Composable
 private fun AppRoot(
-    forcePreview: Boolean = false,
     onExitApp: () -> Unit,
     incomingNfc: Intent? = null,
     onNfcConsumed: () -> Unit = {},
@@ -188,17 +184,14 @@ private fun AppRoot(
     val updatePolicy by vm.updatePolicy.collectAsStateWithLifecycle()
     val showUpdate by vm.showUpdate.collectAsStateWithLifecycle()
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
-    val updateRequired = !forcePreview && !Preview.enabled &&
-        updatePolicy?.required(BuildConfig.VERSION_CODE) == true
+    val updateRequired = updatePolicy?.required(BuildConfig.VERSION_CODE) == true
 
-    LaunchedEffect(forcePreview) {
-        if (forcePreview) vm.startPreview()
-    }
+
 
     // Every resume refreshes the visible page — no manual refresh buttons anywhere.
     LifecycleResumeEffect(Unit) {
-        vm.setAppResumed(true, allowAutoCheckIn = !forcePreview)
-        if (!forcePreview) vm.checkAppUpdate()
+        vm.setAppResumed(true, allowAutoCheckIn = true)
+        vm.checkAppUpdate()
         if (loggedIn) vm.bumpRefresh()
         onPauseOrDispose { vm.setAppResumed(false) }
     }
@@ -212,9 +205,7 @@ private fun AppRoot(
         }
     }
 
-    if (!forcePreview && !Preview.enabled) {
-        UpdatePromptHost(vm, updatePolicy, showUpdate || updateRequired, checkingUpdate, onExitApp)
-    }
+    UpdatePromptHost(vm, updatePolicy, showUpdate || updateRequired, checkingUpdate, onExitApp)
     if (updateRequired) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             Text("请更新后继续使用", modifier = Modifier.align(Alignment.Center))
@@ -245,7 +236,7 @@ private fun AppRoot(
     LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner) {
         val raw = incomingNfc ?: return@LaunchedEffect
         val entry = currentEntry ?: return@LaunchedEffect
-        if (updateRequired || forcePreview || Preview.enabled) return@LaunchedEffect
+        if (updateRequired) return@LaunchedEffect
         lifecycleOwner.lifecycle.withResumed { }
         if (entry.destination.route == "developer-tools/nfc") {
             vm.notify("请在采集页点击开始采集后再碰卡")
@@ -264,8 +255,7 @@ private fun AppRoot(
     val nfcReader = remember(activity, vm) {
         activity?.let { com.smartlife798.app.core.NfcDeviceReader(it) { uris -> vm.acceptNfcUris(uris, autoStart = true) } }
     }
-    val normalNfc = currentEntry != null && currentEntry?.destination?.route != "developer-tools/nfc" &&
-        !forcePreview && !Preview.enabled
+    val normalNfc = currentEntry != null && currentEntry?.destination?.route != "developer-tools/nfc"
     LifecycleResumeEffect(nfcReader, normalNfc) {
         if (normalNfc) nfcReader?.start()
         onPauseOrDispose { nfcReader?.stop() }
@@ -297,19 +287,7 @@ private fun AppRoot(
         Column(
             Modifier.padding(inner).statusBarsPadding(),
         ) {
-            if (Preview.enabled) {
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        "演示模式 · 以下为静态示例数据，未连接服务端",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
-                }
-            }
+
             // Container transforms share the actual clicked card with its full-screen page.
             // The overlay is clipped only at the app content boundary, not by lazy-list items.
             SharedTransitionLayout(Modifier.fillMaxSize().clipToBounds()) {

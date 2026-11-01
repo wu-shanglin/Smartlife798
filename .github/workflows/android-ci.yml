@@ -63,8 +63,8 @@ jobs:
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --console=plain --stacktrace
 
-      - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --console=plain --stacktrace
+      - name: Assemble app and test APKs
+        run: ./gradlew :app:assembleDebug :app:assemblePerformance :app:assembleDebugAndroidTest --console=plain --stacktrace
 
       - name: Lint
         run: ./gradlew :app:lint --console=plain --stacktrace

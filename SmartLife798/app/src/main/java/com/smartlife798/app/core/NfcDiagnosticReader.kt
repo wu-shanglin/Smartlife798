@@ -15,13 +15,13 @@ class NfcDiagnosticReader(private val activity: Activity, private val onTag: (Ta
     private var lastAt = 0L
 
     fun start(): String {
-        if (Preview.enabled || !Store.developerToolsEnabled()) return "采集未启用"
+        if (!Store.developerToolsEnabled()) return "采集未启用"
         val nfc = adapter ?: return "当前设备没有 NFC"
         if (!nfc.isEnabled) return "请先打开系统 NFC，再点击开始采集"
         return try {
             active.set(true)
             nfc.enableReaderMode(activity, { tag ->
-                if (active.get() && !Preview.enabled && Store.developerToolsEnabled()) {
+                if (active.get() && Store.developerToolsEnabled()) {
                     val now = SystemClock.elapsedRealtime()
                     val id = tag.id ?: byteArrayOf()
                     if (!id.contentEquals(lastTag) || now - lastAt >= 1500L) {

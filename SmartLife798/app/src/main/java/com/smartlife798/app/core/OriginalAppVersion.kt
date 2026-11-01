@@ -52,9 +52,8 @@ object OriginalAppVersion {
         _current.value = select(cached)
     }
 
-    /** Called on the VM's main dispatcher after its cancellation/preview guard. */
+    /** Called on the VM's main dispatcher after its cancellation guard. */
     fun accept(candidate: String) {
-        check(!Preview.enabled)
         _current.value = select(candidate, _current.value)
         Store.originalAppVersion = _current.value
     }
@@ -75,9 +74,8 @@ object OriginalAppVersion {
     suspend fun fetch(): String = parseListing(client.fetchPublicText(SOURCE, 262_144))
 }
 
-/** Cancellation (including entering preview) also cancels the in-flight HTTP call/body read. */
+/** Cancellation also cancels the in-flight HTTP call/body read. */
 internal suspend fun OkHttpClient.fetchPublicText(url: String, limit: Int): String {
-    check(!Preview.enabled)
     return suspendCancellableCoroutine { continuation ->
         val call = newCall(Request.Builder().url(url).header("Cache-Control", "no-cache").build())
         continuation.invokeOnCancellation { call.cancel() }

@@ -59,6 +59,28 @@ class SingleAttemptTransportTest {
         }
     }
 
+    @Test fun legacyGetCommandsNeverReplay503OrRedirects() {
+        for (status in listOf(503, 307, 308)) {
+            Loopback(status).use { server ->
+                val client = OkHttpClient()
+                try {
+                    try {
+                        Api.singleAttemptCall(client, Request.Builder().url(server.url).get().build()).execute().use {
+                            assertEquals(status, it.code)
+                        }
+                    } catch (failure: java.io.IOException) {
+                        assertEquals(503, status)
+                    }
+                    assertEquals(1, server.requests.get())
+                    assertEquals("GET /write HTTP/1.1", server.firstRequest.get())
+                } finally {
+                    client.connectionPool.evictAll()
+                    client.dispatcher.executorService.shutdown()
+                }
+            }
+        }
+    }
+
     private fun request(url: String) = Request.Builder().url(url)
         .post("{\"weekday\":1}".toRequestBody()).build()
 
