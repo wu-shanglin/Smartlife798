@@ -45,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,6 +68,8 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -296,79 +299,74 @@ private fun ErrorBanner(error: String?, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun CameraPreview(onQr: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun CameraPreview(onQr: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val executor = remember { Executors.newSingleThreadExecutor() }
-    val scanner = remember {
-        BarcodeScanning.getClient(
+    val currentOnQr by rememberUpdatedState(onQr)
+    val previewView = remember(context) {
+        PreviewView(context).apply {
+            // TextureView follows Compose clipping during predictive back.
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+    }
+    AndroidView(factory = { previewView }, modifier = modifier)
+
+    DisposableEffect(previewView, lifecycleOwner) {
+        val disposed = AtomicBoolean(false)
+        val executor = Executors.newSingleThreadExecutor()
+        val scanner = BarcodeScanning.getClient(
             BarcodeScannerOptions.Builder()
                 .setBarcodeFormats(Barcode.FORMAT_QR_CODE, Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39)
                 .build(),
         )
-    }
-    // The analyzer runs on a background thread, so the de-duplication state is
-    // atomics rather than Compose state.
-    val lastValue = remember { AtomicReference("") }
-    val lastAt = remember { AtomicLong(0L) }
-    val providerRef = remember { AtomicReference<ProcessCameraProvider?>(null) }
-    val analysisRef = remember { AtomicReference<ImageAnalysis?>(null) }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            // CameraX binds to the *Activity* lifecycle, so leaving the scan route
-            // would keep the sensor streaming until the Activity stops.
-            runCatching {
-                analysisRef.get()?.clearAnalyzer()
-                providerRef.get()?.unbindAll()
+        val lastValue = AtomicReference("")
+        val lastAt = AtomicLong(0L)
+        val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+        val analysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+        var provider: ProcessCameraProvider? = null
+        analysis.setAnalyzer(executor) { proxy ->
+            if (disposed.get()) {
+                proxy.close()
+            } else {
+                process(proxy, scanner) { value ->
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (!disposed.get() && value.isNotBlank() &&
+                        (value != lastValue.get() || now - lastAt.get() > 2500)) {
+                        lastValue.set(value)
+                        lastAt.set(now)
+                        previewView.post {
+                            if (!disposed.get()) currentOnQr(value)
+                        }
+                    }
+                }
             }
-            providerRef.set(null)
-            analysisRef.set(null)
+        }
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener({
+            // Both this listener and disposal run on Main: stale binds cannot race cleanup.
+            if (!disposed.get()) {
+                runCatching {
+                    provider = future.get()
+                    provider?.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                }
+            }
+        }, ContextCompat.getMainExecutor(context))
+        onDispose {
+            disposed.set(true)
+            analysis.clearAnalyzer()
+            // Release only this page's use cases, never a newly opened scanner.
+            provider?.unbind(preview, analysis)
             scanner.close()
             executor.shutdown()
         }
     }
-
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            val previewView = PreviewView(ctx).apply {
-                // TextureView participates in Compose translation and clipping. The default
-                // SurfaceView can lag behind the scanner page during predictive back.
-                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                scaleType = PreviewView.ScaleType.FILL_CENTER
-            }
-            val providerFuture = ProcessCameraProvider.getInstance(ctx)
-            providerFuture.addListener({
-                val provider = providerFuture.get()
-                providerRef.set(provider)
-                val preview = Preview.Builder().build().also {
-                    it.surfaceProvider = previewView.surfaceProvider
-                }
-                val analysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                analysisRef.set(analysis)
-                analysis.setAnalyzer(executor) { proxy: ImageProxy ->
-                    process(proxy, scanner) { value ->
-                        val now = System.currentTimeMillis()
-                        val previous = lastValue.get()
-                        if (value.isNotBlank() && (value != previous || now - lastAt.get() > 2500)) {
-                            lastValue.set(value)
-                            lastAt.set(now)
-                            previewView.post { onQr(value) }
-                        }
-                    }
-                }
-                runCatching {
-                    provider.unbindAll()
-                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-                }
-            }, ContextCompat.getMainExecutor(ctx))
-            previewView
-        },
-    )
 }
+
+// Close frames even after disposal/executor shutdown, without posting every frame to Main.
+private val scanCallbackExecutor = Executor { it.run() }
 
 /**
  * [ImageProxy.image] is still an opt-in CameraX API; without this annotation
@@ -386,9 +384,15 @@ private fun process(
         return
     }
     val image = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
-    scanner.process(image)
-        .addOnSuccessListener { codes ->
+    val task = try {
+        scanner.process(image)
+    } catch (_: RuntimeException) {
+        proxy.close()
+        return
+    }
+    task
+        .addOnSuccessListener(scanCallbackExecutor) { codes ->
             codes.firstOrNull { !it.rawValue.isNullOrBlank() }?.rawValue?.let(onFound)
         }
-        .addOnCompleteListener { proxy.close() }
+        .addOnCompleteListener(scanCallbackExecutor) { proxy.close() }
 }

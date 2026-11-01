@@ -224,6 +224,8 @@ object ExpressiveMotionChecks {
                 }
                 click(test, label)
                 await { counts.get() == index + 1 }
+                // API 36 can expose the dismissed popup for another accessibility frame.
+                await { find(test, "更多选项") != null }
             }
             capture(test, "expressive-settings-large-font.png")
             geometry.add("settings-large-font=${settingBounds.map { "${it.width()}x${it.height()}" }}")
@@ -279,7 +281,7 @@ object ExpressiveMotionChecks {
             test.runOnMainSync {
                 screen.setContent {
                     SmartLifeTheme(darkTheme = false) {
-                        ExpressiveRefreshBox(false, { counts.incrementAndGet() }, Modifier.fillMaxSize()) {
+                        ExpressiveRefreshBox(onRefresh = { counts.incrementAndGet() }, modifier = Modifier.fillMaxSize()) {
                             androidx.compose.runtime.SideEffect { compositions.incrementAndGet() }
                             androidx.compose.foundation.lazy.LazyColumn(state = scroll, modifier = Modifier.fillMaxSize()) {
                                 items(100) { index -> Text("连续滚动夹具 $index", Modifier.padding(24.dp)) }
@@ -315,7 +317,7 @@ object ExpressiveMotionChecks {
             test.runOnMainSync {
                 screen.setContent {
                     SmartLifeTheme(darkTheme = false) {
-                        ExpressiveRefreshBox(false, { counts.incrementAndGet() }, Modifier.fillMaxSize()) {
+                        ExpressiveRefreshBox(onRefresh = { counts.incrementAndGet() }, modifier = Modifier.fillMaxSize()) {
                             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) {
                                 items(30) { index -> Text("刷新手势夹具 $index", Modifier.padding(24.dp)) }
                             }

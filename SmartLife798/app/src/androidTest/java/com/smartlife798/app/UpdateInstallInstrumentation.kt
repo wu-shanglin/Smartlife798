@@ -21,6 +21,18 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "refresh") {
+            RefreshChecks.run(this)
+            return
+        }
+        if (mode == "scanner-lifecycle") {
+            ScannerLifecycleChecks.run(this)
+            return
+        }
+        if (mode == "favorite-cache") {
+            FavoriteCacheChecks.run(this)
+            return
+        }
         if (mode == "device-access") {
             DeviceAccessChecks.run(this)
             return

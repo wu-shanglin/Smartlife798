@@ -593,6 +593,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _wallet = MutableStateFlow<Wallet?>(null)
     val wallet: StateFlow<Wallet?> = _wallet.asStateFlow()
 
+    private val favoritesLock = Any()
+    private var favoriteRestoreJob: Job? = null
     private val _favorites = MutableStateFlow<List<Device>>(emptyList())
     val favorites: StateFlow<List<Device>> = _favorites.asStateFlow()
 
@@ -747,12 +749,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun consumeShelf(): DevicesShelf? = _requestedShelf.value.also { _requestedShelf.value = null }
 
+    private fun publishFavorites(devices: List<Device>) = synchronized(favoritesLock) {
+        favoriteRestoreJob?.cancel()
+        _favorites.value = devices
+    }
+
     init {
-        // Restore the cached favorite list so the UI has content while the server responds.
-        runCatching {
-            Store.favoritesCacheJson()?.let {
-                val cached: List<Device> = gson.fromJson(it, object : TypeToken<List<Device>>() {}.type)
-                _favorites.value = cached
+        // Disk/JSON work must not block the first UI frame. Live data always wins.
+        val restoreGeneration = accountGeneration
+        val restoreToken = session.token
+        favoriteRestoreJob = viewModelScope.launch {
+            val cached = withContext(Dispatchers.IO) {
+                runCatching {
+                    Store.favoritesCacheJson()?.let {
+                        gson.fromJson<List<Device>>(it, object : TypeToken<List<Device>>() {}.type)
+                    }
+                }.getOrNull()
+            }
+            synchronized(favoritesLock) {
+                if (isActive && !Preview.enabled && restoreGeneration == accountGeneration && session.token == restoreToken) {
+                    cached?.let { _favorites.value = it }
+                }
             }
         }
         viewModelScope.launch {
@@ -942,7 +959,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _wallet.value = null
         _loggedIn.value = false
         _profile.value = null
-        _favorites.value = emptyList()
+        publishFavorites(emptyList())
         _recents.value = emptyList()
         _pinned.value = emptySet()
         _active.value = null
@@ -1320,7 +1337,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val revisionAtStart = profileRevision
         val generation = accountGeneration
         try {
-            val res = withContext(Dispatchers.IO) { Api.master() }
+            val (res, favoritesJson) = withContext(Dispatchers.IO) {
+                val response = Api.master()
+                val favorites = (response as? Res.Ok)?.data?.favos.orEmpty()
+                response to if (response is Res.Ok) gson.toJson(favorites) else null
+            }
             if (Preview.enabled || session.token != tokenAtStart || generation != accountGeneration) return@accountRead
             when (res) {
                 is Res.Ok -> {
@@ -1333,10 +1354,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     val favorites = master?.favos.orEmpty()
-                    if (_favorites.value != favorites) {
-                        _favorites.value = favorites
-                        Store.saveFavoritesCache(gson.toJson(favorites))
-                    }
+                    // A fast empty response must replace stale disk data even before restoration finishes.
+                    val changed = _favorites.value != favorites || favoriteRestoreJob?.isActive == true
+                    publishFavorites(favorites)
+                    if (changed) favoritesJson?.let(Store::saveFavoritesCache)
                 }
                 is Res.Fail -> {
                     _masterError.value = res.msg
@@ -1388,7 +1409,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _availableScore.value = Preview.profile.totalScore
         _wallet.value = Preview.wallet()
         _profile.value = Preview.profile
-        _favorites.value = Preview.filterFavorites()
+        publishFavorites(Preview.filterFavorites())
         _recents.value = Preview.devices.mapIndexed { i, d ->
             RecentDevice(d.id, d.name, d.dtype, System.currentTimeMillis() - i * 3_600_000L, uses = 3 - i)
         }
@@ -1554,7 +1575,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (Preview.enabled) {
             val list = _favorites.value.toMutableList()
             if (isFav) list.removeAll { it.id == device.id } else list.add(0, device)
-            _favorites.value = list
+            publishFavorites(list)
             return@withContext Res.Ok(Unit)
         }
         val res = Api.favorite(device.id, if (isFav) 1 else 0)
@@ -1562,7 +1583,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val list = _favorites.value.toMutableList()
             if (isFav) list.removeAll { it.id == device.id }
             else if (list.none { it.id == device.id }) list.add(0, device)
-            _favorites.value = list
+            publishFavorites(list)
             Store.saveFavoritesCache(gson.toJson(list))
         }
         res
@@ -1658,9 +1679,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val favorites = _favorites.value
         if (favorites.any { it.id == device.id }) {
             val state = device.statusOnly()
-            _favorites.value = favorites.map {
+            publishFavorites(favorites.map {
                 if (it.id == device.id) it.mergeStatus(state) else it
-            }
+            })
         }
     }
 

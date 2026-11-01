@@ -89,7 +89,6 @@ fun HomeScreen(
     val loading by vm.loadingMaster.collectAsStateWithLifecycle()
     val error by vm.masterError.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var refreshing by remember { mutableStateOf(false) }
     var ending by remember { mutableStateOf(false) }
 
     fun endUsage() {
@@ -140,18 +139,8 @@ fun HomeScreen(
     val liveForActive = live?.takeIf { it.id == cardActive?.deviceId }
 
     ExpressiveRefreshBox(
-        isRefreshing = refreshing,
         onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                scope.launch {
-                    try {
-                        vm.refreshAll()
-                    } finally {
-                        refreshing = false
-                    }
-                }
-            }
+            vm.refreshAll()
         },
         modifier = Modifier
             .fillMaxSize()

@@ -113,7 +113,6 @@ fun DeviceDetailScreen(
     var detail by remember { mutableStateOf<DeviceDetail?>(null) }
     var autoStartSnapshot by remember(deviceId, nfcTicket) { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
-    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var busyText by remember { mutableStateOf("") }
@@ -422,19 +421,9 @@ fun DeviceDetailScreen(
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         ExpressiveRefreshBox(
-            isRefreshing = refreshing,
             onRefresh = {
-                if (!refreshing) {
-                    refreshing = true
-                    scope.launch {
-                        try {
-                            reload(detail == null)
-                            pollOnce()
-                        } finally {
-                            refreshing = false
-                        }
-                    }
-                }
+                reload(detail == null)
+                pollOnce()
             },
             modifier = Modifier
                 .fillMaxSize()

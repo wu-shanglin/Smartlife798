@@ -27,7 +27,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -45,7 +44,6 @@ import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -57,8 +55,6 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
     val pinned by vm.pinned.collectAsStateWithLifecycle()
     val loading by vm.loadingMaster.collectAsStateWithLifecycle()
     val error by vm.masterError.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
-    var refreshing by remember { mutableStateOf(false) }
 
     var shelf by rememberSaveable { mutableStateOf(DevicesShelf.FAVORITE) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -109,18 +105,8 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
     }
 
     ExpressiveRefreshBox(
-        isRefreshing = refreshing,
         onRefresh = {
-            if (!refreshing) {
-                refreshing = true
-                scope.launch {
-                    try {
-                        vm.refreshAll()
-                    } finally {
-                        refreshing = false
-                    }
-                }
-            }
+            vm.refreshAll()
         },
         modifier = Modifier
             .fillMaxSize()

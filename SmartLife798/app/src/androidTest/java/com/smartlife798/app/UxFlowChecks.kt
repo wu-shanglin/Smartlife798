@@ -96,7 +96,7 @@ object UxFlowChecks {
                 await(test, "启动页面", present = false)
                 stage = "settings survive background"
                 android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
-                    "am start -W -n com.smartlife798.app/.MainActivity --ez preview true --activity-single-top",
+                    "am start -W -n ${test.targetContext.packageName}/com.smartlife798.app.MainActivity --ez preview true --activity-single-top",
                 )).use { it.readBytes() }
                 await(test, "启动页面")
                 stage = "settings survive recreation"

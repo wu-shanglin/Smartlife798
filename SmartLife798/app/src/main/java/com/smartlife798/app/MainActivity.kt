@@ -188,7 +188,6 @@ private fun AppRoot(
     val updatePolicy by vm.updatePolicy.collectAsStateWithLifecycle()
     val showUpdate by vm.showUpdate.collectAsStateWithLifecycle()
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
-    val updateDownload by vm.updateDownload.collectAsStateWithLifecycle()
     val updateRequired = !forcePreview && !Preview.enabled &&
         updatePolicy?.required(BuildConfig.VERSION_CODE) == true
 
@@ -214,17 +213,7 @@ private fun AppRoot(
     }
 
     if (!forcePreview && !Preview.enabled) {
-        AppUpdatePrompt(
-            vm = vm,
-            policy = updatePolicy,
-            visible = showUpdate || updateRequired,
-            checking = checkingUpdate,
-            download = updateDownload,
-            onDismiss = vm::dismissAppUpdate,
-            onExit = onExitApp,
-            onRetry = { vm.checkAppUpdate(manual = true) },
-            onError = vm::notify,
-        )
+        UpdatePromptHost(vm, updatePolicy, showUpdate || updateRequired, checkingUpdate, onExitApp)
     }
     if (updateRequired) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -797,4 +786,26 @@ fun QrGlyph(color: Color, modifier: Modifier = Modifier) {
             size = androidx.compose.ui.geometry.Size(unit * 1.0f, unit * 1.0f),
         )
     }
+}
+
+/** Download progress invalidates only the update UI, not AppRoot/navigation. */
+@Composable
+private fun UpdatePromptHost(
+    vm: MainViewModel,
+    policy: com.smartlife798.app.core.UpdatePolicy?,
+    visible: Boolean,
+    checking: Boolean,
+    onExit: () -> Unit,
+) {
+    AppUpdatePrompt(
+        vm = vm,
+        policy = policy,
+        visible = visible,
+        checking = checking,
+        download = vm.updateDownload.collectAsStateWithLifecycle().value,
+        onDismiss = vm::dismissAppUpdate,
+        onExit = onExit,
+        onRetry = { vm.checkAppUpdate(manual = true) },
+        onError = vm::notify,
+    )
 }
