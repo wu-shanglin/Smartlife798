@@ -2,28 +2,30 @@ package com.smartlife798.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 深海蓝品牌色；角色与使用规范见 docs/02 的视觉系统。
-val WaterBlue10 = Color(0xFF08254B)
-val WaterBlue20 = Color(0xFF123C70)
-val WaterBlue30 = Color(0xFF254D86)
-val WaterBlue40 = Color(0xFF2457A7)
-val WaterBlue80 = Color(0xFFACC9FF)
-val WaterBlue90 = Color(0xFFD6E4FF)
+// 晴空蓝品牌色；角色与使用规范见 docs/02 的视觉系统。
+val SkyBlue = Color(0xFF4DB5F2)
 
-val Ink = Color(0xFF16253A)
-val InkSoft = Color(0xFF45566C)
-val Mist = Color(0xFFE9EFF7)
-val MistVariant = Color(0xFFD7E2F0)
-val Outline = Color(0xFF64778E)
-val OutlineVariant = Color(0xFFA9BCD2)
+val WaterBlue10 = Color(0xFF073047)
+val WaterBlue20 = Color(0xFF124C68)
+val WaterBlue30 = Color(0xFF164C68)
+val WaterBlue40 = Color(0xFF08638E)
+val WaterBlue80 = Color(0xFF77CBF8)
+val WaterBlue90 = Color(0xFFCDEEFF)
 
-val SurfaceDark = Color(0xFF0D1420)
-val SurfaceDarkAlt = Color(0xFF263449)
-val DarkOnSurface = Color(0xFFE5EDF9)
-val DarkSurfaceVariant = Color(0xFF33445B)
-val DarkOnSurfaceVariant = Color(0xFFA9BCD2)
+val Ink = Color(0xFF142D3C)
+val InkSoft = Color(0xFF405C6B)
+val Mist = Color(0xFFF1F8FC)
+val MistVariant = Color(0xFFE2EFF6)
+val Outline = Color(0xFF607E8E)
+val OutlineVariant = Color(0xFFB0CAD8)
+
+val SurfaceDark = Color(0xFF0D1922)
+val SurfaceDarkAlt = Color(0xFF233B49)
+val DarkOnSurface = Color(0xFFE1F2FB)
+val DarkSurfaceVariant = Color(0xFF304D5D)
+val DarkOnSurfaceVariant = Color(0xFFB0CAD8)
 val DarkOutline = Color(0xFF95A9C3)
-val DarkOutlineVariant = Color(0xFF45566C)
+val DarkOutlineVariant = Color(0xFF405C6B)
 val DarkError = Color(0xFFFFB4AB)
 val DarkOnError = Color(0xFF690005)
 

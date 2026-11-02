@@ -118,6 +118,7 @@ import com.smartlife798.app.ui.OrdersScreen
 import com.smartlife798.app.ui.ScanScreen
 import com.smartlife798.app.ui.WalletScreen
 import com.smartlife798.app.ui.AppUpdatePrompt
+import com.smartlife798.app.ui.theme.scanCardColors
 import com.smartlife798.app.ui.theme.ExpressiveSpatial
 import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
@@ -654,6 +655,7 @@ private fun RowScope.ExpressiveNavItem(
 
 @Composable
 private fun RowScope.ScanNavButton(onClick: () -> Unit) {
+    val palette = MaterialTheme.colorScheme.scanCardColors()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -671,6 +673,10 @@ private fun RowScope.ScanNavButton(onClick: () -> Unit) {
             onClick = onClick,
             shapes = IconButtonDefaults.shapes(),
             interactionSource = interaction,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = palette.container,
+                contentColor = palette.content,
+            ),
             modifier = Modifier
                 .sharedCard(CardOrigin.NAV_SCAN)
                 .size(54.dp)
@@ -681,7 +687,7 @@ private fun RowScope.ScanNavButton(onClick: () -> Unit) {
                 .semantics { contentDescription = "扫码" },
         ) {
             QrGlyph(
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = palette.content,
                 modifier = Modifier.size(24.dp),
             )
         }

@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -34,6 +36,7 @@ private data class CardScene(
     val shared: SharedTransitionScope,
     val visibility: AnimatedVisibilityScope,
     val entryId: String,
+    val active: State<Boolean>,
 )
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
@@ -48,7 +51,8 @@ fun SharedCardScene(
     clipWhenInactive: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalCardScene provides CardScene(shared, visibility, entryId)) {
+    val activeState = rememberUpdatedState(active)
+    CompositionLocalProvider(LocalCardScene provides CardScene(shared, visibility, entryId, activeState)) {
         // Full-screen pages retained above a popped source must not block touches.
         // Peer tabs retain their pixels until NavHost draws the replacement; hiding
         // them on currentEntry changes can precede the new scene by a whole frame.
@@ -108,12 +112,26 @@ fun Modifier.sharedCardPage(source: CardSource?, itemId: String = ""): Modifier 
 @Composable
 fun SharedCardPage(source: CardSource?, itemId: String = "", content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalPageCardKey provides source?.key(itemId)) {
-        // sharedBounds already records its content into a GraphicsLayer and
-        // scaleToBounds fixes the child viewport. Another full-page ViewLayer
-        // duplicates hierarchy/layout work on older renderers.
-        Box(Modifier.sharedCardPage(source, itemId).fillMaxSize(), propagateMinConstraints = true) {
+        // The handoff layer draws only before sharedBounds takes over. The
+        // fixed child viewport still avoids per-frame content remeasurement.
+        Box(Modifier.cardHandoffOverlay().sharedCardPage(source, itemId).fillMaxSize(), propagateMinConstraints = true) {
             content()
         }
+    }
+}
+
+/** Bridge the navigation/overlay handoff without restoring the popped page's hit area. */
+@Composable
+private fun Modifier.cardHandoffOverlay(): Modifier {
+    val scene = LocalCardScene.current ?: return this
+    return with(scene.shared) {
+        this@cardHandoffOverlay.renderInSharedTransitionScopeOverlay(
+            zIndexInOverlay = 1f,
+            renderInOverlay = {
+                !scene.active.value && !isTransitionActive &&
+                    scene.visibility.transition.currentState == EnterExitState.Visible
+            },
+        )
     }
 }
 

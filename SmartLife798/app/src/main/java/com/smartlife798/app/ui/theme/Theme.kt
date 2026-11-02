@@ -20,8 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -59,12 +57,12 @@ internal val LightScheme = lightColorScheme(
     inverseSurface = Color(0xFF2E3135),
     inverseOnSurface = Color(0xFFF0F0F7),
     inversePrimary = WaterBlue80,
-    surfaceDim = Color(0xFFD7DAE0),
+    surfaceDim = Color(0xFFD6E7EF),
     surfaceBright = Mist,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF5F8FD),
-    surfaceContainer = Color(0xFFE1EAF5),
-    surfaceContainerHighest = Color(0xFFCEDCEC),
+    surfaceContainerLow = Color(0xFFF7FBFE),
+    surfaceContainer = Color(0xFFE7F3FA),
+    surfaceContainerHighest = Color(0xFFD5EAF5),
 )
 
 internal val DarkScheme = darkColorScheme(
@@ -98,10 +96,10 @@ internal val DarkScheme = darkColorScheme(
     inverseOnSurface = Color(0xFF2E3135),
     inversePrimary = WaterBlue40,
     surfaceDim = SurfaceDark,
-    surfaceBright = Color(0xFF353B43),
+    surfaceBright = Color(0xFF354D5B),
     surfaceContainerLowest = Color(0xFF0B0F14),
-    surfaceContainerLow = Color(0xFF151F2E),
-    surfaceContainer = Color(0xFF1D2A3D),
+    surfaceContainerLow = Color(0xFF122630),
+    surfaceContainer = Color(0xFF1B3341),
     surfaceContainerHighest = DarkSurfaceVariant,
 )
 
@@ -141,9 +139,11 @@ internal fun ColorScheme.unifiedControlScheme(): ColorScheme = copy(
 
 internal data class ScanCardColors(val container: Color, val content: Color)
 
+// The brand hero stays luminous in both modes; dynamic colour uses its own
+// light container/content pair rather than darkening an arbitrary primary.
 internal fun ColorScheme.scanCardColors(): ScanCardColors =
-    if (background.luminance() > 0.5f) {
-        ScanCardColors(lerp(primary, onPrimaryContainer, 0.4f), onPrimary)
+    if (primary == LightScheme.primary || primary == DarkScheme.primary) {
+        ScanCardColors(SkyBlue, WaterBlue10)
     } else {
         ScanCardColors(primaryContainer, onPrimaryContainer)
     }
