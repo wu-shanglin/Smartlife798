@@ -892,7 +892,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return withContext(Dispatchers.IO) {
             val res = Api.login(phone, sms)
             if (res is Res.Ok) {
-                res.data?.al?.let { info ->
+                val info = res.data?.al
+                    ?: return@withContext Res.Fail(-1, "登录响应缺少账号信息，请重试")
+                info.let {
                     if (info.token.isNullOrBlank()) {
                         return@withContext Res.Fail(-1, "登录响应缺少令牌")
                     }
@@ -916,6 +918,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             requestAutoCheckIn()
                         }
                         // Start account-owned initialization before removing the login composition.
+                        notify("登录成功")
                         _loggedIn.value = true
                     }
                 }
