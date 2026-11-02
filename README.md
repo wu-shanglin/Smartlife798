@@ -8,15 +8,15 @@
 | 当前版本 | `1.19.1`（`versionCode 57`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [1.19.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.0/SmartLife798-1.19.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.0) |
+| 最新已发布 | [1.19.1 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.1/SmartLife798-1.19.1-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.1) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
 
-**1.19.1 / 57（候选）**：修正同级 Tab 失活过早裁剪造成的交接空帧；设备/订单二级菜单、钱包关闭和支付渠道统一主色层级，浅深色扫码卡片加深。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
+**1.19.1 / 57**：修正同级 Tab 失活过早裁剪造成的交接空帧；设备/订单二级菜单、钱包关闭和支付渠道统一主色层级，浅深色扫码卡片加深。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
 
-最新公开版本为 **1.19.0 / 56**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.0/SmartLife798-1.19.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
+最新公开版本为 **1.19.1 / 57**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.1/SmartLife798-1.19.1-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
 旧客户端若在应用内更新后被厂商安装器提示“相同版本”，可用手机浏览器下载上述正式 APK 并从下载列表打开，覆盖安装一次，无须卸载或清数据。新版本已隔离不同产物的安装 URI；原厂商现场结果仍待确认。
 
