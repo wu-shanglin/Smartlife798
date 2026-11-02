@@ -154,9 +154,9 @@ private fun AdaptiveChoiceGroup(
                                     ),
                                     colors = ToggleButtonDefaults.tonalToggleButtonColors(
                                         containerColor = if (secondary) androidx.compose.ui.graphics.Color.Transparent else colors.surfaceContainerLow,
-                                        checkedContainerColor = if (secondary) colors.secondaryContainer else colors.primaryContainer,
+                                        checkedContainerColor = colors.primaryContainer,
                                         contentColor = if (secondary) colors.onSurfaceVariant else colors.onSurface,
-                                        checkedContentColor = if (secondary) colors.onSecondaryContainer else colors.onSurface,
+                                        checkedContentColor = colors.onPrimaryContainer,
                                     ),
                                     contentPadding = padding,
                                     content = content,

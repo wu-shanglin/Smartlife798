@@ -68,6 +68,7 @@ import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.ui.components.usagePillState
 import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
+import com.smartlife798.app.ui.theme.scanCardColors
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -316,8 +317,9 @@ fun HomeScreen(
 private fun ScanHeroCard(onScan: () -> Unit) {
     // Colours come from the scheme, not a fixed brand constant, so the dynamic
     // (Material You) palette actually applies to this card.
-    val container = MaterialTheme.colorScheme.primary
-    val onContainer = MaterialTheme.colorScheme.onPrimary
+    val palette = MaterialTheme.colorScheme.scanCardColors()
+    val container = palette.container
+    val onContainer = palette.content
     Card(
         onClick = onScan,
         modifier = Modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),

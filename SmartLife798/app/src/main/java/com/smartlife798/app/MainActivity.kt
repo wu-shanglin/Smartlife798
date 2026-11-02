@@ -311,7 +311,7 @@ private fun AppRoot(
                     popExitTransition = { ExitTransition.None },
                 ) {
                     composable("home") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
                             MainTabPage("home", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 HomeScreen(
                                     vm = vm,
@@ -331,7 +331,7 @@ private fun AppRoot(
                         }
                     }
                     composable("devices") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
                             MainTabPage("devices", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 DevicesScreen(
                                     vm = vm,
@@ -343,7 +343,7 @@ private fun AppRoot(
                         }
                     }
                     composable("orders") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
                             MainTabPage("orders", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 OrdersScreen(
                                     vm = vm,
@@ -355,7 +355,7 @@ private fun AppRoot(
                         }
                     }
                     composable("me") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
                             MainTabPage("me", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 MeScreen(
                                     vm = vm,

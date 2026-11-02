@@ -27,6 +27,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TonalToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -120,6 +121,12 @@ fun PaySheet(
                     else -> list.forEach { channel ->
                         TonalToggleButton(
                             checked = selected?.type == channel.type,
+                            colors = ToggleButtonDefaults.tonalToggleButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                checkedContainerColor = MaterialTheme.colorScheme.primary,
+                                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
                             enabled = !paying,
                             onCheckedChange = {
                                 if (!paying) {

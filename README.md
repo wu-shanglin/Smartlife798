@@ -72,7 +72,11 @@
 
 | 账单详情（演示，不执行支付） |
 |---|
-| ![1.11.0 稳定账单面板](screenshots/bill_detail.png) |
+| ![本轮 稳定账单面板](screenshots/bill_detail.png) |
+
+| 支付面板（浅色，离线夹具） | 支付面板（深色，离线夹具） |
+|---|---|
+| ![本轮 浅色支付面板](screenshots/payment.png) | ![本轮 深色支付面板](screenshots/payment_dark.png) |
 
 | 深色首页 | 外观（演示内深色选择） |
 |---|---|

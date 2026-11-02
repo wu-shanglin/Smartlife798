@@ -7,9 +7,12 @@ import android.graphics.Rect
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.SystemClock
-import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.lifecycle.ViewModelProvider
 import com.google.gson.Gson
 import com.smartlife798.app.core.Api
@@ -33,6 +36,9 @@ import java.io.File
 /** Real order navigation with fully intercepted reads; never submits a payment or device command. */
 object BillSheetChecks {
     fun run(test: Instrumentation) {
+        test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
         val result = Bundle()
         var code = Activity.RESULT_CANCELED
         var stage = "account-free guard"
@@ -94,7 +100,11 @@ object BillSheetChecks {
 
                 session.token = "offline-bill-fixture"
                 val vm = ViewModelProvider(screen)[MainViewModel::class.java]
-                screen.setContent { SmartLifeTheme { OrdersScreen(vm) { _, _ -> } } }
+                screen.setContent { SmartLifeTheme {
+                    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.statusBarsPadding()) {
+                        OrdersScreen(vm) { _, _ -> }
+                    }
+                } }
             }
             stage = "button group filters and overflow"
             await { find(test, "短账单夹具") != null && find(test, "长账单夹具") != null }
@@ -131,7 +141,7 @@ object BillSheetChecks {
                     check(channels.get() == 2 && writes.get() == 0)
                 }
                 stage = "Back closes sheet for $label"
-                test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
                 await { find(test, "账单详情") == null && find(test, "支付账单") == null && find(test, "短账单夹具") != null }
             }
             stage = "reopen and logout isolation"
@@ -148,7 +158,7 @@ object BillSheetChecks {
         } catch (error: Exception) {
             screenshot(test, "bill-sheet-failure.png")
             result.putString("visible", nodes(root(test)).filter { it.isVisibleToUser }.mapNotNull { it.text?.toString() }.joinToString(" | "))
-            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}:${error.message}; source=${error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }}; reads=${details.get()}, channels=${channels.get()}, writes=${writes.get()}; ${measurements.joinToString()}; visible=${nodes(root(test)).filter { it.isVisibleToUser }.mapNotNull { it.text?.toString() }.joinToString(" | ")}\n")
+            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}:${error.message}; source=${error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }}; finishing=${activity?.isFinishing}, root=${test.uiAutomation.rootInActiveWindow?.packageName}, reads=${details.get()}, channels=${channels.get()}, writes=${writes.get()}; ${measurements.joinToString()}; visible=${nodes(root(test)).filter { it.isVisibleToUser }.mapNotNull { it.text?.toString() }.joinToString(" | ")}\n")
         } finally {
             test.runOnMainSync { activity?.finish() }
             clientField.set(null, originalClient)
@@ -182,8 +192,9 @@ object BillSheetChecks {
 
     private fun root(test: Instrumentation): AccessibilityNodeInfo? {
         if (android.os.Build.VERSION.SDK_INT >= 33) test.uiAutomation.clearCache()
-        else test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo
-        return test.uiAutomation.rootInActiveWindow
+        return test.uiAutomation.rootInActiveWindow ?: test.uiAutomation.windows
+            .filter { it.isActive || it.isFocused }
+            .firstNotNullOfOrNull { it.root?.takeIf { root -> root.packageName == test.targetContext.packageName } }
     }
 
     private fun nodes(node: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> =
