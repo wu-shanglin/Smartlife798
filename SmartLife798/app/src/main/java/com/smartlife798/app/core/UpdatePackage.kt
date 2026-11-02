@@ -32,8 +32,8 @@ object UpdatePackage {
     suspend fun download(context: Context, policy: UpdatePolicy, progress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
             val directory = File(context.cacheDir, "updates").apply { mkdirs() }
-            val partial = File(directory, "update.part")
-            val complete = File(directory, "update.apk")
+            val complete = File(directory, policy.cacheApkName)
+            val partial = File(directory, "${complete.name}.part")
             var success = false
             val downloadContext = currentCoroutineContext()
             try {
@@ -69,6 +69,12 @@ object UpdatePackage {
                 if (complete.exists() && !complete.delete()) throw IOException("Cannot replace APK")
                 if (!partial.renameTo(complete)) throw IOException("Cannot save APK")
                 success = true
+                // Remove only our known obsolete download files, after the new APK is verified.
+                // Unrelated cache files and the current artifact remain untouched.
+                directory.listFiles()?.filter { it.isFile && it != complete &&
+                    (it.name in setOf("update.apk", "update.part") ||
+                        it.name.matches(Regex("SmartLife798-[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+-[0-9a-f]{64}\\.apk(\\.part)?"))) }
+                    ?.forEach { it.delete() }
                 complete
             } finally {
                 if (!success) partial.delete()

@@ -16,6 +16,12 @@ data class UpdatePolicy(
     val historyAvailable: Boolean = false,
 ) {
     val releaseUrl: String get() = "$REPOSITORY/releases/tag/v$versionName"
+    // The installer must never see different APK bytes under the same content URI.
+    val cacheApkName: String get() {
+        require(versionCode > 0 && sha256.matches(Regex("[0-9a-f]{64}")))
+        ReleaseVersion.parse(versionName)
+        return "SmartLife798-$versionName-$versionCode-$sha256.apk"
+    }
     val apkName: String get() = "SmartLife798-$versionName-debug.apk"
     val apkUrl: String get() = "$REPOSITORY/releases/download/v$versionName/$apkName"
     fun available(currentCode: Int) = versionCode > currentCode
