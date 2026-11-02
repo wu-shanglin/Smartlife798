@@ -8,15 +8,15 @@
 | 当前版本 | `1.19.0`（`versionCode 56`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [1.18.3 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.3/SmartLife798-1.18.3-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.18.3) |
+| 最新已发布 | [1.19.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.0/SmartLife798-1.19.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.0) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
 
-**1.19.0 / 56（候选）**：重调浅深色色板和卡片层级，修正惯性滚动轻触、详情加载布局、短信验证码语义及支付宝免密签约入口。微信客户端拉起与回调已改进，开放平台匹配及真实交易仍未验；真机掉帧未宣称全部消除。
+**1.19.0 / 56**：重调浅深色色板和卡片层级，修正惯性滚动轻触、详情加载布局、短信验证码语义及支付宝免密签约入口。微信客户端拉起与回调已改进，开放平台匹配及真实交易仍未验；真机掉帧未宣称全部消除。
 
-最新公开版本为 **1.18.3 / 55**，强制更新、最低支持码 55（所有低于 55 的既有版本须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.3/SmartLife798-1.18.3-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
+最新公开版本为 **1.19.0 / 56**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.0/SmartLife798-1.19.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
 旧客户端若在应用内更新后被厂商安装器提示“相同版本”，可用手机浏览器下载上述正式 APK 并从下载列表打开，覆盖安装一次，无须卸载或清数据。新版本已隔离不同产物的安装 URI；原厂商现场结果仍待确认。
 
