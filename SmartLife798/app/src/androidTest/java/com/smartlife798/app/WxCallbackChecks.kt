@@ -39,6 +39,12 @@ object WxCallbackChecks {
                 check(!pending.isCompleted)
                 WxPay.deliver(0, request.get().transaction)
                 check(pending.await().success)
+                val fallback = async { WxPay.pay(test.targetContext, order, timeoutMillis = 5_000L) }
+                yield()
+                WxPay.deliver(0, null, "wrong-order")
+                check(!fallback.isCompleted)
+                WxPay.deliver(0, null, order.prepayId)
+                check(fallback.await().success)
                 val cancelled = async { WxPay.pay(test.targetContext, order) }
                 yield()
                 cancelled.cancelAndJoin()

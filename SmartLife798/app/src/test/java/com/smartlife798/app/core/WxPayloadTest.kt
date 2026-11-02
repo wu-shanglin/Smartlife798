@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WxPayloadTest {
+    @Test fun `callback can correlate prepay id without allowing stale transaction`() {
+        assertTrue(WxPay.matchesCallback("current", "order", "current", null))
+        assertTrue(WxPay.matchesCallback("current", "order", null, "order"))
+        assertFalse(WxPay.matchesCallback("current", "order", "stale", "order"))
+        assertFalse(WxPay.matchesCallback("current", "order", null, "old-order"))
+        assertFalse(WxPay.matchesCallback("current", "order", null, null))
+    }
     @Test fun `aliases and numeric timestamp preserve server app id`() {
         val order = WxPay.parse(JsonParser.parseString("""{"appId":"wx-test","partnerId":"merchant","prepayId":"prepay","nonceStr":"nonce","timeStamp":1234,"packageValue":"Sign=WXPay","sign":"opaque"}"""))!!
         assertEquals("wx-test", order.appId)

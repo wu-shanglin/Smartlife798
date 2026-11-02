@@ -41,7 +41,7 @@ object WxPay {
     private var api: IWXAPI? = null
     private var apiAppId: String? = null
     private val payment = Mutex()
-    private data class Pending(val id: String, val reply: CompletableDeferred<Result>)
+    private data class Pending(val id: String, val prepayId: String, val reply: CompletableDeferred<Result>)
     @Volatile private var pending: Pending? = null
 
     @Synchronized
@@ -88,7 +88,7 @@ object WxPay {
             wx.registerApp(order.appId)
             val deferred = CompletableDeferred<Result>()
             val id = java.util.UUID.randomUUID().toString()
-            own = Pending(id, deferred)
+            own = Pending(id, order.prepayId, deferred)
             synchronized(this) { pending = own }
             val request = PayReq().apply {
                 transaction = id
@@ -116,8 +116,8 @@ object WxPay {
 
     /** Called by the `wxapi` entry activity. */
     @Synchronized
-    fun deliver(code: Int, transaction: String?) {
-        val current = pending?.takeIf { it.id == transaction } ?: return
+    fun deliver(code: Int, transaction: String?, prepayId: String? = null) {
+        val current = pending?.takeIf { matchesCallback(it.id, it.prepayId, transaction, prepayId) } ?: return
         pending = null
         val safeMessage = when (code) {
             0 -> "请以服务端账单确认为准"
@@ -126,4 +126,8 @@ object WxPay {
         }
         current.reply.complete(Result(code, safeMessage))
     }
+
+    internal fun matchesCallback(expected: String, expectedPrepayId: String, transaction: String?, prepayId: String?): Boolean =
+        if (!transaction.isNullOrBlank()) transaction == expected
+        else !prepayId.isNullOrBlank() && prepayId == expectedPrepayId
 }
