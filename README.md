@@ -60,15 +60,15 @@
 
 | 登录 | 首页 | 扫码 |
 |---|---|---|
-| ![1.8.0 登录页](screenshots/login.png) | ![1.18.1 首页离线夹具](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
+| ![1.8.0 登录页](screenshots/login.png) | ![本轮 首页离线夹具](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
 
 | 手动输入 | 设备 | 设备详情 |
 |---|---|---|
-| ![1.8.0 手动输入](screenshots/manual.png) | ![1.18.1 设备列表离线夹具](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
+| ![1.8.0 手动输入](screenshots/manual.png) | ![本轮 设备列表离线夹具](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
 
 | 消费记录 | 待付款筛选与角标 | 我的 |
 |---|---|---|
-| ![1.18.1 消费记录离线夹具](screenshots/orders.png) | ![1.18.1 待付款离线夹具](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
+| ![本轮 消费记录离线夹具](screenshots/orders.png) | ![1.18.1 待付款离线夹具](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
 
 | 账单详情（演示，不执行支付） |
 |---|
@@ -76,4 +76,4 @@
 
 | 深色首页 | 外观（演示内深色选择） |
 |---|---|
-| ![1.10.0 深色首页演示](screenshots/dark.png) | ![1.10.0 深色设置卡片演示](screenshots/appearance_dark.png) |
+| ![本轮 深色首页演示](screenshots/dark.png) | ![1.10.0 深色设置卡片演示](screenshots/appearance_dark.png) |

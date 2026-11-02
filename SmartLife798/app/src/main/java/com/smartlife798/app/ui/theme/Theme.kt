@@ -59,9 +59,9 @@ private val LightScheme = lightColorScheme(
     surfaceDim = Color(0xFFD7DAE0),
     surfaceBright = Mist,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF0F4FA),
-    surfaceContainer = Color(0xFFEAEEF5),
-    surfaceContainerHighest = Color(0xFFDFE3EB),
+    surfaceContainerLow = Color(0xFFF5F8FD),
+    surfaceContainer = Color(0xFFE1EAF5),
+    surfaceContainerHighest = Color(0xFFCEDCEC),
 )
 
 private val DarkScheme = darkColorScheme(
@@ -97,8 +97,8 @@ private val DarkScheme = darkColorScheme(
     surfaceDim = SurfaceDark,
     surfaceBright = Color(0xFF353B43),
     surfaceContainerLowest = Color(0xFF0B0F14),
-    surfaceContainerLow = Color(0xFF151B22),
-    surfaceContainer = Color(0xFF171D24),
+    surfaceContainerLow = Color(0xFF151F2E),
+    surfaceContainer = Color(0xFF1D2A3D),
     surfaceContainerHighest = DarkSurfaceVariant,
 )
 

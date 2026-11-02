@@ -499,7 +499,7 @@ fun DeviceDetailScreen(
                     }
                 }
 
-                if (payItems.isNotEmpty()) {
+                if (payItems.isNotEmpty() || (device == null && loading)) {
                     item(key = "use-score", contentType = "use-score") {
                         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
@@ -513,7 +513,7 @@ fun DeviceDetailScreen(
                                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(checked = profile?.useScore == 1,
-                                    enabled = !busy && !savingProfile && profile?.useScore != null,
+                                    enabled = device != null && !busy && !savingProfile && profile?.useScore != null,
                                     modifier = Modifier.semantics { contentDescription = "使用积分开关" },
                                     onCheckedChange = { enabled ->
                                         scope.launch {
@@ -528,7 +528,8 @@ fun DeviceDetailScreen(
                     }
                     item(key = "payment", contentType = "payment") {
                         PaySection(
-                            payItems = payItems,
+                            payItems = if (device == null) listOf(PayType.ALIPAY, PayType.WECHAT) else payItems,
+                            loading = device == null,
                             selected = payType,
                             onSelect = { payType = it },
                             signing = signingAli,
@@ -553,8 +554,8 @@ fun DeviceDetailScreen(
                     }
                 }
 
-                detail?.takeIf { it.device != null }?.let { loaded ->
-                    item(key = "info", contentType = "info") { InfoCard(loaded) }
+                item(key = "info", contentType = "info") {
+                    InfoCard(detail ?: DeviceDetail(device = initialDevice))
                 }
 
                 val wallet = detail?.wallet
@@ -806,6 +807,7 @@ private fun PaySection(
     selected: Int,
     onSelect: (Int) -> Unit,
     signing: Boolean,
+    loading: Boolean = false,
     onSignAlipay: () -> Unit,
 ) {
     Card(
@@ -816,7 +818,7 @@ private fun PaySection(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("支付方式", style = MaterialTheme.typography.titleSmall)
             ChoiceButtonGroup(labels = payItems.map { PayType.label(it) },
-                selectedIndex = payItems.indexOf(selected), onSelect = { onSelect(payItems[it]) })
+                selectedIndex = payItems.indexOf(selected), onSelect = { onSelect(payItems[it]) }, enabled = !loading)
             // Only warn for channels this build genuinely cannot complete; Alipay
             // (21) and the server-side wallets are integrated.
             if (selected != 0 && !PayType.isSupportedHere(selected)) {
@@ -841,7 +843,7 @@ private fun PaySection(
                     androidx.compose.material3.TextButton(
                         shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                         onClick = onSignAlipay,
-                        enabled = !signing,
+                        enabled = !loading && !signing,
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                     ) {
                         Text(if (signing) "正在获取…" else "去支付宝签约")

@@ -19,13 +19,17 @@ class WXPayEntryActivity : Activity(), IWXAPIEventHandler {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        runCatching { WxPay.api(this).handleIntent(intent, this) }
+        handleCallback(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        runCatching { WxPay.api(this).handleIntent(intent, this) }
+        handleCallback(intent)
+    }
+
+    private fun handleCallback(intent: Intent) {
+        if (!runCatching { WxPay.api(this).handleIntent(intent, this) }.getOrDefault(false)) finish()
     }
 
     override fun onReq(req: BaseReq?) = Unit

@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.autofill.ContentType
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.ui.components.HintBanner
@@ -159,7 +161,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         label = { Text("手机号") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.PhoneNumber },
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -200,8 +202,8 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             onValueChange = { smsInput = it.filter(Char::isDigit).take(8) },
                             label = { Text("短信验证码") },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f).semantics { contentType = ContentType.SmsOtpCode },
                         )
                         Spacer(Modifier.width(10.dp))
                         TextButton(

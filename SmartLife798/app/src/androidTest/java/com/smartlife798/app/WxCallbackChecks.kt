@@ -21,7 +21,7 @@ object WxCallbackChecks {
         val sdk = Proxy.newProxyInstance(IWXAPI::class.java.classLoader, arrayOf(IWXAPI::class.java)) { _, method, args ->
             when (method.name) {
                 "isWXAppInstalled", "registerApp" -> true
-                "sendReq" -> { request.set(args!![0] as PayReq); true }
+                "sendReq" -> { check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper()); request.set(args!![0] as PayReq); true }
                 else -> null
             }
         } as IWXAPI
