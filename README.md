@@ -8,15 +8,15 @@
 | 当前版本 | `1.18.1`（`versionCode 53`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [1.18.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.0/SmartLife798-1.18.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.18.0) |
+| 最新已发布 | [1.18.1 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.1/SmartLife798-1.18.1-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.18.1) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
 
-**1.18.1 / 53**：统一深海蓝卡片的蓝灰辅助色；设备/订单主分栏与次级筛选分层、统一圆角；详情支持返回动画中连续点击重开。本地候选已准备，尚未发布 Release；真机帧率与预测手势取消验收仍见 docs/05。
+**1.18.1 / 53**：统一深海蓝卡片的蓝灰辅助色；设备/订单主分栏与次级筛选分层、统一圆角；详情支持返回动画中连续点击重开。已发布普通更新，最低支持码保持 37；真机帧率与预测手势取消验收仍见 docs/05。
 
-最新公开版本为 **1.18.0 / 52**，普通更新、最低支持码 37；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.0/SmartLife798-1.18.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
+最新公开版本为 **1.18.1 / 53**，普通更新、最低支持码 37；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.1/SmartLife798-1.18.1-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
 ## 功能与边界
 
