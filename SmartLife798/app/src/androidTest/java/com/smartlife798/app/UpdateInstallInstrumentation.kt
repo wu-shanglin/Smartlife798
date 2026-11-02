@@ -26,7 +26,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun callActivityOnCreate(activity: Activity, state: Bundle?) {
-        val appRoot = mode in setOf("ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
+        val appRoot = mode in setOf("interrupt", "ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
         if (appRoot && activity.intent?.getBooleanExtra("offlineFixture", false) == true) {
             ServiceLocator.init(activity)
             com.smartlife798.app.core.Store.saveAutoCheckIn(false)
@@ -51,6 +51,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "interrupt") { NavigationInterruptionChecks.run(this); return }
         if (mode == "login-init") { LoginInitializationChecks.run(this); return }
         if (mode == "transactions") { TransactionChecks.run(this); return }
         if (mode == "wx-callback") { WxCallbackChecks.run(this); return }

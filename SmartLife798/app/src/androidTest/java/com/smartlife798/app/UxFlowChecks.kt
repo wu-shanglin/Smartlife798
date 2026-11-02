@@ -132,7 +132,7 @@ object UxFlowChecks {
                     test.runOnMainSync { check(Appearance.mode.value == ThemeMode.SYSTEM) }
                     if (android.os.Build.VERSION.SDK_INT >= 31) {
                         stage = "reveal dynamic color"
-                        reveal(test, "动态取色")
+                        reveal(test, "动态取色开关")
                         stage = "dynamic color logout isolation"
                         click(test, "动态取色开关")
                         test.runOnMainSync { check(Appearance.dynamicColor.value != dynamicColor) }

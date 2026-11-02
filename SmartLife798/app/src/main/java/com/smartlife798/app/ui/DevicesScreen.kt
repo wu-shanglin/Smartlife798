@@ -143,6 +143,7 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                     )
                     if (types.isNotEmpty()) {
                         ChoiceButtonGroup(
+                            secondary = true,
                             labels = listOf("全部类型") + types.map(DeviceType::name),
                             selectedIndex = if (typeFilter == null) 0
                                 else types.indexOf(typeFilter).takeIf { it >= 0 }?.plus(1) ?: -1,

@@ -66,8 +66,10 @@ object ExpressiveMotionChecks {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 .putExtra("offlineFixture", true)) as MainActivity
             val screen = activity ?: error("Preview activity unavailable")
-            for (settings in listOf(false, true)) {
-                val name = if (settings) "settings" else "choice"
+            for (variant in 0..2) {
+                val settings = variant == 2
+                val secondary = variant == 1
+                val name = if (settings) "settings" else if (secondary) "filter" else "choice"
                 stage = "$name press expands center and compresses neighbors"
                 counts.set(0)
                 test.runOnMainSync {
@@ -77,7 +79,7 @@ object ExpressiveMotionChecks {
                                 .padding(top = 100.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 Text("联动动效离线验证", style = MaterialTheme.typography.titleMedium)
                                 if (settings) SettingsChoiceButtonGroup(labels, 0, { counts.incrementAndGet() })
-                                else ChoiceButtonGroup(labels, 0, { counts.incrementAndGet() })
+                                else ChoiceButtonGroup(labels, 0, { counts.incrementAndGet() }, secondary = secondary)
                             }
                         }
                     }

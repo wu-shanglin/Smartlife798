@@ -2,6 +2,7 @@
 
 package com.smartlife798.app.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -217,8 +218,7 @@ fun DeviceCard(
 ) {
     val state = device.stateLabel()
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.clickable(onClick = onClick).then(modifier).fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),

@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.EnterTransition
@@ -63,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
@@ -313,7 +315,7 @@ private fun AppRoot(
                     popExitTransition = { ExitTransition.None },
                 ) {
                     composable("home") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             MainTabPage("home", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 HomeScreen(
                                     vm = vm,
@@ -333,7 +335,7 @@ private fun AppRoot(
                         }
                     }
                     composable("devices") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             MainTabPage("devices", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 DevicesScreen(
                                     vm = vm,
@@ -345,7 +347,7 @@ private fun AppRoot(
                         }
                     }
                     composable("orders") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             MainTabPage("orders", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 OrdersScreen(
                                     vm = vm,
@@ -357,7 +359,7 @@ private fun AppRoot(
                         }
                     }
                     composable("me") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             MainTabPage("me", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
                                 MeScreen(
                                     vm = vm,
@@ -399,7 +401,7 @@ private fun AppRoot(
                             else scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             val source = entry.cardSource(CardDestination.WALLET)
                             SharedCardPage(source) {
                                 WalletScreen(vm = vm, onBack = { navController.popBackStack() })
@@ -420,7 +422,7 @@ private fun AppRoot(
                             else scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             val source = entry.cardSource(CardDestination.SCAN)
                             SharedCardPage(source) {
                                 ScanScreen(
@@ -448,7 +450,7 @@ private fun AppRoot(
                             else scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             val source = entry.cardSource(CardDestination.MANUAL)
                             SharedCardPage(source) {
                                 ManualScanScreen(
@@ -484,7 +486,7 @@ private fun AppRoot(
                     ) { entry ->
                         val id = entry.arguments?.getString("id").orEmpty()
                         val autoStart = entry.arguments?.getBoolean("autoStart") ?: false
-                        SharedCardScene(sharedScope, this, entry.id) {
+                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
                             val source = entry.cardSource(CardDestination.DEVICE)
                             SharedCardPage(source, id) {
                                 DeviceDetailScreen(
@@ -492,7 +494,7 @@ private fun AppRoot(
                                     deviceId = id,
                                     autoStart = autoStart,
                                     nfcTicket = entry.arguments?.getString("nfcTicket").orEmpty(),
-                                    onBack = { navController.popBackStack() },
+                                    onBack = { if (navController.currentBackStackEntry?.id == entry.id) navController.popBackStack() },
                                     onOpenOrders = {
                                         navController.popBackStack()
                                         navigateTab(navController, "orders")
@@ -504,6 +506,13 @@ private fun AppRoot(
                             }
                         }
                     }
+                }
+                // NavHost can ignore Back while the incoming entry is STARTED.
+                // A normal Back must also reverse an unfinished card transition.
+                val navigationState = currentEntry?.lifecycle?.currentStateAsState()?.value
+                BackHandler(enabled = navController.previousBackStackEntry != null &&
+                    (sharedScope.isTransitionActive || navigationState == androidx.lifecycle.Lifecycle.State.STARTED)) {
+                    navController.popBackStack()
                 }
             }
         }

@@ -4,6 +4,7 @@ package com.smartlife798.app.ui
 
 import android.app.Activity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -218,8 +219,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 } else {
                     item {
                         Card(
-                            onClick = { onOpenDevice(active!!.deviceId, CardOrigin.ORDERS_ACTIVE) },
-                            modifier = Modifier.sharedCard(CardOrigin.ORDERS_ACTIVE, active!!.deviceId).fillMaxWidth(),
+                            modifier = Modifier.clickable { onOpenDevice(active!!.deviceId, CardOrigin.ORDERS_ACTIVE) }.sharedCard(CardOrigin.ORDERS_ACTIVE, active!!.deviceId).fillMaxWidth(),
                             shape = MaterialTheme.shapes.large,
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                         ) {
@@ -258,6 +258,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             } else {
                 item {
                     ChoiceButtonGroup(
+                        secondary = true,
                         labels = OrderFilter.entries.map { option ->
                             val count = when (option) {
                                 OrderFilter.ALL -> bills.size

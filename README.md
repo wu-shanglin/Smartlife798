@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.18.0`（`versionCode 52`） |
+| 当前版本 | `1.18.1`（`versionCode 53`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.18.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.0/SmartLife798-1.18.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.18.0) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**1.18.0 / 52**：移除演示入口、静态示例数据和模拟业务分支；订单分页与钱包重试、交易互斥和账号隔离、单次请求发送、微信回调超时、网络取消、扫码恢复及缓存/轮询开销优化。离线数据仅存在于独立测试 APK。已加入实际 UX 采集的应用级 Baseline Profile，并验证系统消费链路；真机性能、R8 与支付 SDK 验收仍分别跟踪于 docs/06。
+**1.18.1 / 53**：统一深海蓝卡片的蓝灰辅助色；设备/订单主分栏与次级筛选分层、统一圆角；详情支持返回动画中连续点击重开。本地候选已准备，尚未发布 Release；真机帧率与预测手势取消验收仍见 docs/05。
 
 最新公开版本为 **1.18.0 / 52**，普通更新、最低支持码 37；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.0/SmartLife798-1.18.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -46,7 +46,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.18.0-debug.apk`](dist/SmartLife798-1.18.0-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.18.1-debug.apk`](dist/SmartLife798-1.18.1-debug.apk) |
 
 交付包沿用既有签名，采用非 debuggable 的 performance 构建；附件保留更新通道的历史文件名。
 
@@ -54,19 +54,19 @@
 
 ## 截图
 
-截图来源、版本及限制统一见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)；订单、待付款和账单详情为 1.11.0 演示构建；首页、设备、设备详情、我的及深色页保留 1.10.0，登录、扫码与手输保留 1.8.0 历史图。演示截图不能作为真实业务验收。
+截图来源、版本及限制统一见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。首页、设备、订单和深色首页为 1.18.1 独立离线夹具；其余为表中所列历史截图，不能作为真实业务验收。
 
 | 登录 | 首页 | 扫码 |
 |---|---|---|
-| ![1.8.0 登录页](screenshots/login.png) | ![1.10.0 首页演示](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
+| ![1.8.0 登录页](screenshots/login.png) | ![1.18.1 首页离线夹具](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
 
 | 手动输入 | 设备 | 设备详情 |
 |---|---|---|
-| ![1.8.0 手动输入](screenshots/manual.png) | ![1.10.0 设备列表演示](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
+| ![1.8.0 手动输入](screenshots/manual.png) | ![1.18.1 设备列表离线夹具](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
 
 | 消费记录 | 待付款筛选与角标 | 我的 |
 |---|---|---|
-| ![1.11.0 消费记录演示](screenshots/orders.png) | ![1.11.0 待付款演示](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
+| ![1.18.1 消费记录离线夹具](screenshots/orders.png) | ![1.18.1 待付款离线夹具](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
 
 | 账单详情（演示，不执行支付） |
 |---|
