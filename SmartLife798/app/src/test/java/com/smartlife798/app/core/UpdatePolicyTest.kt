@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpdatePolicyTest {
+    @Test fun cacheIdentitySeparatesVersionsAndArtifactBytes() {
+        val policy = UpdatePolicy(54, "1.18.2", 37, "", "a".repeat(64))
+        assertNotEquals(policy.cacheApkName, policy.copy(versionCode = 55, versionName = "1.18.3").cacheApkName)
+        assertNotEquals(policy.cacheApkName, policy.copy(sha256 = "b".repeat(64)).cacheApkName)
+        assertEquals(policy.cacheApkName, policy.copy(notes = "说明改变").cacheApkName)
+    }
+
+    @Test fun cacheIdentityRejectsUnsafePathFields() {
+        val policy = UpdatePolicy(54, "1.18.2", 37, "", "a".repeat(64))
+        for (invalid in listOf(policy.copy(versionName = "../1.18.2"),
+            policy.copy(sha256 = "../other"), policy.copy(versionCode = -1))) {
+            try { invalid.cacheApkName; fail("Unsafe cache identity accepted") }
+            catch (_: IllegalArgumentException) { }
+        }
+    }
+
     @Test fun temporaryHistoryFailureKeepsMatchingCachedNotesButUsesFreshMinimum() {
         val fresh = json(minimum = "1")
         val cached = json(minimum = "24").dropLast(1) +

@@ -51,6 +51,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "update-handoff") { UpdateHandoffChecks.run(this); return }
         if (mode == "interrupt") { NavigationInterruptionChecks.run(this); return }
         if (mode == "login-init") { LoginInitializationChecks.run(this); return }
         if (mode == "transactions") { TransactionChecks.run(this); return }
