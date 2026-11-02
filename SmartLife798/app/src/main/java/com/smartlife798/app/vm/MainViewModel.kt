@@ -1053,8 +1053,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } catch (_: android.content.ActivityNotFoundException) { Res.Fail(-1, "未安装支付宝，无法完成签约") }
                     catch (_: SecurityException) { Res.Fail(-1, "系统拒绝打开签约页面") }
                 } else {
-                    val result = com.smartlife798.app.core.AlipaySdk.pay(activity, payload)
-                    Res.Ok(if (result.success) "已从支付宝返回，请在支付宝页面确认签约结果" else "签约未完成（${result.status}）${result.memo}")
+                    Res.Ok(com.smartlife798.app.core.AlipaySdk.sign(activity, payload))
                 }
             }
         }

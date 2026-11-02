@@ -16,6 +16,31 @@ import kotlinx.coroutines.withContext
 object AlipaySdk {
     data class Result(val success: Boolean, val status: String, val memo: String)
 
+    suspend fun sign(activity: Activity, payload: String): String =
+        kotlinx.coroutines.withTimeoutOrNull(120_000L) {
+            withContext(Dispatchers.Main.immediate) {
+                kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                    try {
+                        com.alipay.sdk.app.OpenAuthTask(activity).execute(
+                            AlipaySign.CALLBACK_SCHEME,
+                            com.alipay.sdk.app.OpenAuthTask.BizType.Deduct,
+                            mapOf("sign_params" to AlipaySign.parameters(payload)),
+                            { code, _, _ ->
+                                if (continuation.isActive) continuation.resume(
+                                    if (code == 9000) "已从支付宝返回，请在支付宝页面确认签约结果"
+                                    else "签约未确认，请在支付宝查看协议状态",
+                                    onCancellation = null,
+                                )
+                            },
+                            true,
+                        )
+                    } catch (_: Exception) {
+                        if (continuation.isActive) continuation.resume("无法打开支付宝签约，请稍后重试", onCancellation = null)
+                    }
+                }
+            }
+        } ?: "签约结果待确认，请在支付宝查看协议状态，勿重复签约"
+
     suspend fun pay(activity: Activity, orderInfo: String): Result = withContext(Dispatchers.IO) {
         try {
             val raw: Map<String, String> = PayTask(activity).payV2(orderInfo, true)

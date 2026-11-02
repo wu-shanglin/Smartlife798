@@ -21,6 +21,11 @@
       上传到云端或在换机时迁移。fullBackupContent=false 再显式关掉旧版备份通道。
       lint 提示 allowBackup 自 Android 12 起被标记弃用，但关闭备份仍是最直接的做法。
     -->
+    <queries>
+        <package android:name="com.tencent.mm" />
+        <package android:name="com.eg.android.AlipayGphone" />
+    </queries>
+
     <application
         android:name=".SmartLifeApp"
         android:allowBackup="false"
@@ -70,10 +75,20 @@
                 android:resource="@xml/update_paths" />
         </provider>
 
+        <activity android:name="com.alipay.sdk.app.AlipayResultActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="smartlife798sign" />
+            </intent-filter>
+        </activity>
+
         <!-- WeChat Pay result entry: must be {applicationId}.wxapi.WXPayEntryActivity -->
         <activity
             android:name=".wxapi.WXPayEntryActivity"
             android:exported="true"
+            android:taskAffinity="${applicationId}"
             android:launchMode="singleTask"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>

@@ -39,14 +39,19 @@ object WxPay {
     }
 
     private var api: IWXAPI? = null
+    private var apiAppId: String? = null
     private val payment = Mutex()
-    private data class Pending(val id: String, val reply: CompletableDeferred<Result>)
+    private data class Pending(val id: String, val prepayId: String, val reply: CompletableDeferred<Result>)
     @Volatile private var pending: Pending? = null
 
-    fun api(context: Context): IWXAPI {
-        api?.let { return it }
-        val created = WXAPIFactory.createWXAPI(context.applicationContext, FALLBACK_APP_ID, true)
-        created.registerApp(FALLBACK_APP_ID)
+    @Synchronized
+    fun api(context: Context, appId: String? = null): IWXAPI {
+        val requested = appId ?: apiAppId ?: FALLBACK_APP_ID
+        api?.let { if (appId == null || apiAppId == null || apiAppId == requested) return it }
+        api?.detach()
+        val created = WXAPIFactory.createWXAPI(context.applicationContext, requested, true)
+        created.registerApp(requested)
+        apiAppId = requested
         api = created
         return created
     }
@@ -58,7 +63,8 @@ object WxPay {
     fun parse(json: JsonElement?): Order? {
         val obj = json?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
         fun text(vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
-            obj.get(key)?.takeIf { !it.isJsonNull }?.asString?.takeIf { it.isNotBlank() }
+            obj.get(key)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.let { p -> p.isString || p.isNumber } }
+                ?.asString?.takeIf { it.isNotBlank() }
         }
         val appId = text("appid", "appId") ?: FALLBACK_APP_ID
         return Order(
@@ -67,7 +73,7 @@ object WxPay {
             prepayId = text("prepayid", "prepayId") ?: return null,
             nonceStr = text("noncestr", "nonceStr") ?: return null,
             timeStamp = text("timestamp", "timeStamp") ?: return null,
-            packageValue = text("package") ?: "Sign=WXPay",
+            packageValue = text("package", "packageValue") ?: "Sign=WXPay",
             sign = text("sign") ?: return null,
         )
     }
@@ -77,12 +83,12 @@ object WxPay {
         if (!payment.tryLock()) return Result(-4, "支付处理中，请勿重复操作")
         var own: Pending? = null
         try {
-            val wx = api(context)
+            val wx = api(context, order.appId)
             if (!wx.isWXAppInstalled) return Result(-2, "未安装微信，无法完成支付")
             wx.registerApp(order.appId)
             val deferred = CompletableDeferred<Result>()
             val id = java.util.UUID.randomUUID().toString()
-            own = Pending(id, deferred)
+            own = Pending(id, order.prepayId, deferred)
             synchronized(this) { pending = own }
             val request = PayReq().apply {
                 transaction = id
@@ -94,7 +100,9 @@ object WxPay {
                 packageValue = order.packageValue
                 sign = order.sign
             }
-            val sent = runCatching { wx.sendReq(request) }.getOrDefault(false)
+            val sent = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                runCatching { wx.sendReq(request) }.getOrDefault(false)
+            }
             if (!sent) {
                 return Result(-3, "拉起微信支付失败")
             }
@@ -108,8 +116,8 @@ object WxPay {
 
     /** Called by the `wxapi` entry activity. */
     @Synchronized
-    fun deliver(code: Int, transaction: String?) {
-        val current = pending?.takeIf { it.id == transaction } ?: return
+    fun deliver(code: Int, transaction: String?, prepayId: String? = null) {
+        val current = pending?.takeIf { matchesCallback(it.id, it.prepayId, transaction, prepayId) } ?: return
         pending = null
         val safeMessage = when (code) {
             0 -> "请以服务端账单确认为准"
@@ -118,4 +126,8 @@ object WxPay {
         }
         current.reply.complete(Result(code, safeMessage))
     }
+
+    internal fun matchesCallback(expected: String, expectedPrepayId: String, transaction: String?, prepayId: String?): Boolean =
+        if (!transaction.isNullOrBlank()) transaction == expected
+        else !prepayId.isNullOrBlank() && prepayId == expectedPrepayId
 }

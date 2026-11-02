@@ -19,20 +19,27 @@ class WXPayEntryActivity : Activity(), IWXAPIEventHandler {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        runCatching { WxPay.api(this).handleIntent(intent, this) }
+        handleCallback(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        runCatching { WxPay.api(this).handleIntent(intent, this) }
+        handleCallback(intent)
+    }
+
+    private fun handleCallback(intent: Intent) {
+        if (!runCatching { WxPay.api(this).handleIntent(intent, this) }.getOrDefault(false)) finish()
     }
 
     override fun onReq(req: BaseReq?) = Unit
 
     override fun onResp(resp: BaseResp?) {
-        Diag.event("wxpay.outcome", "errCode" to (resp?.errCode ?: -1))
-        WxPay.deliver(resp?.errCode ?: -1, resp?.transaction)
+        val pay = resp as? com.tencent.mm.opensdk.modelpay.PayResp
+        if (pay != null) {
+            Diag.event("wxpay.outcome", "errCode" to pay.errCode)
+            WxPay.deliver(pay.errCode, pay.transaction, pay.prepayId)
+        }
         finish()
     }
 }

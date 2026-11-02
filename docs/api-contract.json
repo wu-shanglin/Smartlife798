@@ -560,5 +560,12 @@
     "preflight": "Under the shared command mutex, read dev/home/1?did=&apply=6 again and require a complete matching device, allowed ownership and matching start/stop action before sending a command. Read failure sends no command; server authorization remains final.",
     "polling": "While blocked by ownership, refresh full detail in the foreground to discover release; ordinary dev/status only contains partial machine state.",
     "clientError": "-1004 DEVICE_ACCESS_CHANGED is local only; refresh the detail and keep the reason visible. Not a server code."
+  },
+  "alipayAgreement": {
+    "type": 20,
+    "payload": "sign preferred; decode encoded envelope once; OpenAuthTask BizType.Deduct sign_params; code only falls back to pouch miniapp",
+    "staticEvidence": "3.1.10 REA PayHelper.A confirms OpenAuthTask.Deduct; legacy full chain AgencyDialog.N/E -> BasePayActivity.g -> PayHelper.z(259)/A; 258 is payment",
+    "callback": "smartlife798sign -> SDK AlipayResultActivity; callback does not prove server agreement status",
+    "validation": "offline parameters and callback wiring; real agreement not verified"
   }
 }

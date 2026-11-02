@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -150,7 +151,9 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
     val state = with(scene.shared) { rememberSharedContentState(key) }
     // Unmatched cards must not extend a peer-tab transition just to animate a clip.
     val corner = if (state.isMatchFound) {
-        scene.visibility.transition.animateDp(label = "cardCorner") { phase ->
+        scene.visibility.transition.animateDp(
+            transitionSpec = { spring(dampingRatio = 0.9f, stiffness = 650f) }, label = "cardCorner",
+        ) { phase ->
             if ((phase == EnterExitState.Visible) == page) 0.dp else key.origin.cornerDp.dp
         }
     } else {
@@ -182,6 +185,7 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
+            boundsTransform = { _, _ -> spring(dampingRatio = 0.9f, stiffness = 650f) },
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 ContentScale.FillWidth,
                 if (page) Alignment.TopStart else Alignment.Center,

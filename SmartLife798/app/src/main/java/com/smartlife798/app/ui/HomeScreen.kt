@@ -214,7 +214,8 @@ fun HomeScreen(
                 )
             }
             else -> item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(ordered, key = { it.id }) { device ->
                         // A tile may come from a cached favourites list; prefer the
                         // fresh server snapshot for the same device.
@@ -223,6 +224,7 @@ fun HomeScreen(
                         FavoriteTile(
                             device = shown,
                             pinned = pinned.contains(device.id),
+                            isScrolling = { rowState.isScrollInProgress },
                             onClick = { onOpenDevice(device.id, CardOrigin.HOME_FAVORITE) },
                         )
                     }
@@ -481,9 +483,9 @@ private fun ActiveUsageCard(
 }
 
 @Composable
-private fun FavoriteTile(device: Device, pinned: Boolean, onClick: () -> Unit) {
+private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boolean, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.clickable(onClick = onClick).sharedCard(CardOrigin.HOME_FAVORITE, device.id).width(176.dp),
+        modifier = Modifier.tapDuringFling(isScrolling, onClick).clickable(onClick = onClick).sharedCard(CardOrigin.HOME_FAVORITE, device.id).width(176.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
