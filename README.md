@@ -8,15 +8,15 @@
 | 当前版本 | `1.18.0`（`versionCode 52`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [1.17.1 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.17.1/SmartLife798-1.17.1-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.17.1) |
+| 最新已发布 | [1.18.0 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.0/SmartLife798-1.18.0-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.18.0) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
 
-**1.18.0 / 52 交付准备，尚未对外发布**：移除演示入口、静态示例数据和模拟业务分支；订单分页与钱包重试、交易互斥和账号隔离、单次请求发送、微信回调超时、网络取消、扫码恢复及缓存/轮询开销优化。离线数据仅存在于独立测试 APK。已加入实际 UX 采集的应用级 Baseline Profile，并验证系统消费链路；真机性能、R8 与支付 SDK 验收仍分别跟踪于 docs/06。
+**1.18.0 / 52**：移除演示入口、静态示例数据和模拟业务分支；订单分页与钱包重试、交易互斥和账号隔离、单次请求发送、微信回调超时、网络取消、扫码恢复及缓存/轮询开销优化。离线数据仅存在于独立测试 APK。已加入实际 UX 采集的应用级 Baseline Profile，并验证系统消费链路；真机性能、R8 与支付 SDK 验收仍分别跟踪于 docs/06。
 
-最新公开版本为 **1.17.1 / 50**，普通更新、最低支持码 37；公开 APK、update.json 与历史附件均已下载核验。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.17.1/SmartLife798-1.17.1-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
+最新公开版本为 **1.18.0 / 52**，普通更新、最低支持码 37；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.0/SmartLife798-1.18.0-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
 ## 功能与边界
 
