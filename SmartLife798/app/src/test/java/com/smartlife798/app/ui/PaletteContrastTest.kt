@@ -27,10 +27,11 @@ class PaletteContrastTest {
             assertEquals(scheme.primaryContainer, scheme.tertiaryContainer)
         }
     }
-    @Test fun `scan hero is deeper in both modes with readable text`() {
+    @Test fun `scan hero stays sky blue in both modes with readable text`() {
         listOf(LightScheme, DarkScheme).forEach { scheme ->
             val hero = scheme.scanCardColors()
-            assertTrue(hero.container.luminance() < scheme.primary.luminance())
+            assertEquals(Color(0xFF4DB5F2), hero.container)
+            assertTrue(hero.container.luminance() > 0.4f)
             val lightestRipple = hero.content.copy(alpha = 0.14f).compositeOver(hero.container)
             val a = luminance(lightestRipple); val b = luminance(hero.content)
             assertTrue((maxOf(a,b)+0.05)/(minOf(a,b)+0.05) >= 4.5)
