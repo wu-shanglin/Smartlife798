@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.18.2`（`versionCode 54`） |
+| 当前版本 | `1.18.3`（`versionCode 55`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.18.2 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.2/SmartLife798-1.18.2-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.18.2) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**1.18.2 / 54**：修复登录页更新按钮遮挡，补齐登录中、成功与失败提示，异常登录响应不再静默返回。已发布普通更新，最低支持码保留 37；真实登录及厂商软键盘待实机验收。
+**1.18.3 / 55**：应用内更新为不同目标产物使用独立文件和安装 URI，新包校验成功后才清理旧更新缓存。普通更新候选，最低支持码保留 37；厂商安装器“同版本”原现场尚待确认，见 docs/05。
 
 最新公开版本为 **1.18.2 / 54**，普通更新、最低支持码 37；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.18.2/SmartLife798-1.18.2-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -46,7 +46,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.18.2-debug.apk`](dist/SmartLife798-1.18.2-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.18.3-debug.apk`](dist/SmartLife798-1.18.3-debug.apk) |
 
 交付包沿用既有签名，采用非 debuggable 的 performance 构建；附件保留更新通道的历史文件名。
 
