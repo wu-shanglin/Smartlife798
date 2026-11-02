@@ -18,25 +18,28 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
-private val LightScheme = lightColorScheme(
+internal val LightScheme = lightColorScheme(
     primary = WaterBlue40,
     onPrimary = Color.White,
     primaryContainer = WaterBlue90,
     onPrimaryContainer = WaterBlue10,
-    secondary = Aqua40,
+    secondary = WaterBlue40,
     onSecondary = Color.White,
-    secondaryContainer = AquaContainer,
-    onSecondaryContainer = AquaOnContainer,
-    tertiary = Slate40,
+    secondaryContainer = WaterBlue90,
+    onSecondaryContainer = WaterBlue10,
+    tertiary = WaterBlue40,
     onTertiary = Color.White,
-    tertiaryContainer = SlateContainer,
-    onTertiaryContainer = SlateOnContainer,
+    tertiaryContainer = WaterBlue90,
+    onTertiaryContainer = WaterBlue10,
     background = Mist,
     onBackground = Ink,
     surface = Color.White,
@@ -64,19 +67,19 @@ private val LightScheme = lightColorScheme(
     surfaceContainerHighest = Color(0xFFCEDCEC),
 )
 
-private val DarkScheme = darkColorScheme(
+internal val DarkScheme = darkColorScheme(
     primary = WaterBlue80,
     onPrimary = WaterBlue10,
     primaryContainer = WaterBlue30,
     onPrimaryContainer = WaterBlue90,
-    secondary = Aqua80,
-    onSecondary = DarkOnAqua,
-    secondaryContainer = DarkAquaContainer,
-    onSecondaryContainer = DarkOnAquaContainer,
-    tertiary = Slate80,
-    onTertiary = DarkOnSlate,
-    tertiaryContainer = DarkSlateContainer,
-    onTertiaryContainer = DarkOnSlateContainer,
+    secondary = WaterBlue80,
+    onSecondary = WaterBlue10,
+    secondaryContainer = WaterBlue30,
+    onSecondaryContainer = WaterBlue90,
+    tertiary = WaterBlue80,
+    onTertiary = WaterBlue10,
+    tertiaryContainer = WaterBlue30,
+    onTertiaryContainer = WaterBlue90,
     background = SurfaceDark,
     onBackground = DarkOnSurface,
     surface = SurfaceDarkAlt,
@@ -124,6 +127,27 @@ val ExpressiveEffects = spring<Float>(
     stiffness = Spring.StiffnessMedium,
 )
 
+/** Tonal controls use the same accent as primary actions, including dynamic palettes. */
+internal fun ColorScheme.unifiedControlScheme(): ColorScheme = copy(
+    secondary = primary,
+    onSecondary = onPrimary,
+    secondaryContainer = primaryContainer,
+    onSecondaryContainer = onPrimaryContainer,
+    tertiary = primary,
+    onTertiary = onPrimary,
+    tertiaryContainer = primaryContainer,
+    onTertiaryContainer = onPrimaryContainer,
+)
+
+internal data class ScanCardColors(val container: Color, val content: Color)
+
+internal fun ColorScheme.scanCardColors(): ScanCardColors =
+    if (background.luminance() > 0.5f) {
+        ScanCardColors(lerp(primary, onPrimaryContainer, 0.4f), onPrimary)
+    } else {
+        ScanCardColors(primaryContainer, onPrimaryContainer)
+    }
+
 @Composable
 fun SmartLifeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -131,12 +155,13 @@ fun SmartLifeTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val scheme: ColorScheme = when {
+    val baseScheme: ColorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         darkTheme -> DarkScheme
         else -> LightScheme
     }
+    val scheme = remember(baseScheme) { baseScheme.unifiedControlScheme() }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {

@@ -13,6 +13,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
@@ -43,19 +45,25 @@ fun SharedCardScene(
     visibility: AnimatedVisibilityScope,
     entryId: String,
     active: Boolean = true,
+    clipWhenInactive: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(LocalCardScene provides CardScene(shared, visibility, entryId)) {
-        // NavHost retains the outgoing destination above the source during pop.
-        // Clip its local layer (including hit testing), while shared content keeps
-        // drawing in the shared overlay. The revealed source is immediately tappable.
+        // Full-screen pages retained above a popped source must not block touches.
+        // Peer tabs retain their pixels until NavHost draws the replacement; hiding
+        // them on currentEntry changes can precede the new scene by a whole frame.
         val semantics = if (!active)
             Modifier.clearAndSetSemantics { } else Modifier
-        val outgoingClip = if (!active) Modifier.graphicsLayer {
+        val outgoingClip = if (!active && clipWhenInactive) Modifier.graphicsLayer {
             clip = true
             shape = EmptySceneShape
         } else Modifier
-        Box(Modifier.fillMaxSize().then(semantics).then(outgoingClip)) { content() }
+        val inactiveInput = if (!active && !clipWhenInactive) Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+            }
+        } else Modifier
+        Box(Modifier.fillMaxSize().then(semantics).then(outgoingClip).then(inactiveInput)) { content() }
     }
 }
 

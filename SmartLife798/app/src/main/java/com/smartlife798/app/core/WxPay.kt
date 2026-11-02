@@ -17,7 +17,8 @@ import kotlinx.coroutines.CompletableDeferred
  * `com.smartlife798.app.wxapi.WXPayEntryActivity` 回传，最后仍以 `trans/confirm` 为准。
  *
  * 注意：微信要求 **应用包名 + 签名 + appId** 在开放平台登记一致。原 APK 的
- * `wx03092553dbf49755` 绑定的是原厂签名，重制版若用 debug 签名，微信会返回 -1（签名校验失败）。
+ * `wx03092553dbf49755` 来自原应用；当前独立包身份未取得平台匹配验收。
+ * -1 是通用错误，具体原因须结合微信提示，不能一概解释为签名不符。
  * 客户端不伪造结果，回调仅保留状态码和安全文案。
  */
 object WxPay {
