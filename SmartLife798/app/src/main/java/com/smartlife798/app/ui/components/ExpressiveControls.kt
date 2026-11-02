@@ -60,7 +60,8 @@ fun ChoiceButtonGroup(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-) = AdaptiveChoiceGroup(labels, selectedIndex, onSelect, modifier, enabled, settings = false)
+    secondary: Boolean = false,
+) = AdaptiveChoiceGroup(labels, selectedIndex, onSelect, modifier, enabled, settings = false, secondary = secondary)
 
 @Composable
 fun SettingsChoiceButtonGroup(
@@ -80,10 +81,11 @@ private fun AdaptiveChoiceGroup(
     enabled: Boolean,
     settings: Boolean,
     icons: List<ImageVector?> = emptyList(),
+    secondary: Boolean = false,
 ) {
     if (labels.isEmpty()) return
     val colors = MaterialTheme.colorScheme
-    val style = if (settings) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
+    val style = if (settings || secondary) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
         else MaterialTheme.typography.labelLarge
     val padding = if (settings) PaddingValues(10.dp) else ToggleButtonDefaults.ContentPadding
     val density = LocalDensity.current
@@ -139,7 +141,7 @@ private fun AdaptiveChoiceGroup(
                                 Text(label, style = style, textAlign = TextAlign.Center,
                                     maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                             }
-                            if (settings) {
+                            if (settings || secondary) {
                                 TonalToggleButton(
                                     checked = isSelected,
                                     onCheckedChange = { onSelect(index) },
@@ -151,10 +153,10 @@ private fun AdaptiveChoiceGroup(
                                         checkedShape = RoundedCornerShape(14.dp),
                                     ),
                                     colors = ToggleButtonDefaults.tonalToggleButtonColors(
-                                        containerColor = colors.surfaceContainerLow,
-                                        checkedContainerColor = colors.primaryContainer,
-                                        contentColor = colors.onSurface,
-                                        checkedContentColor = colors.onSurface,
+                                        containerColor = if (secondary) androidx.compose.ui.graphics.Color.Transparent else colors.surfaceContainerLow,
+                                        checkedContainerColor = if (secondary) colors.secondaryContainer else colors.primaryContainer,
+                                        contentColor = if (secondary) colors.onSurfaceVariant else colors.onSurface,
+                                        checkedContentColor = if (secondary) colors.onSecondaryContainer else colors.onSurface,
                                     ),
                                     contentPadding = padding,
                                     content = content,
@@ -163,6 +165,10 @@ private fun AdaptiveChoiceGroup(
                                 ToggleButton(checked = isSelected,
                                     onCheckedChange = { onSelect(index) }, enabled = enabled,
                                     interactionSource = interactionSource, modifier = buttonModifier,
+                                    shapes = ToggleButtonDefaults.shapes(
+                                        shape = RoundedCornerShape(14.dp),
+                                        checkedShape = RoundedCornerShape(14.dp),
+                                    ),
                                     contentPadding = padding, content = content)
                             }
                         },

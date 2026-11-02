@@ -12,11 +12,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -37,9 +41,29 @@ fun SharedCardScene(
     shared: SharedTransitionScope,
     visibility: AnimatedVisibilityScope,
     entryId: String,
+    active: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalCardScene provides CardScene(shared, visibility, entryId), content = content)
+    CompositionLocalProvider(LocalCardScene provides CardScene(shared, visibility, entryId)) {
+        // NavHost retains the outgoing destination above the source during pop.
+        // Clip its local layer (including hit testing), while shared content keeps
+        // drawing in the shared overlay. The revealed source is immediately tappable.
+        val semantics = if (!active)
+            Modifier.clearAndSetSemantics { } else Modifier
+        val outgoingClip = if (!active) Modifier.graphicsLayer {
+            clip = true
+            shape = EmptySceneShape
+        } else Modifier
+        Box(Modifier.fillMaxSize().then(semantics).then(outgoingClip)) { content() }
+    }
+}
+
+private val EmptySceneShape = object : Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline = Outline.Rectangle(Rect.Zero)
 }
 
 @Composable

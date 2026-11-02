@@ -190,7 +190,7 @@ fun MeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(
-                        modifier = Modifier.weight(1f).sharedCard(CardOrigin.WALLET).clickable(onClick = onOpenWallet).padding(vertical = 4.dp),
+                        modifier = Modifier.weight(1f).clickable(onClick = onOpenWallet).sharedCard(CardOrigin.WALLET).padding(vertical = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {

@@ -2,6 +2,7 @@
 
 package com.smartlife798.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -246,8 +247,7 @@ fun HomeScreen(
         } else {
             items(recents.take(4), key = { it.id }) { recent ->
                 Card(
-                    onClick = { onOpenDevice(recent.id, CardOrigin.HOME_RECENT) },
-                    modifier = Modifier.sharedCard(CardOrigin.HOME_RECENT, recent.id).fillMaxWidth(),
+                    modifier = Modifier.clickable { onOpenDevice(recent.id, CardOrigin.HOME_RECENT) }.sharedCard(CardOrigin.HOME_RECENT, recent.id).fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
@@ -379,8 +379,7 @@ private fun ActiveUsageCard(
     onEnd: () -> Unit,
 ) {
     Card(
-        onClick = { onOpenDevice(active.deviceId) },
-        modifier = Modifier.sharedCard(CardOrigin.HOME_ACTIVE, active.deviceId).fillMaxWidth(),
+        modifier = Modifier.clickable { onOpenDevice(active.deviceId) }.sharedCard(CardOrigin.HOME_ACTIVE, active.deviceId).fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
     ) {
@@ -484,8 +483,7 @@ private fun ActiveUsageCard(
 @Composable
 private fun FavoriteTile(device: Device, pinned: Boolean, onClick: () -> Unit) {
     Card(
-        onClick = onClick,
-        modifier = Modifier.sharedCard(CardOrigin.HOME_FAVORITE, device.id).width(176.dp),
+        modifier = Modifier.clickable(onClick = onClick).sharedCard(CardOrigin.HOME_FAVORITE, device.id).width(176.dp),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
