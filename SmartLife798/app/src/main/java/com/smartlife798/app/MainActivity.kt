@@ -217,14 +217,10 @@ private fun AppRoot(
     }
 
     if (!loggedIn) {
-        Box(Modifier.fillMaxSize()) {
-            LoginScreen(vm = vm)
-            androidx.compose.material3.TextButton(
-                onClick = { vm.checkAppUpdate(manual = true) },
-                enabled = !checkingUpdate,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
-            ) { Text(if (checkingUpdate) "正在检查更新…" else "检查客户端更新") }
-            SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter))
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbar) },
+        ) { padding ->
+            LoginScreen(vm = vm, modifier = Modifier.padding(padding))
         }
         return
     }

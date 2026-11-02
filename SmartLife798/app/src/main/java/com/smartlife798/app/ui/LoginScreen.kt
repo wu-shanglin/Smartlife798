@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.ui.components.HintBanner
@@ -57,7 +61,8 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 @Composable
-fun LoginScreen(vm: MainViewModel) {
+fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
+    val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var phone by remember { mutableStateOf("") }
     var captchaInput by remember { mutableStateOf("") }
@@ -94,10 +99,10 @@ fun LoginScreen(vm: MainViewModel) {
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
+            .imePadding(),
     ) {
         Column(
             modifier = Modifier
@@ -225,6 +230,14 @@ fun LoginScreen(vm: MainViewModel) {
                             Text(if (countdown > 0) "${countdown}s" else if (sending) "发送中" else "获取验证码")
                         }
                     }
+                    error?.let { message ->
+                        Text(
+                            message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                        )
+                    }
                     Button(
                         enabled = phone.length == 11 && smsInput.isNotBlank() && !submitting,
                         onClick = {
@@ -237,7 +250,10 @@ fun LoginScreen(vm: MainViewModel) {
                                     // the root composable over to the main UI.
                                     when (val res = vm.login(phone, smsInput)) {
                                         is Res.Ok -> Unit
-                                        is Res.Fail -> error = res.msg
+                                        is Res.Fail -> {
+                                            error = res.msg.ifBlank { "登录失败，请稍后重试" }
+                                            vm.notify(error.orEmpty())
+                                        }
                                     }
                                 } finally { submitting = false }
                             }
@@ -254,17 +270,17 @@ fun LoginScreen(vm: MainViewModel) {
                             )
                             Spacer(Modifier.width(10.dp))
                         }
-                        Text("登录")
-                    }
-                    if (error != null) {
-                        Text(
-                            error!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                        Text(if (submitting) "登录中…" else "登录")
                     }
                 }
             }
+
+            TextButton(
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                onClick = { vm.checkAppUpdate(manual = true) },
+                enabled = !checkingUpdate,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (checkingUpdate) "正在检查更新…" else "检查客户端更新") }
 
             HintBanner(
                 "本客户端直接连接「慧生活798」官方服务端（${Api.BASE_URL}），登录、设备与计费数据均来自真实接口，" +

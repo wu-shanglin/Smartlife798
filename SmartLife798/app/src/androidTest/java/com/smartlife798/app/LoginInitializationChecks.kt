@@ -23,13 +23,25 @@ object LoginInitializationChecks {
         val missions = AtomicInteger()
         val logins = AtomicInteger()
         val unexpectedWrites = AtomicInteger()
+        var savedAutoCheckIn: Boolean? = null
         try {
             test.runOnMainSync { ServiceLocator.init(test.targetContext) }
             check(Store.token.isNullOrBlank())
+            savedAutoCheckIn = Store.autoCheckIn()
+            Store.saveAutoCheckIn(true)
             val client = original.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
                 val req = chain.request()
                 val data = when (req.url.encodedPath) {
-                    "/api/v1/acc/login" -> { logins.incrementAndGet(); """{"al":{"token":"offline-login-token","uid":"offline-login-user"}}""" }
+                    "/api/v1/acc/login" -> {
+                        Thread.sleep(700)
+                        when (logins.incrementAndGet()) {
+                            1 -> return@addInterceptor Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(200).message("offline")
+                                .body("""{"code":-1,"msg":"短信验证码错误"}""".toResponseBody()).build()
+                            2 -> "null"
+                            3 -> """{"al":{"uid":"offline-login-user"}}"""
+                            else -> """{"al":{"token":"offline-login-token","uid":"offline-login-user"}}"""
+                        }
+                    }
                     "/api/v1/ui/app/master" -> { Thread.sleep(200); """{"account":{"id":"offline-login-user","name":"离线登录用户"},"favos":[]}""" }
                     "/api/v1/acc/score/mission-lst" -> { missions.incrementAndGet(); """{"accScoreRsp":{"validScore":"1","daily":{"ltime":${System.currentTimeMillis()},"week":127}}}""" }
                     "/api/v1/bill/lst-owner" -> "[]"
@@ -71,30 +83,58 @@ object LoginInitializationChecks {
                     ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
                 SystemClock.sleep(250)
             }
-            await {
-                val root = test.uiAutomation.rootInActiveWindow
-                var button = nodes(root).firstOrNull { it.text?.toString() == "登录" }
-                while (button != null && !button.isClickable) button = button.parent
-                val bounds = android.graphics.Rect()
-                val screen = android.graphics.Rect()
-                button?.getBoundsInScreen(bounds)
-                root?.getBoundsInScreen(screen)
-                if (button?.isEnabled == true && screen.contains(bounds.centerX(), bounds.centerY())) {
-                    android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
-                        "input tap ${bounds.centerX()} ${bounds.centerY()}"
-                    )).use { it.readBytes() }
-                    true
-                } else false
+            fun clickLogin() {
+                await {
+                    val root = test.uiAutomation.rootInActiveWindow
+                    var button = nodes(root).firstOrNull { it.text?.toString() == "登录" }
+                    while (button != null && !button.isClickable) button = button.parent
+                    val bounds = android.graphics.Rect()
+                    val screen = android.graphics.Rect()
+                    button?.getBoundsInScreen(bounds)
+                    root?.getBoundsInScreen(screen)
+                    if (button?.isEnabled == true && screen.contains(bounds.centerX(), bounds.centerY())) {
+                        android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
+                            "input tap ${bounds.centerX()} ${bounds.centerY()}"
+                        )).use { it.readBytes() }
+                        true
+                    } else false
+                }
             }
+            fun visibleText(value: String) = nodes(test.uiAutomation.rootInActiveWindow).any {
+                it.text?.toString() == value && it.isVisibleToUser
+            }
+            stage = "rejection feedback and non-overlapping update entry"
+            val all = nodes(test.uiAutomation.rootInActiveWindow)
+            val loginBounds = android.graphics.Rect()
+            val updateBounds = android.graphics.Rect()
+            all.first { it.text?.toString() == "登录" }.getBoundsInScreen(loginBounds)
+            all.first { it.text?.toString() == "检查客户端更新" }.getBoundsInScreen(updateBounds)
+            check(!android.graphics.Rect.intersects(loginBounds, updateBounds))
+            clickLogin()
+            await { visibleText("登录中…") }
+            await { visibleText("短信验证码错误") }
+            check(logins.get() == 1 && Store.token.isNullOrBlank())
+            stage = "missing account response remains on login"
+            clickLogin()
+            await { visibleText("登录响应缺少账号信息，请重试") }
+            check(Store.token.isNullOrBlank())
+            stage = "missing token response remains on login"
+            clickLogin()
+            await { visibleText("登录响应缺少令牌") }
+            check(Store.token.isNullOrBlank())
+            stage = "successful login feedback"
+            clickLogin()
+            await { visibleText("登录成功") }
             stage = "owned initialization after composition removal"
             await { missions.get() > 0 && nodes(test.uiAutomation.rootInActiveWindow).any { it.text?.toString()?.contains("离线登录用户") == true } }
-            check(logins.get() == 1 && unexpectedWrites.get() == 0)
-            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; one login, zero SMS/pay/device writes; terminal fixtures\n")
+            check(logins.get() == 4 && unexpectedWrites.get() == 0)
+            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; four login attempts, zero SMS/pay/device writes; terminal fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
         } finally {
             test.runOnMainSync { activity?.let { it.viewModelStore.clear(); it.finish() }; session.clear() }
+            savedAutoCheckIn?.let { Store.saveAutoCheckIn(it) }
             field.set(null, original)
         }
         test.finish(code, result)
