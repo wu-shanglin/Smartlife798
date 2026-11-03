@@ -299,7 +299,7 @@
         "id"
       ],
       "response": "BaseReq",
-      "use": "close transaction",
+      "use": "close unpaid transaction explicitly; read bill/view-full before (same id, status 1/4) and after (status 9 required); no automatic retry; not ord/cancel or refund",
       "verified": "static"
     },
     {

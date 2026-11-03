@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
@@ -217,6 +218,15 @@ private fun AppRoot(
         return
     }
 
+    val guideBasicsDone by vm.guideBasicsDone.collectAsStateWithLifecycle()
+    if (!guideBasicsDone) {
+        if (!showUpdate) com.smartlife798.app.ui.FirstUseGuide(vm, onExitApp)
+        else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        return
+    }
+    var deferGuideForNfc by rememberSaveable { mutableStateOf(incomingNfc != null) }
+    LaunchedEffect(incomingNfc) { if (incomingNfc != null) deferGuideForNfc = true }
+
     if (!loggedIn) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
@@ -231,6 +241,8 @@ private fun AppRoot(
     val startDestination = rememberSaveable { vm.startupPage.value.route }
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
+    com.smartlife798.app.ui.NewFeaturesPrompt(vm, eligible = !showUpdate && !deferGuideForNfc && incomingNfc == null &&
+        currentEntry?.destination?.route in setOf("home", "devices", "orders", "me"))
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner) {
         val raw = incomingNfc ?: return@LaunchedEffect

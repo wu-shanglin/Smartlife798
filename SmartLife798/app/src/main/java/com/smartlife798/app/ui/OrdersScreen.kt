@@ -402,6 +402,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             activity = activity,
             bill = target,
             onDismiss = { payTarget = null },
+            onCancelled = { payTarget = null; detail = null; scope.launch { loadBills(true) } },
             onPaid = {
                 payTarget = null
                 detail = null

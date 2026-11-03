@@ -254,6 +254,24 @@ object Store {
         }
     }
 
+    /** Installation-level learning state, deliberately retained across account changes. */
+    fun guideStarted(): Boolean = prefs.getBoolean("guideStarted", false)
+    fun guideBasicsDone(): Boolean = prefs.getBoolean("guideBasicsDone", false)
+    fun guideSeen(): Set<String> = prefs.getStringSet("guideSeen", emptySet())?.toSet().orEmpty()
+    fun initializeGuide() {
+        if (guideStarted()) return
+        // Old installations have no guide keys. Preserve their access; offer one feature digest.
+        val existing = listOf("token", "uid", "profile", "themeMode", "startupPage", "recents", "autoCheckIn")
+            .any(prefs::contains)
+        prefs.edit { putBoolean("guideStarted", true); putBoolean("guideBasicsDone", existing) }
+    }
+    fun saveGuideSeen(keys: Set<String>, basicsDone: Boolean = guideBasicsDone()) {
+        prefs.edit {
+            putStringSet("guideSeen", guideSeen() + keys)
+            putBoolean("guideBasicsDone", basicsDone)
+        }
+    }
+
     fun clearAll() {
         prefs.edit { clear() }
     }
