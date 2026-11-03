@@ -2,7 +2,6 @@
 
 package com.smartlife798.app.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -348,13 +347,12 @@ private fun ScanHeroCard(onScan: () -> Unit) {
             Text(
                 "扫描设备上的二维码，自动识别水控、淋浴、洗衣等设备并进入使用页",
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Normal,
                 color = onContainer,
             )
             Spacer(Modifier.height(6.dp))
             Surface(
-                color = onContainer.copy(alpha = 0.16f),
-                border = BorderStroke(1.dp, onContainer.copy(alpha = 0.45f)),
+                color = onContainer,
                 shape = RoundedCornerShape(50),
             ) {
                 Row(
@@ -364,10 +362,10 @@ private fun ScanHeroCard(onScan: () -> Unit) {
                     Text(
                         "打开相机扫码",
                         style = MaterialTheme.typography.labelLarge,
-                        color = onContainer,
+                        color = container,
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("→", color = onContainer)
+                    Text("→", color = container)
                 }
             }
         }

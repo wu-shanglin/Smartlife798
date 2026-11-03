@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -54,15 +55,15 @@ internal val LightScheme = lightColorScheme(
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
     surfaceTint = WaterBlue40,
-    inverseSurface = Color(0xFF2E3135),
-    inverseOnSurface = Color(0xFFF0F0F7),
-    inversePrimary = WaterBlue80,
-    surfaceDim = Color(0xFFD6E7EF),
+    inverseSurface = WaterBlue90,
+    inverseOnSurface = WaterBlue10,
+    inversePrimary = WaterBlue40,
+    surfaceDim = Color(0xFFDADDE8),
     surfaceBright = Mist,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF7FBFE),
-    surfaceContainer = Color(0xFFE7F3FA),
-    surfaceContainerHighest = Color(0xFFD5EAF5),
+    surfaceContainerLow = Color(0xFFF4F5FC),
+    surfaceContainer = Color(0xFFEDEFF8),
+    surfaceContainerHighest = Color(0xFFDFE4F2),
 )
 
 internal val DarkScheme = darkColorScheme(
@@ -96,10 +97,10 @@ internal val DarkScheme = darkColorScheme(
     inverseOnSurface = Color(0xFF2E3135),
     inversePrimary = WaterBlue40,
     surfaceDim = SurfaceDark,
-    surfaceBright = Color(0xFF354D5B),
-    surfaceContainerLowest = Color(0xFF0B0F14),
-    surfaceContainerLow = Color(0xFF122630),
-    surfaceContainer = Color(0xFF1B3341),
+    surfaceBright = Color(0xFF3A3E4C),
+    surfaceContainerLowest = Color(0xFF0A0D14),
+    surfaceContainerLow = Color(0xFF171B25),
+    surfaceContainer = Color(0xFF1D222E),
     surfaceContainerHighest = DarkSurfaceVariant,
 )
 
@@ -135,18 +136,17 @@ internal fun ColorScheme.unifiedControlScheme(): ColorScheme = copy(
     onTertiary = onPrimary,
     tertiaryContainer = primaryContainer,
     onTertiaryContainer = onPrimaryContainer,
+    // Light-mode notices use a tonal surface instead of an almost-black bar.
+    inverseSurface = if (background.luminance() > 0.5f) primaryContainer else inverseSurface,
+    inverseOnSurface = if (background.luminance() > 0.5f) onPrimaryContainer else inverseOnSurface,
+    inversePrimary = if (background.luminance() > 0.5f) primary else inversePrimary,
 )
 
 internal data class ScanCardColors(val container: Color, val content: Color)
 
-// The brand hero stays luminous in both modes; dynamic colour uses its own
-// light container/content pair rather than darkening an arbitrary primary.
-internal fun ColorScheme.scanCardColors(): ScanCardColors =
-    if (primary == LightScheme.primary || primary == DarkScheme.primary) {
-        ScanCardColors(SkyBlue, Color.White)
-    } else {
-        ScanCardColors(primaryContainer, onPrimaryContainer)
-    }
+// Use the matched Material foreground in each mode: vivid blue/white in
+// light mode, periwinkle/deep blue in dark mode, and the selected dynamic pair.
+internal fun ColorScheme.scanCardColors(): ScanCardColors = ScanCardColors(primary, onPrimary)
 
 @Composable
 fun SmartLifeTheme(

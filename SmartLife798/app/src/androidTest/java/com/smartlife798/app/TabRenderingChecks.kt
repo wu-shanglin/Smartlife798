@@ -95,7 +95,38 @@ object TabRenderingChecks {
             check(samples.get() >= 16) { "insufficient rendered samples" }
             check(missing.get() == 0) { "scan button absent in ${missing.get()} copied frames" }
             check(errors.get() == 0) { "pixel copy failures" }
-            result.putString("stream", "PASS: 16 real main-tab switches; rendered scan-button samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}; offline only, not an FPS measurement\n")
+            test.runOnMainSync { view.viewTreeObserver.removeOnDrawListener(draw) }
+            listener = null
+            stage = "capture reference theme pairs"
+            fun capture(name: String) {
+                test.waitForIdleSync()
+                val bitmap = checkNotNull(test.uiAutomation.takeScreenshot())
+                try {
+                    java.io.File(test.targetContext.cacheDir, name).outputStream().use {
+                        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                    }
+                } finally { bitmap.recycle() }
+            }
+            capture("home.png")
+            test.runOnMainSync { Appearance.setMode(ThemeMode.DARK) }
+            Thread.sleep(500)
+            capture("dark.png")
+            test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
+            Thread.sleep(500)
+            tap("设备")
+            await { find(test, "我的设备") != null }
+            Thread.sleep(500)
+            capture("devices.png")
+            tap("订单")
+            await { find(test, "订单与记录") != null }
+            Thread.sleep(500)
+            capture("orders.png")
+            var pending = find(test, "待付款 1") ?: error("pending tab absent")
+            while (!pending.isClickable) pending = pending.parent ?: error("pending action absent")
+            check(pending.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            Thread.sleep(500)
+            capture("preview_bills.png")
+            result.putString("stream", "PASS: 16 real main-tab switches; rendered scan-button samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}; light/dark palette and page captures; offline only, not an FPS measurement\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}: ${failure.message}; root=${test.uiAutomation.rootInActiveWindow?.packageName}, finishing=${activity?.isFinishing}; samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}\n")

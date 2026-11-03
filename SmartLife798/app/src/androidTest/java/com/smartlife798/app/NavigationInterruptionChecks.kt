@@ -61,6 +61,10 @@ object NavigationInterruptionChecks {
                 val start = SystemClock.elapsedRealtime()
                 await(1000) { reads.get() > before }
                 check(SystemClock.elapsedRealtime() - start < 1000)
+                // A retained outgoing page can finish another read. Before the
+                // next Back, also require the new detail's active action. Keep
+                // cross-process accessibility queries outside the request timer.
+                await { find(test, "返回") != null }
                 Thread.sleep(120)
             }
             stage = "system back during entry"
