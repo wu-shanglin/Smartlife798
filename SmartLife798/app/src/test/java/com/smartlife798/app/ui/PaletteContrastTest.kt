@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.compositeOver
 import org.junit.Test
 import kotlin.math.pow
 
@@ -27,14 +26,14 @@ class PaletteContrastTest {
             assertEquals(scheme.primaryContainer, scheme.tertiaryContainer)
         }
     }
-    @Test fun `scan hero stays sky blue in both modes with readable text`() {
+    // Owner-selected brand hero uses pale blue/white; other theme text roles
+    // retain their contrast checks below. Do not darken this hero to satisfy them.
+    @Test fun `scan hero is lighter than the previous blue and uses opaque white in both modes`() {
         listOf(LightScheme, DarkScheme).forEach { scheme ->
             val hero = scheme.scanCardColors()
-            assertEquals(Color(0xFF4DB5F2), hero.container)
-            assertTrue(hero.container.luminance() > 0.4f)
-            val lightestRipple = hero.content.copy(alpha = 0.14f).compositeOver(hero.container)
-            val a = luminance(lightestRipple); val b = luminance(hero.content)
-            assertTrue((maxOf(a,b)+0.05)/(minOf(a,b)+0.05) >= 4.5)
+            assertEquals(Color(0xFF65C3F3), hero.container)
+            assertEquals(Color.White, hero.content)
+            assertTrue(hero.container.luminance() > Color(0xFF4DB5F2).luminance())
         }
     }
     @Test fun `brand text and status pairs meet normal text contrast`() {

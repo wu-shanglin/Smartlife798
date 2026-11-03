@@ -143,7 +143,7 @@ internal data class ScanCardColors(val container: Color, val content: Color)
 // light container/content pair rather than darkening an arbitrary primary.
 internal fun ColorScheme.scanCardColors(): ScanCardColors =
     if (primary == LightScheme.primary || primary == DarkScheme.primary) {
-        ScanCardColors(SkyBlue, WaterBlue10)
+        ScanCardColors(SkyBlue, Color.White)
     } else {
         ScanCardColors(primaryContainer, onPrimaryContainer)
     }
