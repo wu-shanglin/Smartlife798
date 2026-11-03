@@ -260,10 +260,17 @@ object Store {
     fun guideSeen(): Set<String> = prefs.getStringSet("guideSeen", emptySet())?.toSet().orEmpty()
     fun initializeGuide() {
         if (guideStarted()) return
-        // Old installations have no guide keys. Preserve their access; offer one feature digest.
+        // Old installations have no guide keys. Do not replay basic cards for existing users.
         val existing = listOf("token", "uid", "profile", "themeMode", "startupPage", "recents", "autoCheckIn")
             .any(prefs::contains)
         prefs.edit { putBoolean("guideStarted", true); putBoolean("guideBasicsDone", existing) }
+    }
+    fun resetGuide() {
+        prefs.edit {
+            putBoolean("guideStarted", true)
+            putBoolean("guideBasicsDone", false)
+            remove("guideSeen")
+        }
     }
     fun saveGuideSeen(keys: Set<String>, basicsDone: Boolean = guideBasicsDone()) {
         prefs.edit {

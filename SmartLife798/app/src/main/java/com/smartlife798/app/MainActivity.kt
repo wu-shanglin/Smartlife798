@@ -218,14 +218,26 @@ private fun AppRoot(
         return
     }
 
-    val guideBasicsDone by vm.guideBasicsDone.collectAsStateWithLifecycle()
-    if (!guideBasicsDone) {
-        if (!showUpdate) com.smartlife798.app.ui.FirstUseGuide(vm, onExitApp)
-        else Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
-        return
-    }
     var deferGuideForNfc by rememberSaveable { mutableStateOf(incomingNfc != null) }
     LaunchedEffect(incomingNfc) { if (incomingNfc != null) deferGuideForNfc = true }
+    val guideDeck by vm.guideDeck.collectAsStateWithLifecycle()
+    val visibleDeck = guideDeck?.takeIf { !showUpdate && (it.manual || it.firstUse || (!deferGuideForNfc && incomingNfc == null)) }
+    if (visibleDeck != null) {
+        val closeGuide = if (visibleDeck.manual) ({ vm.dismissGuide(visibleDeck.id) }) else onExitApp
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = closeGuide,
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            androidx.compose.runtime.key(visibleDeck.id) {
+                com.smartlife798.app.ui.FeatureGuideScreen(
+                    deck = visibleDeck,
+                    onRead = { vm.readGuideCard(visibleDeck.id, it) },
+                    onFinish = { vm.finishGuide(visibleDeck.id) },
+                    onExit = closeGuide,
+                )
+            }
+        }
+    }
 
     if (!loggedIn) {
         Scaffold(
@@ -241,13 +253,11 @@ private fun AppRoot(
     val startDestination = rememberSaveable { vm.startupPage.value.route }
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
-    com.smartlife798.app.ui.NewFeaturesPrompt(vm, eligible = !showUpdate && !deferGuideForNfc && incomingNfc == null &&
-        currentEntry?.destination?.route in setOf("home", "devices", "orders", "me"))
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner) {
+    LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner, visibleDeck?.id) {
         val raw = incomingNfc ?: return@LaunchedEffect
         val entry = currentEntry ?: return@LaunchedEffect
-        if (updateRequired) return@LaunchedEffect
+        if (updateRequired || visibleDeck != null) return@LaunchedEffect
         lifecycleOwner.lifecycle.withResumed { }
         if (entry.destination.route == "developer-tools/nfc") {
             vm.notify("请在采集页点击开始采集后再碰卡")
@@ -266,12 +276,13 @@ private fun AppRoot(
     val nfcReader = remember(activity, vm) {
         activity?.let { com.smartlife798.app.core.NfcDeviceReader(it) { uris -> vm.acceptNfcUris(uris, autoStart = true) } }
     }
-    val normalNfc = currentEntry != null && currentEntry?.destination?.route != "developer-tools/nfc"
+    val normalNfc = visibleDeck == null && currentEntry != null && currentEntry?.destination?.route != "developer-tools/nfc"
     LifecycleResumeEffect(nfcReader, normalNfc) {
         if (normalNfc) nfcReader?.start()
         onPauseOrDispose { nfcReader?.stop() }
     }
-    LaunchedEffect(nfcDevice, currentEntry?.id) {
+    LaunchedEffect(nfcDevice, currentEntry?.id, visibleDeck?.id) {
+        if (visibleDeck != null) return@LaunchedEffect
         val request = nfcDevice ?: return@LaunchedEffect
         val entry = currentEntry ?: return@LaunchedEffect
         entry.lifecycle.withResumed {
@@ -385,6 +396,7 @@ private fun AppRoot(
                         DeveloperToolsScreen(
                             enabled = enabled,
                             onOpenNfc = { navController.navigate("developer-tools/nfc") { launchSingleTop = true } },
+                            onResetGuide = vm::resetGuides,
                             onDisable = { vm.setDeveloperToolsEnabled(false) },
                             onBack = { navController.popBackStack() },
                         )

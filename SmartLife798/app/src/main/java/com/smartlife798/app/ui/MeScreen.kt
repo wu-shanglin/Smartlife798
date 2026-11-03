@@ -51,7 +51,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -90,8 +89,6 @@ fun MeScreen(
     onOpenWallet: () -> Unit,
     onOpenDeveloperTools: () -> Unit = {},
 ) {
-    var showGuide by rememberSaveable { mutableStateOf(false) }
-    if (showGuide) GuideLibrary(vm, onClose = { showGuide = false })
     val profile by vm.profile.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val wallet by vm.wallet.collectAsStateWithLifecycle()
@@ -325,7 +322,7 @@ fun MeScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { showGuide = true }) { Text("使用指南") }
+                    TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = vm::replayGuides) { Text("使用指南") }
                     Text("服务端连接", style = MaterialTheme.typography.titleSmall)
                     InfoRow("接口地址", Api.BASE_URL)
                     InfoRow("客户端标识", "Android_ilife798_$protocolVersion")

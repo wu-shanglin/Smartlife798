@@ -16,11 +16,23 @@ class FeatureGuideTest {
         assertEquals(listOf("new-a:1", "new-b:2"), FeatureGuide.pending(setOf("old:1", "new-b:1", "retired:1"), catalog).map { it.key })
         assertTrue(FeatureGuide.pending(catalog.map { it.key }.toSet(), catalog).isEmpty())
     }
-    @Test fun manyNewTopicsDoNotLengthenFirstUse() {
-        val future = FeatureGuide.topics + (1..40).map { GuideTopic("future-$it:1", "", "", "") }
-        assertEquals(4, FeatureGuide.basics(future).size)
-        assertEquals(listOf("a:2"), FeatureGuide.pending(emptySet(), listOf(GuideTopic("a:1", "", "", ""), GuideTopic("a:2", "", "", ""))).map { it.key })
-        assertEquals(40, FeatureGuide.pending(FeatureGuide.topics.map { it.key }.toSet(), future).size)
+    @Test fun existingUsersNeverReplayTheBasicCard() {
+        val pending = FeatureGuide.pending(emptySet(), includeBasics = false)
+        assertFalse(pending.any { it.basic })
+        assertEquals(FeatureGuide.topics.filterNot { it.basic }, pending)
+    }
+    @Test fun firstUseCombinesOneBasicAndCurrentFeatures() {
+        val fresh = FeatureGuide.pending(emptySet())
+        assertEquals(1, fresh.count { it.basic })
+        assertTrue(fresh.first().basic)
+    }
+    @Test fun partialReadingResumesAtUnreadFeatures() {
+        val firstTwo = FeatureGuide.topics.take(2).map { it.key }.toSet()
+        assertEquals(FeatureGuide.topics.drop(2), FeatureGuide.pending(firstTwo, includeBasics = false))
+    }
+    @Test fun crossVersionBatchContainsOnlyLatestUnseenFeatures() {
+        val future = FeatureGuide.topics + listOf(GuideTopic("new:1", "", "", ""), GuideTopic("new:2", "", "", ""))
+        assertEquals(listOf("new:2"), FeatureGuide.pending(FeatureGuide.topics.map { it.key }.toSet(), future, includeBasics = false).map { it.key })
     }
     @Test fun downgradeDoesNotReshowReadContent() {
         assertTrue(FeatureGuide.pending(setOf("a:2"), listOf(GuideTopic("a:1", "", "", ""))).isEmpty())

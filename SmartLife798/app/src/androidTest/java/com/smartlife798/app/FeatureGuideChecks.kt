@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.*
 import com.smartlife798.app.ui.*
@@ -43,6 +44,7 @@ object FeatureGuideChecks {
         var vm: MainViewModel? = null
         try {
             prefs.edit().clear().commit()
+            test.runOnMainSync { Appearance.restore() }
             Store.initializeGuide()
             check(!Store.guideBasicsDone())
             val fixture = client.newBuilder().apply { interceptors().clear() }.addInterceptor { chain ->
@@ -69,26 +71,61 @@ object FeatureGuideChecks {
                 vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
             }
             stage = "first-use visible"
-            await(test, "扫码找到设备")
+            await(test, "日常使用，从这里开始")
             snapshot(test, "guide-first.png")
             stage = "first-use navigation"
             click(test, "下一步")
             stage = "second page visible"
-            await(test, "掌握使用进度")
-            stage = "back button"
-            click(test, "上一步")
             await(test, "扫码找到设备")
-            check(!Store.guideBasicsDone())
+            stage = "back button"
+            test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await(test, "日常使用，从这里开始")
+            check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:1"))
             click(test, "跳过")
             check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).isEmpty())
             await(test, "手机号登录")
-            stage = "account retention and library"
+            stage = "account retention and unified replay"
             Store.clearAccount()
             check(Store.guideBasicsDone() && Store.guideSeen().size == FeatureGuide.topics.size)
-            test.runOnMainSync { activity!!.setContent { SmartLifeTheme(darkTheme = true) { GuideLibrary(vm!!, onClose = {}) } } }
+            test.runOnMainSync { Appearance.setMode(ThemeMode.DARK); vm!!.replayGuides() }
             await(test, "使用指南")
-            await(test, "扫码找到设备")
-            snapshot(test, "guide-library-dark.png")
+            await(test, "日常使用，从这里开始")
+            snapshot(test, "guide-replay-dark.png")
+            click(test, "跳过")
+            test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
+            stage = "developer reset guard"
+            val seenBefore = Store.guideSeen()
+            test.runOnMainSync { vm!!.resetGuides() }
+            check(Store.guideSeen() == seenBefore && vm!!.guideDeck.value == null)
+            stage = "developer reset confirmation and layout"
+            test.runOnMainSync {
+                vm!!.setDeveloperToolsEnabled(true)
+                activity!!.setContent { SmartLifeTheme {
+                    val batch = vm!!.guideDeck.collectAsState().value
+                    if (batch != null) FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
+                        onFinish = { vm!!.finishGuide(batch.id) }, onExit = { vm!!.dismissGuide(batch.id) })
+                    else DeveloperToolsScreen(true, onOpenNfc = {}, onResetGuide = vm!!::resetGuides, onDisable = {}, onBack = {})
+                } }
+            }
+            await(test, "重置引导卡片")
+            snapshot(test, "developer-tools.png")
+            click(test, "重置引导卡片")
+            await(test, "重置引导卡片？")
+            click(test, "取消")
+            check(Store.guideSeen() == seenBefore)
+            click(test, "重置引导卡片")
+            click(test, "重置并查看")
+            check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
+            check(Store.developerToolsEnabled() && Store.themeModeName() == ThemeMode.LIGHT.name)
+            check(vm!!.guideDeck.value?.topics == FeatureGuide.current())
+            await(test, "日常使用，从这里开始")
+            test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            await(test, "重置引导卡片")
+            check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
+            test.runOnMainSync { vm!!.replayGuides() }
+            await(test, "日常使用，从这里开始")
+            click(test, "跳过")
+            await(test, "重置引导卡片")
             stage = "read-only state blocks cancellation"
             session.token = "fixture-token"
             status = BillStatus.CONFIRMING
@@ -123,16 +160,24 @@ object FeatureGuideChecks {
             Store.saveStartupPage(StartupPage.DEVICES)
             Store.initializeGuide()
             check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).size == FeatureGuide.topics.size)
-            stage = "upgrade digest defers without acknowledgement"
+            stage = "upgrade uses the same fullscreen cards without basics"
             test.runOnMainSync {
                 activity!!.viewModelStore.clear()
                 vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
-                activity!!.setContent { SmartLifeTheme { NewFeaturesPrompt(vm!!, eligible = true) } }
+                val batch = checkNotNull(vm!!.guideDeck.value)
+                check(batch.topics.none { it.basic })
+                activity!!.setContent { SmartLifeTheme {
+                    FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
+                        onFinish = { vm!!.finishGuide(batch.id) }, onExit = {})
+                } }
             }
-            await(test, "了解新增功能")
-            click(test, "稍后")
-            check(Store.guideSeen().isEmpty())
-            result.putString("stream", "PASS: first-use next/back/skip; retained learning; dark library; old-install migration; blocked confirming; server refusal; unconfirmed close; cancel UI keep/confirm and authoritative readback; terminal fixtures only\n")
+            await(test, "了解新功能")
+            await(test, "扫码找到设备")
+            snapshot(test, "guide-update.png")
+            click(test, "下一步")
+            await(test, "掌握使用进度")
+            check(Store.guideSeen() == setOf("scan-nfc:1"))
+            result.putString("stream", "PASS: first-use next/back/skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; blocked confirming; server refusal; unconfirmed close; cancel UI keep/confirm and authoritative readback; terminal fixtures only\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             snapshot(test, "guide-failure.png")
@@ -150,10 +195,12 @@ object FeatureGuideChecks {
                 is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
             } }
             editor.commit()
+            test.runOnMainSync { Appearance.restore() }
         }
         test.finish(code, result)
     }
     private fun snapshot(test: Instrumentation, name: String) {
+        test.uiAutomation.waitForIdle(500, 5000)
         test.uiAutomation.takeScreenshot()?.let { bitmap ->
             java.io.File(test.targetContext.cacheDir, name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
