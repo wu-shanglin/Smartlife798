@@ -218,12 +218,11 @@ private fun AppRoot(
         return
     }
 
-    var deferGuideForNfc by rememberSaveable { mutableStateOf(incomingNfc != null) }
-    LaunchedEffect(incomingNfc) { if (incomingNfc != null) deferGuideForNfc = true }
     val guideDeck by vm.guideDeck.collectAsStateWithLifecycle()
-    val visibleDeck = guideDeck?.takeIf { !showUpdate && (it.manual || it.firstUse || (!deferGuideForNfc && incomingNfc == null)) }
+    val sourceFallback by vm.sourceFallback.collectAsStateWithLifecycle()
+    val visibleDeck = guideDeck?.takeIf { !showUpdate && sourceFallback == null }
     if (visibleDeck != null) {
-        val closeGuide = if (visibleDeck.manual) ({ vm.dismissGuide(visibleDeck.id) }) else onExitApp
+        val closeGuide = onExitApp
         androidx.compose.ui.window.Dialog(
             onDismissRequest = closeGuide,
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),

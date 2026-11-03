@@ -38,7 +38,7 @@ def metadata(gradle: str, minimum: int, notes: str, sha256: str) -> dict:
     if not re.fullmatch(r'[0-9a-f]{64}', sha256):
         raise ValueError('Invalid SHA-256')
     data = dict(versionCode=code, versionName=name, minSupportedVersionCode=minimum, notes=notes,
-                sha256=sha256, historyAvailable=True)
+                sha256=sha256, historyAvailable=True, apkName=f"SmartLife798-{name}-release.apk")
     if len((json.dumps(data, ensure_ascii=False, indent=2) + '\n').encode('utf-8')) > 16_384:
         raise ValueError('Update metadata exceeds legacy response limit')
     return data

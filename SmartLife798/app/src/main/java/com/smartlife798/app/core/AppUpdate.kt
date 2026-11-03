@@ -14,6 +14,7 @@ data class UpdatePolicy(
     val sha256: String,
     val releases: List<UpdateRelease> = emptyList(),
     val historyAvailable: Boolean = false,
+    val artifactName: String? = null,
 ) {
     val releaseUrl: String get() = "$REPOSITORY/releases/tag/v$versionName"
     // The installer must never see different APK bytes under the same content URI.
@@ -22,7 +23,7 @@ data class UpdatePolicy(
         ReleaseVersion.parse(versionName)
         return "SmartLife798-$versionName-$versionCode-$sha256.apk"
     }
-    val apkName: String get() = "SmartLife798-$versionName-debug.apk"
+    val apkName: String get() = artifactName ?: "SmartLife798-$versionName-debug.apk"
     val apkUrl: String get() = "$REPOSITORY/releases/download/v$versionName/$apkName"
     fun available(currentCode: Int) = versionCode > currentCode
     fun required(currentCode: Int) = available(currentCode) && currentCode < minSupportedVersionCode
@@ -77,7 +78,9 @@ data class UpdatePolicy(
             val historyAvailable = root.get("historyAvailable")?.let {
                 it.isJsonPrimitive && it.asJsonPrimitive.isBoolean && it.asBoolean
             } == true
-            return UpdatePolicy(code, name, minimum, notes, hash, releases, historyAvailable)
+            val artifact = root.get("apkName")?.asString
+            require(artifact == null || artifact in setOf("SmartLife798-$name-release.apk", "SmartLife798-$name-debug.apk"))
+            return UpdatePolicy(code, name, minimum, notes, hash, releases, historyAvailable, artifact)
         }
 
         fun cached(json: String?): UpdatePolicy? = try {
@@ -116,13 +119,28 @@ object AppUpdate {
         return root.toString()
     }
 
-    suspend fun fetch(): String {
-        val json = client.fetchPublicText("${UpdatePolicy.REPOSITORY}/releases/latest/download/update.json", 16_384)
+    data class Result(val json: String, val source: UpdateSource)
+
+    suspend fun fetch(preferred: UpdateSource): Result = fetchWith(preferred, ::fetchSource)
+
+    internal suspend fun fetchWith(preferred: UpdateSource, fetch: suspend (UpdateSource) -> String): Result {
+        var failure: Exception? = null
+        for (source in preferred.attempts()) {
+            try { return Result(fetch(source), source) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: java.io.IOException) { failure = e }
+            catch (e: RuntimeException) { failure = e }
+        }
+        throw failure ?: java.io.IOException("No update source")
+    }
+
+    private suspend fun fetchSource(source: UpdateSource): String {
+        val json = client.fetchPublicText(source.url("${UpdatePolicy.REPOSITORY}/releases/latest/download/update.json"), 16_384)
         val policy = UpdatePolicy.parse(json)
         if (!policy.historyAvailable) return json
         return try {
             val history = client.fetchPublicText(
-                "${UpdatePolicy.REPOSITORY}/releases/download/v${policy.versionName}/release-history.json", 1_048_576,
+                source.url("${UpdatePolicy.REPOSITORY}/releases/download/v${policy.versionName}/release-history.json"), 1_048_576,
             )
             mergeHistory(json, history)
         } catch (e: kotlinx.coroutines.CancellationException) {

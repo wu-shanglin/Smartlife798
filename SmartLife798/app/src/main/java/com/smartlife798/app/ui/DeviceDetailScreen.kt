@@ -735,7 +735,7 @@ private fun HeroCard(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
                 ) {
                     Icon(
-                        Icons.Filled.Star,
+                        com.smartlife798.app.ui.components.PinIcon,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                         tint = if (pinned) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,

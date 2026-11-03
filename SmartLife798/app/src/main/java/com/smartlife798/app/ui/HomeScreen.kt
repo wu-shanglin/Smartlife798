@@ -252,7 +252,7 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier.clickable { onOpenDevice(recent.id, CardOrigin.HOME_RECENT) }.sharedCard(CardOrigin.HOME_RECENT, recent.id).fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 ) {
                     Row(
                         modifier = Modifier
@@ -490,7 +490,7 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
     Card(
         modifier = Modifier.tapDuringFling(isScrolling, onClick).clickable(onClick = onClick).sharedCard(CardOrigin.HOME_FAVORITE, device.id).width(176.dp),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = if (pinned) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -504,7 +504,7 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                if (pinned) Text("📌", style = MaterialTheme.typography.labelMedium)
+                if (pinned) com.smartlife798.app.ui.components.PinBadge()
             }
             Text(
                 device.name.ifBlank { DeviceType.nameOrNull(device.dtype) ?: "设备" },
@@ -531,7 +531,7 @@ private fun EmptyStateCard(title: String, description: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)

@@ -227,7 +227,7 @@ fun DeviceCard(
     Card(
         modifier = Modifier.clickable(onClick = onClick).then(modifier).fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = if (pinned) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
@@ -262,12 +262,7 @@ fun DeviceCard(
                     )
                     if (pinned) {
                         Spacer(Modifier.width(4.dp))
-                        Icon(
-                            Icons.Filled.Star,
-                            contentDescription = "已置顶",
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(14.dp),
-                        )
+                        PinBadge()
                     }
                 }
                 Text(

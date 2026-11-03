@@ -180,7 +180,7 @@ fun MeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Row(
                     modifier = Modifier
@@ -228,7 +228,7 @@ fun MeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -264,7 +264,7 @@ fun MeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SettingsHeading(Icons.Filled.Home, "启动页面", "选择下次打开时显示的页面")
@@ -280,7 +280,7 @@ fun MeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SettingsHeading(Icons.Filled.Settings, "外观", "选择适合你的显示方式")
@@ -319,7 +319,7 @@ fun MeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = vm::replayGuides) { Text("使用指南") }
@@ -375,7 +375,7 @@ fun MeScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("关于本客户端", style = MaterialTheme.typography.titleSmall)
@@ -402,6 +402,14 @@ fun MeScreen(
                             onClick = onOpenDeveloperTools,
                         ) { Text("开发者工具") }
                     }
+                    val preferredSource by vm.updateSource.collectAsStateWithLifecycle()
+                    Text("优先更新源", style = MaterialTheme.typography.titleSmall)
+                    com.smartlife798.app.ui.components.ChoiceButtonGroup(
+                        labels = com.smartlife798.app.core.UpdateSource.entries.map { it.label },
+                        selectedIndex = preferredSource.ordinal,
+                        onSelect = { vm.setUpdateSource(com.smartlife798.app.core.UpdateSource.entries[it]) },
+                    )
+                    Text("连接失败时依次尝试其他来源，临时切换需经你确认。", style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(
                         shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                         onClick = { vm.checkAppUpdate(manual = true) },

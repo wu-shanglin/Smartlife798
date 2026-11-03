@@ -29,7 +29,7 @@ object UpdatePackage {
         .build()
     private const val MAX_BYTES = 200L * 1024 * 1024
 
-    suspend fun download(context: Context, policy: UpdatePolicy, progress: (Int) -> Unit): File =
+    suspend fun download(context: Context, policy: UpdatePolicy, source: UpdateSource = UpdateSource.GITHUB, progress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
             val directory = File(context.cacheDir, "updates").apply { mkdirs() }
             val complete = File(directory, policy.cacheApkName)
@@ -37,7 +37,7 @@ object UpdatePackage {
             var success = false
             val downloadContext = currentCoroutineContext()
             try {
-                Api.awaitResponse(client.newCall(Request.Builder().url(policy.apkUrl).build())) { response ->
+                Api.awaitResponse(client.newCall(Request.Builder().url(source.url(policy.apkUrl)).build())) { response ->
                     if (!response.isSuccessful) throw IOException("APK unavailable")
                     val body = response.body ?: throw IOException("Empty APK")
                     val length = body.contentLength()
@@ -94,6 +94,9 @@ object UpdatePackage {
         }
         val actualHash = digest.digest().joinToString("") { "%02x".format(it) }
         if (actualHash != policy.sha256) throw UpdateVerificationException(UpdateVerificationFailure.HASH)
+        val verified = com.android.apksig.ApkVerifier.Builder(file)
+            .setMinCheckedPlatformVersion(24).build().verify()
+        if (!verified.isVerified) throw UpdateVerificationException(UpdateVerificationFailure.SIGNATURE)
         val pm = context.packageManager
         // Some archive parsers leave SigningInfo empty; request legacy certificates
         // too, and still require an exact non-empty match with the installed APK.
@@ -116,7 +119,10 @@ object UpdatePackage {
             }.toSet()
         }
         val current = signatures(installed)
-        if (current.isEmpty() || current != signatures(archive)) throw UpdateVerificationException(UpdateVerificationFailure.SIGNATURE)
+        val verifiedSigners = verified.signerCertificates.map {
+            MessageDigest.getInstance("SHA-256").digest(it.encoded).joinToString("") { byte -> "%02x".format(byte) }
+        }.toSet()
+        if (current.isEmpty() || current != signatures(archive) || current != verifiedSigners) throw UpdateVerificationException(UpdateVerificationFailure.SIGNATURE)
     }
 
     fun canInstall(context: Context): Boolean =

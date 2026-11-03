@@ -56,6 +56,10 @@ object Store {
             prefs.edit { putString("updatePolicy", value) }
         }
 
+    var updateSource: UpdateSource
+        get() = UpdateSource.fromName(prefs.getString("updateSource", null))
+        set(value) { prefs.edit { putString("updateSource", value.name) } }
+
     /** Public original-app version; installation-wide and retained on logout. */
     var originalAppVersion: String?
         get() = prefs.getString("originalAppVersion", null)

@@ -4,6 +4,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpdatePolicyTest {
+    @Test fun explicitReleaseArtifactAndLegacyDefaultAreRestricted() {
+        assertEquals("SmartLife798-1.7.0-debug.apk", UpdatePolicy.parse(json()).apkName)
+        val release = json().dropLast(1) + ",\"apkName\":\"SmartLife798-1.7.0-release.apk\"}"
+        assertEquals("SmartLife798-1.7.0-release.apk", UpdatePolicy.parse(release).apkName)
+        assertNull(UpdatePolicy.cached(release.replace("SmartLife798-1.7.0-release.apk", "../evil.apk")))
+    }
+
+    @Test fun sourceFallbackOrderFailureAndCancellation() = kotlinx.coroutines.runBlocking {
+        assertEquals(UpdateSource.GITHUB, UpdateSource.fromName("unknown"))
+        val attempts = mutableListOf<UpdateSource>()
+        val result = AppUpdate.fetchWith(UpdateSource.GITHUB) { source ->
+            attempts += source
+            if (source == UpdateSource.GITHUB) throw java.io.IOException()
+            "valid"
+        }
+        assertEquals(listOf(UpdateSource.GITHUB, UpdateSource.GH_PROXY), attempts)
+        assertEquals(UpdateSource.GH_PROXY, result.source)
+        assertEquals(listOf(UpdateSource.GH_PROXY, UpdateSource.GITHUB), UpdateSource.GH_PROXY.attempts())
+        attempts.clear()
+        try {
+            AppUpdate.fetchWith(UpdateSource.GITHUB) { attempts += it; throw kotlinx.coroutines.CancellationException() }
+            fail("cancellation swallowed")
+        } catch (_: kotlinx.coroutines.CancellationException) { }
+        assertEquals(listOf(UpdateSource.GITHUB), attempts)
+        try { AppUpdate.fetchWith(UpdateSource.GITHUB) { throw java.io.IOException() }; fail("failure swallowed") }
+        catch (_: java.io.IOException) { }
+        assertEquals("https://gh-proxy.org/${UpdatePolicy.REPOSITORY}/releases/latest/download/update.json",
+            UpdateSource.GH_PROXY.url("${UpdatePolicy.REPOSITORY}/releases/latest/download/update.json"))
+        try { UpdateSource.GH_PROXY.url("https://i.ilife798.com/api"); fail("business URL accepted") }
+        catch (_: IllegalArgumentException) { }
+    }
+
     @Test fun cacheIdentitySeparatesVersionsAndArtifactBytes() {
         val policy = UpdatePolicy(54, "1.18.2", 37, "", "a".repeat(64))
         assertNotEquals(policy.cacheApkName, policy.copy(versionCode = 55, versionName = "1.18.3").cacheApkName)

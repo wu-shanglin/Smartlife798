@@ -71,17 +71,20 @@ object FeatureGuideChecks {
                 vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
             }
             stage = "first-use visible"
-            await(test, "日常使用，从这里开始")
+            await(test, "轻盈体验，从登录开始")
             snapshot(test, "guide-first.png")
             stage = "first-use navigation"
             click(test, "下一步")
             stage = "second page visible"
-            await(test, "扫码找到设备")
+            await(test, "打开应用，碰一碰直达设备")
             stage = "back button"
             test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-            await(test, "日常使用，从这里开始")
-            check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:1"))
-            click(test, "跳过")
+            await(test, "轻盈体验，从登录开始")
+            check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:2"))
+            check(find(test, "跳过") == null)
+            click(test, "下一步")
+            click(test, "下一步")
+            click(test, "开始使用")
             check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).isEmpty())
             await(test, "手机号登录")
             stage = "account retention and unified replay"
@@ -89,9 +92,12 @@ object FeatureGuideChecks {
             check(Store.guideBasicsDone() && Store.guideSeen().size == FeatureGuide.topics.size)
             test.runOnMainSync { Appearance.setMode(ThemeMode.DARK); vm!!.replayGuides() }
             await(test, "使用指南")
-            await(test, "日常使用，从这里开始")
+            await(test, "轻盈体验，从登录开始")
             snapshot(test, "guide-replay-dark.png")
-            click(test, "跳过")
+            check(find(test, "跳过") == null)
+            click(test, "下一步")
+            click(test, "下一步")
+            click(test, "开始使用")
             test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
             stage = "developer reset guard"
             val seenBefore = Store.guideSeen()
@@ -118,13 +124,16 @@ object FeatureGuideChecks {
             check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
             check(Store.developerToolsEnabled() && Store.themeModeName() == ThemeMode.LIGHT.name)
             check(vm!!.guideDeck.value?.topics == FeatureGuide.current())
-            await(test, "日常使用，从这里开始")
+            await(test, "轻盈体验，从登录开始")
             test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
             await(test, "重置引导卡片")
             check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
             test.runOnMainSync { vm!!.replayGuides() }
-            await(test, "日常使用，从这里开始")
-            click(test, "跳过")
+            await(test, "轻盈体验，从登录开始")
+            check(find(test, "跳过") == null)
+            click(test, "下一步")
+            click(test, "下一步")
+            click(test, "开始使用")
             await(test, "重置引导卡片")
             stage = "read-only state blocks cancellation"
             session.token = "fixture-token"
@@ -165,19 +174,19 @@ object FeatureGuideChecks {
                 activity!!.viewModelStore.clear()
                 vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
                 val batch = checkNotNull(vm!!.guideDeck.value)
-                check(batch.topics.none { it.basic })
+                check(batch.topics == FeatureGuide.current())
                 activity!!.setContent { SmartLifeTheme {
                     FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
                         onFinish = { vm!!.finishGuide(batch.id) }, onExit = {})
                 } }
             }
             await(test, "了解新功能")
-            await(test, "扫码找到设备")
+            await(test, "轻盈体验，从登录开始")
             snapshot(test, "guide-update.png")
             click(test, "下一步")
-            await(test, "掌握使用进度")
-            check(Store.guideSeen() == setOf("scan-nfc:1"))
-            result.putString("stream", "PASS: first-use next/back/skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; blocked confirming; server refusal; unconfirmed close; cancel UI keep/confirm and authoritative readback; terminal fixtures only\n")
+            await(test, "打开应用，碰一碰直达设备")
+            check(Store.guideSeen() == setOf("welcome:2"))
+            result.putString("stream", "PASS: first-use next/back/no-skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; blocked confirming; server refusal; unconfirmed close; cancel UI keep/confirm and authoritative readback; terminal fixtures only\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             snapshot(test, "guide-failure.png")

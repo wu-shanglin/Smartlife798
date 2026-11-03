@@ -3,6 +3,7 @@
 package com.smartlife798.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -46,6 +47,11 @@ fun FeatureGuideScreen(
             isAppearanceLightNavigationBars = !lightIcons
         }
     }
+    val motion = androidx.compose.animation.core.rememberInfiniteTransition(label = "guideIcon")
+    val floatOffset by motion.animateFloat(
+        initialValue = -3f, targetValue = 3f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "float")
     val topics = deck.topics
     var currentKey by rememberSaveable(deck.id) { mutableStateOf(topics.first().key) }
     // A recreated VM may have removed already-read cards from the batch.
@@ -56,7 +62,7 @@ fun FeatureGuideScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (deck.manual) "使用指南" else if (deck.firstUse) "欢迎使用慧生活798" else "了解新功能",
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                TextButton(shapes = ButtonDefaults.shapes(), onClick = onFinish) { Text("跳过") }
+
             }
             Text("${page + 1} / ${topics.size}", style = MaterialTheme.typography.labelLarge)
             LinearProgressIndicator(progress = { (page + 1f) / topics.size }, modifier = Modifier.fillMaxWidth())
@@ -65,15 +71,15 @@ fun FeatureGuideScreen(
             }) { index ->
                 val topic = topics[index]
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Surface(shape = RoundedCornerShape(36.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(96.dp)) {
+                    Surface(shape = RoundedCornerShape(36.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.offset(y = floatOffset.dp).size(64.dp)) {
                         Box(contentAlignment = Alignment.Center) {
                             if (topic.icon == com.smartlife798.app.core.GuideIcon.SCAN)
-                                com.smartlife798.app.QrGlyph(MaterialTheme.colorScheme.onPrimaryContainer, Modifier.size(48.dp))
+                                com.smartlife798.app.QrGlyph(MaterialTheme.colorScheme.onPrimaryContainer, Modifier.size(32.dp))
                             else Icon(when (topic.icon) {
                                 com.smartlife798.app.core.GuideIcon.WALLET -> Icons.Filled.ShoppingCart
                                 com.smartlife798.app.core.GuideIcon.PREFERENCES -> Icons.Filled.Settings
                                 else -> Icons.Filled.Home
-                            }, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                     Text(topic.title, style = MaterialTheme.typography.displaySmall)

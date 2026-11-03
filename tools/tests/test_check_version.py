@@ -19,12 +19,12 @@ class VersionCheckTest(unittest.TestCase):
         gradle.write_text('versionName = "1.7.0"\nversionCode = 23\n', encoding="utf-8")
         (self.root / "CHANGELOG.md").write_text(
             "## [Unreleased]\n\n## [1.7.0] - 2026-10-23\n", encoding="utf-8")
-        self.apk = self.root / "dist/SmartLife798-1.7.0-debug.apk"
+        self.apk = self.root / "dist/SmartLife798-1.7.0-release.apk"
         self.apk.parent.mkdir()
         self.apk.write_bytes(b"test artifact, not an installable APK")
         self.readme = (
             "| 当前版本 | `1.7.0`（`versionCode 23`） |\n"
-            "| 产物 | [APK](dist/SmartLife798-1.7.0-debug.apk) |\n"
+            "| 产物 | [APK](dist/SmartLife798-1.7.0-release.apk) |\n"
         )
         self.write_readme(self.readme)
 
@@ -60,8 +60,8 @@ class VersionCheckTest(unittest.TestCase):
         self.assertEqual(self.run_check().returncode, 1)
 
     def test_link_elsewhere_cannot_hide_wrong_artifact_row(self):
-        self.write_readme(self.readme.replace("1.7.0-debug.apk", "1.6.0-debug.apk") +
-                          "\n旧说明 dist/SmartLife798-1.7.0-debug.apk\n")
+        self.write_readme(self.readme.replace("1.7.0-release.apk", "1.6.0-release.apk") +
+                          "\n旧说明 dist/SmartLife798-1.7.0-release.apk\n")
         self.assertEqual(self.run_check().returncode, 1)
 
     def test_duplicate_current_rows_are_rejected(self):
@@ -70,7 +70,7 @@ class VersionCheckTest(unittest.TestCase):
 
     def test_source_check_ignores_artifacts_and_release_only_requires_file(self):
         self.apk.write_bytes(b"different local build")
-        (self.apk.parent / "SmartLife798-1.6.0-debug.apk").touch()
+        (self.apk.parent / "SmartLife798-1.6.0-release.apk").touch()
         self.assertEqual(self.run_check().returncode, 0)
         self.assertEqual(self.run_check("--require-apk").returncode, 0)
         self.apk.unlink()
