@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +55,7 @@ object BillSheetChecks {
         val channels = AtomicInteger()
         val measurements = mutableListOf<String>()
         var overflowSelections = 0
+        val dark = mutableStateOf(false)
         val short = Bill(id = "offline-short", msg = "短账单夹具", status = BillStatus.PAID, payment = 1.0)
         val long = FixtureData.bills().first().copy(
             id = "offline-long", msg = "长账单夹具", status = BillStatus.UNPAID,
@@ -100,7 +102,7 @@ object BillSheetChecks {
 
                 session.token = "offline-bill-fixture"
                 val vm = ViewModelProvider(screen)[MainViewModel::class.java]
-                screen.setContent { SmartLifeTheme {
+                screen.setContent { SmartLifeTheme(darkTheme = dark.value) {
                     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.statusBarsPadding()) {
                         OrdersScreen(vm) { _, _ -> }
                     }
@@ -138,6 +140,11 @@ object BillSheetChecks {
                     await { find(test, "账户余额") != null }
                     stableTitle(test, "支付账单", measurements)
                     screenshot(test, "bill-payment.png")
+                    test.runOnMainSync { dark.value = true }
+                    Thread.sleep(600)
+                    screenshot(test, "bill-payment-dark.png")
+                    test.runOnMainSync { dark.value = false }
+                    Thread.sleep(400)
                     check(channels.get() == 2 && writes.get() == 0)
                 }
                 stage = "Back closes sheet for $label"

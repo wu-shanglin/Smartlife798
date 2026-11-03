@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.smartlife798.app.ui.theme.actionTextColor
 import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceState
 import com.smartlife798.app.core.DeviceStateKind
@@ -52,12 +51,12 @@ import com.smartlife798.app.core.stateLabel
 @Composable
 fun StatusPill(state: DeviceState) {
     val (container, content) = when (state.kind) {
-        DeviceStateKind.ONLINE -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSurfaceVariant
+        DeviceStateKind.ONLINE -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         DeviceStateKind.RUNNING -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        DeviceStateKind.STARTING -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        DeviceStateKind.STARTING -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         DeviceStateKind.OFFLINE -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
         DeviceStateKind.DISABLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        DeviceStateKind.BLUETOOTH -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSurfaceVariant
+        DeviceStateKind.BLUETOOTH -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
     val animatedContainer by animateColorAsState(
         container, MaterialTheme.motionScheme.fastEffectsSpec(), label = "statusContainer",
@@ -94,11 +93,11 @@ fun SectionHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal)
         if (action != null && onAction != null) {
             TextButton(
                 shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.actionTextColor()),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
                 onClick = onAction,
             ) {
                 Text(action, style = MaterialTheme.typography.labelLarge)
@@ -136,11 +135,11 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.extraLarge) {
+        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.extraLarge) {
             Icon(
                 Icons.Filled.Search,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.padding(18.dp).size(30.dp),
             )
         }
@@ -241,13 +240,13 @@ fun DeviceCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = (DeviceType.nameOrNull(device.dtype) ?: "设备").take(1),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -286,7 +285,7 @@ fun DeviceCard(
                     Text(
                         "已收藏",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.actionTextColor(),
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }

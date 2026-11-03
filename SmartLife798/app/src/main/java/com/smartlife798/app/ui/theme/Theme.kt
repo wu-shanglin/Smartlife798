@@ -18,9 +18,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -31,18 +29,18 @@ internal val LightScheme = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = WaterBlue90,
     onPrimaryContainer = SelectionInk,
-    secondary = WaterBlue40,
+    secondary = MutedAccent,
     onSecondary = Color.White,
-    secondaryContainer = WaterBlue90,
-    onSecondaryContainer = SelectionInk,
-    tertiary = WaterBlue40,
+    secondaryContainer = SecondaryContainer,
+    onSecondaryContainer = MutedAccent,
+    tertiary = MutedAccent,
     onTertiary = Color.White,
-    tertiaryContainer = WaterBlue90,
-    onTertiaryContainer = SelectionInk,
+    tertiaryContainer = TertiaryContainer,
+    onTertiaryContainer = MutedAccent,
     background = Mist,
     onBackground = Ink,
-    surface = Color.White,
-    onSurface = CardInk,
+    surface = Mist,
+    onSurface = Ink,
     // Cards sit on `background`. With a dynamic scheme `surface == background`,
     // so card containers use the tonal token to keep their edge visible.
     surfaceContainerHigh = LightCard,
@@ -55,15 +53,15 @@ internal val LightScheme = lightColorScheme(
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
     surfaceTint = WaterBlue40,
-    inverseSurface = WaterBlue90,
-    inverseOnSurface = SelectionInk,
-    inversePrimary = WaterBlue40,
+    inverseSurface = Color(0xFF10131C),
+    inverseOnSurface = Color(0xFFE5E5EE),
+    inversePrimary = WaterBlue80,
     surfaceDim = Color(0xFFDADDE8),
     surfaceBright = Mist,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF4F5FC),
-    surfaceContainer = Color(0xFFEDEFF8),
-    surfaceContainerHighest = Color(0xFFDFE4F2),
+    surfaceContainerLow = Color(0xFFF2F1FA),
+    surfaceContainer = Color(0xFFEDECF5),
+    surfaceContainerHighest = Color(0xFFDEDEEA),
 )
 
 internal val DarkScheme = darkColorScheme(
@@ -71,14 +69,14 @@ internal val DarkScheme = darkColorScheme(
     onPrimary = WaterBlue10,
     primaryContainer = WaterBlue30,
     onPrimaryContainer = WaterBlue90,
-    secondary = WaterBlue80,
-    onSecondary = WaterBlue10,
-    secondaryContainer = WaterBlue30,
-    onSecondaryContainer = WaterBlue90,
-    tertiary = WaterBlue80,
-    onTertiary = WaterBlue10,
-    tertiaryContainer = WaterBlue30,
-    onTertiaryContainer = WaterBlue90,
+    secondary = DarkSecondary,
+    onSecondary = Color(0xFF25283D),
+    secondaryContainer = DarkSecondaryContainer,
+    onSecondaryContainer = DarkOnSecondaryContainer,
+    tertiary = DarkTertiary,
+    onTertiary = Color(0xFF273044),
+    tertiaryContainer = DarkTertiaryContainer,
+    onTertiaryContainer = DarkOnTertiaryContainer,
     background = SurfaceDark,
     onBackground = DarkOnSurface,
     surface = SurfaceDarkAlt,
@@ -126,30 +124,6 @@ val ExpressiveEffects = spring<Float>(
     stiffness = Spring.StiffnessMedium,
 )
 
-/** Tonal controls use the same accent as primary actions, including dynamic palettes. */
-internal fun ColorScheme.unifiedControlScheme(): ColorScheme = copy(
-    secondary = primary,
-    onSecondary = onPrimary,
-    secondaryContainer = primaryContainer,
-    onSecondaryContainer = onPrimaryContainer,
-    tertiary = primary,
-    onTertiary = onPrimary,
-    tertiaryContainer = primaryContainer,
-    onTertiaryContainer = onPrimaryContainer,
-    // Light-mode notices use a tonal surface instead of an almost-black bar.
-    inverseSurface = if (background.luminance() > 0.5f) primaryContainer else inverseSurface,
-    inverseOnSurface = if (background.luminance() > 0.5f) onPrimaryContainer else inverseOnSurface,
-    inversePrimary = if (background.luminance() > 0.5f) primary else inversePrimary,
-)
-
-/** Text accents are distinct from the solid scan-card fill in the light reference. */
-internal fun ColorScheme.actionTextColor(): Color =
-    if (primary == WaterBlue40 && background.luminance() > 0.5f) ActionInk else primary
-
-/** Page subtitles fade the page ink; card supporting text has its own blue-grey role. */
-internal fun ColorScheme.pageSupportingText(): Color =
-    if (background.luminance() > 0.5f) onBackground.copy(alpha = 0.8f) else onSurfaceVariant
-
 internal data class ScanCardColors(val container: Color, val content: Color)
 
 // Use the matched Material foreground in each mode: vivid blue/white in
@@ -163,13 +137,12 @@ fun SmartLifeTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val baseScheme: ColorScheme = when {
+    val scheme: ColorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         darkTheme -> DarkScheme
         else -> LightScheme
     }
-    val scheme = remember(baseScheme) { baseScheme.unifiedControlScheme() }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {

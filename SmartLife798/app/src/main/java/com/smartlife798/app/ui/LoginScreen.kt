@@ -143,7 +143,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(6.dp))
 
             Surface(
-                color = MaterialTheme.colorScheme.surface,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(24.dp),
                 tonalElevation = 1.dp,
                 modifier = Modifier.fillMaxWidth(),
