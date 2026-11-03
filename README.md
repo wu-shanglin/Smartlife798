@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.19.6`（`versionCode 62`） |
+| 当前版本 | `1.20.0`（`versionCode 63`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.19.6 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.6/SmartLife798-1.19.6-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.6) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**1.19.6 / 62**（已发布）：按参考图统一全应用的主蓝、灰紫次级色、中性文字/卡片和黑色提示条；设备、订单、钱包、设置、详情、登录及弹层共用同一套主题，删除首页取色特例与强制全蓝覆盖。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
+**1.20.0 / 63**（本地候选，未发布）：新增首次使用与跨版本功能指南；钱包及订单支付面板可显式取消未付交易，取消后须读回服务端状态。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
 
 最新公开版本为 **1.19.6 / 62**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.6/SmartLife798-1.19.6-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -48,15 +48,17 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.19.6-debug.apk`](dist/SmartLife798-1.19.6-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.20.0-debug.apk`](dist/SmartLife798-1.20.0-debug.apk) |
 
 交付包沿用既有签名，采用非 debuggable 的 performance 构建；附件保留更新通道的历史文件名。
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 
+首次引导使用当前主题与 Expressive 按钮；更新时只汇总未读功能，不重播基础引导，详见 [引导机制](docs/02-功能设计与UI方案.md#首次使用与功能指南)。
+
 ## 截图
 
-除扫码/手动输入保留历史来源外，下列界面均为 1.19.6 独立 `.offline` 夹具，使用真实 Compose 页面与终止式传输采集；不代表真实设备、签到、充值或支付验收。来源与限制见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
+首次引导、指南与取消确认来自 1.20.0，其余除扫码/手动输入保留历史来源外均为 1.19.6 独立 `.offline` 夹具，使用真实 Compose 页面与终止式传输采集；不代表真实设备、签到、充值或支付验收。来源与限制见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
 
 | 首页 | 设备 | 订单 |
 |---|---|---|
@@ -79,3 +81,7 @@
 | ![深色首页](screenshots/dark.png) | ![深色设置](screenshots/appearance_dark.png) | ![深色支付](screenshots/payment_dark.png) |
 
 历史相机与输入界面：[扫码](screenshots/scan.png) · [手动输入](screenshots/manual.png)。
+
+| 首次使用 | 深色功能指南 | 取消订单确认 |
+|---|---|---|
+| ![首次使用](screenshots/guide-first.png) | ![功能指南](screenshots/guide-library-dark.png) | ![取消订单](screenshots/payment-cancel.png) |

@@ -33,8 +33,13 @@ class UpdateInstallInstrumentation : Instrumentation() {
             com.smartlife798.app.core.session.token = "offline-ui-token"
             com.smartlife798.app.core.session.uid = "preview-user"
         }
+        if (mode != "feature-guide") {
+            ServiceLocator.init(activity)
+            com.smartlife798.app.core.Store.initializeGuide()
+            com.smartlife798.app.core.Store.saveGuideSeen(com.smartlife798.app.core.FeatureGuide.topics.map { it.key }.toSet(), true)
+        }
         super.callActivityOnCreate(activity, state)
-        if (!appRoot && activity is MainActivity && mode !in setOf("update-ui", "forced-exit")) {
+        if (!appRoot && activity is MainActivity && mode !in setOf("update-ui", "forced-exit", "feature-guide")) {
             activity.setContent { }
         }
     }
@@ -51,6 +56,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "feature-guide") { FeatureGuideChecks.run(this); return }
         if (mode == "update-handoff") { UpdateHandoffChecks.run(this); return }
         if (mode == "card-handoff") { CardHandoffChecks.run(this); return }
         if (mode == "tabs") { TabRenderingChecks.run(this); return }

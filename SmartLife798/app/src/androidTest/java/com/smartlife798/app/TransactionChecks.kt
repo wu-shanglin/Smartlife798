@@ -52,6 +52,7 @@ object TransactionChecks {
             stage = "logged-out transaction guard"
             runBlocking {
                 check(vm.payBill(activity!!, "offline-bill", PayChannel(92)) is PaymentFlow.Outcome.Unavailable)
+                check(vm.cancelBill("offline-bill") is Res.Fail)
                 check(vm.createRechargeBill(product) is Res.Fail)
                 check(vm.signAlipay(activity!!) is Res.Fail)
             }
@@ -66,6 +67,7 @@ object TransactionChecks {
                 check(vm.signAlipay(activity!!) is Res.Fail)
                 payer.cancelAndJoin()
                 check(vm.payBill(activity!!, "duplicate", PayChannel(92)) is PaymentFlow.Outcome.Unavailable)
+                check(vm.cancelBill("offline-bill") is Res.Fail)
             }
             check(prepay.get() == 1 && created.get() == 0)
             release.countDown()

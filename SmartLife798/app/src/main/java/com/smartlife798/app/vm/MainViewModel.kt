@@ -74,6 +74,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** A pending "go pay the previous bill" request raised by a failed device start. */
     data class PayRequest(val bill: Bill?, val note: String, val createdAt: Long = System.currentTimeMillis())
 
+    init { Store.initializeGuide() }
+    private val _guideBasicsDone: MutableStateFlow<Boolean> = MutableStateFlow(Store.guideBasicsDone())
+    val guideBasicsDone: StateFlow<Boolean> = _guideBasicsDone.asStateFlow()
+    private val _guideSeen: MutableStateFlow<Set<String>> = MutableStateFlow(Store.guideSeen())
+    val guideSeen: StateFlow<Set<String>> = _guideSeen.asStateFlow()
+    fun acknowledgeGuide(keys: Set<String>, basicsDone: Boolean = false) {
+        Store.saveGuideSeen(keys, basicsDone || _guideBasicsDone.value)
+        _guideSeen.value = Store.guideSeen()
+        _guideBasicsDone.value = Store.guideBasicsDone()
+    }
+
     private val gson = Gson()
     private val transaction = Mutex()
     private val transactionJobs = mutableSetOf<Job>()
@@ -1266,6 +1277,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         currentCoroutineContext().ensureActive()
         if (token != session.token || generation != accountGeneration) throw CancellationException("Account changed")
         return result
+    }
+
+    /** Close once, then require an authoritative cancelled snapshot. Shares the payment lock. */
+    suspend fun cancelBill(billId: String): Res<Unit> = accountTransaction(Res.Fail(-1, "请先登录或等待当前交易完成")) {
+        withContext(Dispatchers.IO) {
+            if (billId.isBlank()) return@withContext Res.Fail(-1, "订单编号为空")
+            val before = accountResponse { Api.billDetail(billId) }
+            if (before is Res.Fail) return@withContext before
+            val bill = (before as Res.Ok).data?.bill
+            if (bill?.id != billId || !bill.isUnpaid) return@withContext Res.Fail(-1, "当前订单不可取消，请刷新查看状态")
+            val closed = accountResponse { Api.closePay(billId) }
+            bumpRefresh()
+            if (closed is Res.Fail) return@withContext Res.Fail(closed.code, "取消未确认：${closed.msg}，请刷新订单核对")
+            val after = accountResponse { Api.billDetail(billId) }
+            val updated = (after as? Res.Ok)?.data?.bill
+            if (updated?.id == billId && updated.status == com.smartlife798.app.core.BillStatus.CANCELLED) Res.Ok(Unit)
+            else Res.Fail(-1, "取消结果待确认，请刷新订单核对；请勿重复支付")
+        }
     }
 
     suspend fun loadChannels(billId: String): Res<List<PayChannel>> = withContext(Dispatchers.IO) {

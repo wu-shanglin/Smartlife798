@@ -59,11 +59,15 @@ fun PaySheet(
     bill: Bill,
     onDismiss: () -> Unit,
     onPaid: () -> Unit,
+    onCancelled: () -> Unit = onDismiss,
 ) {
     val scope = rememberCoroutineScope()
     var channels by remember(bill.id) { mutableStateOf<List<PayChannel>?>(null) }
     var error by remember(bill.id) { mutableStateOf<String?>(null) }
     var selected by remember(bill.id) { mutableStateOf<PayChannel?>(null) }
+    var cancelAttempted by remember(bill.id) { mutableStateOf(false) }
+    var confirmCancel by remember(bill.id) { mutableStateOf(false) }
+    var cancelling by remember(bill.id) { mutableStateOf(false) }
     var paying by remember(bill.id) { mutableStateOf(false) }
     var result by remember(bill.id) { mutableStateOf<String?>(null) }
     var retry by remember(bill.id) { mutableIntStateOf(0) }
@@ -84,7 +88,31 @@ fun PaySheet(
         }
     }
 
-    AppBottomSheet(onDismissRequest = { if (!paying) onDismiss() }, sheetState = sheetState, dismissEnabled = !paying) {
+    if (confirmCancel) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmCancel = false },
+            title = { Text("取消这笔未付订单？") },
+            text = { Text("取消结果以服务端为准。若刚完成付款，请先关闭面板并刷新订单核对。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(shapes = ButtonDefaults.shapes(), onClick = {
+                    if (paying || cancelling) return@TextButton
+                    confirmCancel = false
+                    cancelling = true
+                    cancelAttempted = true
+                    scope.launch {
+                        try {
+                            when (val response = vm.cancelBill(bill.id)) {
+                                is Res.Ok -> { vm.notify("订单已取消"); onCancelled() }
+                                is Res.Fail -> result = response.msg
+                            }
+                        } finally { cancelling = false }
+                    }
+                }) { Text("确认取消") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(shapes = ButtonDefaults.shapes(), onClick = { confirmCancel = false }) { Text("保留订单") } },
+        )
+    }
+    AppBottomSheet(onDismissRequest = { if (!paying && !cancelling) onDismiss() }, sheetState = sheetState, dismissEnabled = !paying && !cancelling) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -92,8 +120,8 @@ fun PaySheet(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("支付账单", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 FilledTonalIconButton(
-                    onClick = { if (!paying) scope.launch { sheetState.hide(); onDismiss() } },
-                    enabled = !paying,
+                    onClick = { if (!paying && !cancelling) scope.launch { sheetState.hide(); onDismiss() } },
+                    enabled = !paying && !cancelling,
                     shapes = IconButtonDefaults.shapes(),
                 ) { Icon(Icons.Filled.Close, contentDescription = "关闭支付面板") }
             }
@@ -127,9 +155,9 @@ fun PaySheet(
                                 checkedContainerColor = MaterialTheme.colorScheme.primary,
                                 checkedContentColor = MaterialTheme.colorScheme.onPrimary,
                             ),
-                            enabled = !paying,
+                            enabled = !paying && !cancelling,
                             onCheckedChange = {
-                                if (!paying) {
+                                if (!paying && !cancelling) {
                                     selected = channel
                                     result = null
                                 }
@@ -154,16 +182,24 @@ fun PaySheet(
                     modifier = Modifier.heightIn(max = 96.dp).verticalScroll(rememberScrollState()),
                 )
             }
+            if (com.smartlife798.app.core.BillStatus.isUnpaid(bill.status) && bill.id.isNotBlank()) {
+                androidx.compose.material3.OutlinedButton(
+                    enabled = !paying && !cancelling,
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { if (!paying && !cancelling) confirmCancel = true },
+                ) { Text(if (cancelling) "正在取消…" else "取消订单") }
+            }
             val channel = selected
             Button(
-                enabled = !paying && (error != null || (channel != null && activity != null)),
+                enabled = !paying && !cancelling && !cancelAttempted && (error != null || (channel != null && activity != null)),
                 onClick = {
                     if (error != null) {
                         retry += 1
                         return@Button
                     }
                     // Guard the entry itself; two taps can arrive before recomposition.
-                    if (channel == null || activity == null || paying) return@Button
+                    if (channel == null || activity == null || paying || cancelling || cancelAttempted) return@Button
                     paying = true
                     result = null
                     scope.launch {

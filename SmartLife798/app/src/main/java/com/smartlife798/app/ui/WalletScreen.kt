@@ -157,7 +157,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                 else -> items(products!!, key = { it.id }) { product ->
                     Card(
                         onClick = {
-                            if (creating) return@Card
+                            if (creating || payTarget != null) return@Card
                             creating = true
                             scope.launch {
                                 try {
@@ -227,7 +227,8 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             vm = vm,
             activity = activity,
             bill = target,
-            onDismiss = { payTarget = null },
+            onDismiss = { payTarget = null; vm.bumpRefresh() },
+            onCancelled = { payTarget = null; vm.bumpRefresh() },
             onPaid = {
                 payTarget = null
                 scope.launch { vm.refreshWallet() }
