@@ -68,8 +68,6 @@ import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.ui.components.usagePillState
 import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
-import com.smartlife798.app.ui.theme.actionTextColor
-import com.smartlife798.app.ui.theme.pageSupportingText
 import com.smartlife798.app.ui.theme.scanCardColors
 import kotlinx.coroutines.launch
 
@@ -175,7 +173,7 @@ fun HomeScreen(
                     Text(
                         "慧生活 798 · 数据自动同步" + if (syncedAt > 0) " · " + Fmt.clock(syncedAt).take(5) else "",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.pageSupportingText(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -322,7 +320,6 @@ private fun ScanHeroCard(onScan: () -> Unit) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
     val container = palette.container
     val onContainer = palette.content
-    val buttonContent = MaterialTheme.colorScheme.actionTextColor()
     Card(
         onClick = onScan,
         modifier = Modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
@@ -365,10 +362,10 @@ private fun ScanHeroCard(onScan: () -> Unit) {
                     Text(
                         "打开相机扫码",
                         style = MaterialTheme.typography.labelLarge,
-                        color = buttonContent,
+                        color = container,
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("→", color = buttonContent)
+                    Text("→", color = container)
                 }
             }
         }
@@ -505,7 +502,7 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
                 Text(
                     DeviceType.nameOrNull(device.dtype) ?: "设备",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.actionTextColor(),
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 if (pinned) Text("📌", style = MaterialTheme.typography.labelMedium)
             }
@@ -534,7 +531,7 @@ private fun EmptyStateCard(title: String, description: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)

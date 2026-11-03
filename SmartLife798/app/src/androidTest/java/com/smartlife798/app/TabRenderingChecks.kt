@@ -1,6 +1,11 @@
 package com.smartlife798.app
 
 import android.app.Activity
+import androidx.activity.compose.setContent
+import androidx.lifecycle.ViewModelProvider
+import com.smartlife798.app.ui.LoginScreen
+import com.smartlife798.app.ui.theme.SmartLifeTheme
+import com.smartlife798.app.vm.MainViewModel
 import android.app.Instrumentation
 import android.content.Intent
 import android.graphics.Bitmap
@@ -126,7 +131,57 @@ object TabRenderingChecks {
             check(pending.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             Thread.sleep(500)
             capture("preview_bills.png")
-            result.putString("stream", "PASS: 16 real main-tab switches; rendered scan-button samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}; light/dark palette and page captures; offline only, not an FPS measurement\n")
+            fun click(label: String) {
+                var action = find(test, label) ?: error("missing fixture action")
+                while (!action.isClickable) action = action.parent ?: error("missing click parent")
+                check(action.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            }
+            stage = "capture settings and wallet"
+            tap("我的")
+            await { find(test, "修改昵称") != null }
+            Thread.sleep(500)
+            capture("me.png")
+            click("钱包")
+            await { find(test, "充值金额") != null }
+            Thread.sleep(700)
+            capture("wallet.png")
+            check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+            await { find(test, "修改昵称") != null }
+            stage = "capture device detail"
+            tap("设备")
+            await { find(test, "我的设备") != null }
+            click("3 栋 2 层淋浴机 02")
+            await { find(test, "当前模式") != null }
+            Thread.sleep(700)
+            capture("device.png")
+            check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+            await { find(test, "我的设备") != null }
+            tap("我的")
+            await { find(test, "修改昵称") != null }
+            stage = "capture appearance in both modes"
+            repeat(12) {
+                if (find(test, "动态取色开关") == null) {
+                    val scroll = nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable }
+                    check(scroll?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true)
+                    Thread.sleep(250)
+                }
+            }
+            check(find(test, "动态取色开关") != null)
+            capture("appearance_light.png")
+            test.runOnMainSync { Appearance.setMode(ThemeMode.DARK) }
+            Thread.sleep(600)
+            capture("appearance_dark.png")
+            stage = "capture login form without submitting"
+            test.runOnMainSync {
+                val screen = activity as MainActivity
+                val vm = ViewModelProvider(screen)[MainViewModel::class.java]
+                screen.setContent { SmartLifeTheme(darkTheme = false, dynamicColor = false) {
+                    LoginScreen(vm = vm)
+                } }
+            }
+            Thread.sleep(700)
+            capture("login.png")
+            result.putString("stream", "PASS: 16 real main-tab switches; rendered scan-button samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}; light/dark palette, main pages, device detail, wallet and settings captures; offline only, not an FPS measurement\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}: ${failure.message}; root=${test.uiAutomation.rootInActiveWindow?.packageName}, finishing=${activity?.isFinishing}; samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}\n")
