@@ -535,7 +535,8 @@ private fun MainTabPage(
     Scaffold(
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = MaterialTheme.colorScheme.background,
+                tonalElevation = 0.dp,
                 modifier = Modifier.selectableGroup().onSizeChanged { onBottomBarHeight(it.height) },
             ) {
                 tabs.take(2).forEach { tab ->

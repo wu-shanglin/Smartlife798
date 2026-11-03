@@ -28,7 +28,7 @@ class PaletteContrastTest {
         }
     }
     @Test fun `scan uses reference light blue white and dark periwinkle deep blue pairs`() {
-        assertEquals(Color(0xFF0057D9), LightScheme.scanCardColors().container)
+        assertEquals(Color(0xFF0055D6), LightScheme.scanCardColors().container)
         assertEquals(Color.White, LightScheme.scanCardColors().content)
         assertEquals(Color(0xFFB3C5FF), DarkScheme.scanCardColors().container)
         assertEquals(Color(0xFF002C6D), DarkScheme.scanCardColors().content)
@@ -38,6 +38,12 @@ class PaletteContrastTest {
             val a = luminance(decorated); val b = luminance(hero.content)
             assertTrue((maxOf(a,b)+0.05)/(minOf(a,b)+0.05) >= 4.5)
         }
+    }
+    @Test fun `light reference image surface and selection colours remain paired`() {
+        assertEquals(Color(0xFFF9F8FE), LightScheme.background)
+        assertEquals(Color(0xFFE5E7F4), LightScheme.surfaceContainerHigh)
+        assertEquals(Color(0xFFDAE1FE), LightScheme.primaryContainer)
+        assertEquals(Color(0xFF0040A4), LightScheme.onPrimaryContainer)
     }
     @Test fun `light notices stay light and readable for brand and dynamic palettes`() {
         listOf(LightScheme, lightColorScheme()).forEach { original ->
