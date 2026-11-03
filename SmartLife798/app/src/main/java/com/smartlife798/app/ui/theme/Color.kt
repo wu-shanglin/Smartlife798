@@ -3,7 +3,7 @@ package com.smartlife798.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // 晴空蓝品牌色；角色与使用规范见 docs/02 的视觉系统。
-val SkyBlue = Color(0xFF4DB5F2)
+val SkyBlue = Color(0xFF65C3F3)
 
 val WaterBlue10 = Color(0xFF073047)
 val WaterBlue20 = Color(0xFF124C68)
