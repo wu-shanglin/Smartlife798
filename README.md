@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.21.0`（`versionCode 64`） |
+| 当前版本 | `1.22.0`（`versionCode 65`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.19.6 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.6/SmartLife798-1.19.6-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.6) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**1.21.0 / 64**（本地候选，未发布）：首次与新增功能统一全屏引导卡片，开发者工具支持重置引导并采用分组卡片布局；钱包及订单支付面板可显式取消未付交易，取消后须读回服务端状态。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
+**1.22.0 / 65**（本地候选，未发布）：卡片背景减淡、设备页置顶排序与统一图钉标识；三页不可跳过的动画引导；可选更新优先源与确认后的临时回退；APK 密码学签名验证；交付改为非 debuggable 的 release 构建并保留原安装证书。真实手机与真实支付仍须独立验收。
 
 最新公开版本为 **1.19.6 / 62**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.6/SmartLife798-1.19.6-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -44,11 +44,11 @@
 
 ## 构建与产物
 
-唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。可选 release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
+唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.21.0-debug.apk`](dist/SmartLife798-1.21.0-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.22.0-release.apk`](dist/SmartLife798-1.22.0-release.apk) |
 
 交付包沿用既有签名，采用非 debuggable 的 performance 构建；附件保留更新通道的历史文件名。
 
@@ -58,7 +58,7 @@
 
 ## 截图
 
-首次/更新引导和开发者工具来自 1.21.0，取消确认来自 1.20.0，其余除扫码/手动输入保留历史来源外均为 1.19.6 独立 `.offline` 夹具，使用真实 Compose 页面与终止式传输采集；不代表真实设备、签到、充值或支付验收。来源与限制见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
+设备列表及首次/更新引导来自 1.22.0，开发者工具来自 1.21.0，取消确认来自 1.20.0，其余除扫码/手动输入保留历史来源外均为 1.19.6 独立 `.offline` 夹具，使用真实 Compose 页面与终止式传输采集；不代表真实设备、签到、充值或支付验收。来源与限制见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
 
 | 首页 | 设备 | 订单 |
 |---|---|---|

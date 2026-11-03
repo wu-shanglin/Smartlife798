@@ -75,6 +75,21 @@ object UxFlowChecks {
                     await(test, "当前模式")
                     test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
                     await(test, "我的设备")
+                    stage = "pinned device moves ahead of original first item"
+                    val deviceVm = ViewModelProvider(activity!!)[MainViewModel::class.java]
+                    val firstDevice = deviceVm.favorites.value.first()
+                    val lastDevice = deviceVm.favorites.value.last()
+                    test.runOnMainSync { deviceVm.togglePinned(lastDevice.id) }
+                    await(test, "置顶")
+                    val orderedNames = text(test)
+                    check(orderedNames.indexOf(lastDevice.name) < orderedNames.indexOf(firstDevice.name))
+                    test.uiAutomation.takeScreenshot()?.let { bitmap ->
+                        java.io.File(test.targetContext.cacheDir, "ux-devices-pinned.png").outputStream().use {
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    }
+                    test.runOnMainSync { deviceVm.togglePinned(lastDevice.id) }
+                    await(test, "置顶", present = false)
                     stage = "search no-match and clear"
                     setSearch(test, "NO-SUCH-DEVICE")
                     await(test, "没有匹配的设备")

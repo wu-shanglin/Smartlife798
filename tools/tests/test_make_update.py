@@ -37,6 +37,7 @@ class UpdateMetadataTest(unittest.TestCase):
     def test_normal_and_mandatory_minimum(self):
         gradle = 'versionCode = 24\nversionName = "1.7.0"'
         self.assertEqual(module.metadata(gradle, 1, '改进', 'a' * 64)['minSupportedVersionCode'], 1)
+        self.assertEqual(module.metadata(gradle, 1, '改进', 'a' * 64)['apkName'], 'SmartLife798-1.7.0-release.apk')
         self.assertEqual(module.metadata(gradle, 24, '修复', 'a' * 64)['versionCode'], 24)
         for minimum in (0, -1, 25):
             with self.assertRaises(ValueError):

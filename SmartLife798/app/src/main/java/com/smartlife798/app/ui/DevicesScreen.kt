@@ -92,13 +92,13 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
         DevicesShelf.COMMON -> commons
         DevicesShelf.RECENT -> recentDevices
     }
-    val list = remember(baseList, query, typeFilter) {
+    val list = remember(baseList, query, typeFilter, pinned) {
         val search = query.trim()
         baseList.filter { d ->
             (search.isEmpty() || d.name.contains(search, true) || d.id.contains(search, true) ||
                 DeviceType.name(d.dtype).contains(search, true)) &&
                 (typeFilter == null || d.dtype == typeFilter)
-        }
+        }.sortedByDescending { it.id in pinned }
     }
     val types = remember(favorites, recentDevices) {
         (favorites + recentDevices).map { it.dtype }.filter { it != 0 }.distinct().sorted()

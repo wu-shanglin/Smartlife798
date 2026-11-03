@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.withResumed
 import com.smartlife798.app.BuildConfig
@@ -52,6 +53,17 @@ fun AppUpdatePrompt(
     onRetry: () -> Unit,
     onError: (String) -> Unit,
 ) {
+    val fallback by vm.sourceFallback.collectAsStateWithLifecycle()
+    fallback?.let { result ->
+        AlertDialog(
+            onDismissRequest = { vm.answerSourceFallback(false) },
+            title = { Text("临时切换更新源？") },
+            text = { Text("当前选择的优先源无法连接，是否暂时切换至${result.source.label}？此次选择不会修改“我的”中的优先源。确认后，如有新版本将开始下载。") },
+            confirmButton = { TextButton(onClick = { vm.answerSourceFallback(true) }) { Text("是，临时切换") } },
+            dismissButton = { TextButton(onClick = { vm.answerSourceFallback(false) }) { Text("否") } },
+        )
+        return
+    }
     if (!visible || policy == null || !policy.available(BuildConfig.VERSION_CODE)) return
     val required = policy.required(BuildConfig.VERSION_CODE)
     val context = LocalContext.current

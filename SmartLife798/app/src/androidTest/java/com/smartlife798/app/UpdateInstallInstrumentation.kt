@@ -56,6 +56,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "update-sources") { UpdateSourceChecks.run(this); return }
         if (mode == "feature-guide") { FeatureGuideChecks.run(this); return }
         if (mode == "update-handoff") { UpdateHandoffChecks.run(this); return }
         if (mode == "card-handoff") { CardHandoffChecks.run(this); return }
@@ -189,6 +190,24 @@ class UpdateInstallInstrumentation : Instrumentation() {
             rejects(policy.copy(sha256 = "0".repeat(64)))
             rejects(policy.copy(versionCode = policy.versionCode + 1))
             rejects(policy.copy(versionName = "999.0.0"))
+            stage = "tampered APK with matching attacker hash"
+            val tampered = File(targetContext.cacheDir, "updates/tampered.apk")
+            try {
+                apk.copyTo(tampered, overwrite = true)
+                java.io.RandomAccessFile(tampered, "rw").use { data ->
+                    val offset = 256L
+                    data.seek(offset)
+                    val old = data.readByte()
+                    data.seek(offset)
+                    data.writeByte(old.toInt() xor 1)
+                }
+                val hash = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(tampered.readBytes()).joinToString("") { "%02x".format(it) }
+                var rejected = false
+                try { UpdatePackage.verify(targetContext, tampered, policy.copy(sha256 = hash)) }
+                catch (_: Exception) { rejected = true }
+                check(rejected)
+            } finally { tampered.delete() }
             stage = "FileProvider"
             val intent = UpdatePackage.installIntent(targetContext, apk)
             check(intent.data?.scheme == "content")

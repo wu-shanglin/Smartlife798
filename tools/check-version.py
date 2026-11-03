@@ -98,7 +98,7 @@ def check(quiet: bool, require_apk: bool = False) -> int:
     if current != f"{version}（versionCode{code}）":
         failures.append(f"README.md 版本表未同步为 `{version}`（`versionCode {code}`）")
 
-    apk_name = f"SmartLife798-{version}-debug.apk"
+    apk_name = f"SmartLife798-{version}-release.apk"
     artifact = table_value(readme_raw, "产物")
     if not re.fullmatch(rf"\[[^\]]+\]\(dist/{re.escape(apk_name)}\)", artifact):
         failures.append(f"README.md 的产物链接不是 dist/{apk_name}")

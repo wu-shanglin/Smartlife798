@@ -77,7 +77,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init { Store.initializeGuide() }
     private var guideSequence = 0
     private val _guideDeck: MutableStateFlow<com.smartlife798.app.core.GuideDeck?> = MutableStateFlow(
-        com.smartlife798.app.core.FeatureGuide.pending(Store.guideSeen(), includeBasics = !Store.guideBasicsDone())
+        com.smartlife798.app.core.FeatureGuide.pending(Store.guideSeen(), includeBasics = true)
             .takeIf { it.isNotEmpty() }?.let { com.smartlife798.app.core.GuideDeck(guideSequence, it, !Store.guideBasicsDone()) },
     )
     val guideDeck: StateFlow<com.smartlife798.app.core.GuideDeck?> = _guideDeck.asStateFlow()
@@ -428,6 +428,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val updatePolicy = _updatePolicy.asStateFlow()
     private val _checkingUpdate = MutableStateFlow(false)
     val checkingUpdate = _checkingUpdate.asStateFlow()
+    private val _updateSource = MutableStateFlow(Store.updateSource)
+    val updateSource = _updateSource.asStateFlow()
+    private var downloadSource = Store.updateSource
+    data class SourceFallback(val json: String, val source: com.smartlife798.app.core.UpdateSource)
+    private val _sourceFallback = MutableStateFlow<SourceFallback?>(null)
+    val sourceFallback = _sourceFallback.asStateFlow()
+
+    fun setUpdateSource(source: com.smartlife798.app.core.UpdateSource) {
+        if (_checkingUpdate.value || downloadJob?.isActive == true) return
+        Store.updateSource = source
+        _updateSource.value = source
+        downloadSource = source
+        _sourceFallback.value = null
+        lastUpdateCheck = 0L
+    }
+
+    fun answerSourceFallback(accept: Boolean) {
+        val fallback = _sourceFallback.value ?: return
+        _sourceFallback.value = null
+        if (!accept) {
+            _showUpdate.value = _updatePolicy.value?.required(BuildConfig.VERSION_CODE) == true
+            return
+        }
+        downloadSource = fallback.source
+        applyUpdatePolicy(fallback.json, manual = true, trusted = fallback.source == com.smartlife798.app.core.UpdateSource.GITHUB)
+        if (_updatePolicy.value?.available(BuildConfig.VERSION_CODE) == true) downloadAppUpdate()
+    }
+
+    private fun applyUpdatePolicy(fetched: String, manual: Boolean, trusted: Boolean) {
+        val json = com.smartlife798.app.core.AppUpdate.retainHistory(fetched, Store.updatePolicyJson)
+        // A proxy cannot introduce or persist a mandatory-update policy.
+        val parsed = com.smartlife798.app.core.UpdatePolicy.parse(json)
+        val known = com.smartlife798.app.core.UpdatePolicy.cached(Store.updatePolicyJson)
+        if (!trusted && known != null && parsed.versionCode < known.versionCode) {
+            _showUpdate.value = known.required(BuildConfig.VERSION_CODE)
+            notify("备用源版本落后，请稍后重试")
+            return
+        }
+        val policy = if (trusted) parsed else parsed.copy(minSupportedVersionCode = known?.minSupportedVersionCode ?: 1)
+        if (policy != _updatePolicy.value) _updateDownload.value = UpdateDownload()
+        if (trusted) Store.updatePolicyJson = json
+        _updatePolicy.value = policy
+        _showUpdate.value = policy.available(BuildConfig.VERSION_CODE) && (manual || dismissedUpdateCode != policy.versionCode)
+        if (manual && !policy.available(BuildConfig.VERSION_CODE)) notify("当前已是最新版本")
+    }
+
     private var updateJob: Job? = null
     private var lastUpdateCheck = 0L
     private var dismissedUpdateCode: Int? = null
@@ -454,7 +500,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         downloadJob = viewModelScope.launch {
             _updateDownload.value = UpdateDownload(busy = true)
             try {
-                val file = com.smartlife798.app.core.UpdatePackage.download(getApplication(), policy) { percent ->
+                val file = com.smartlife798.app.core.UpdatePackage.download(getApplication(), policy, downloadSource) { percent ->
                     _updateDownload.value = UpdateDownload(busy = true, percent = percent)
                 }
                 if (_updatePolicy.value == policy) {
@@ -497,7 +543,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun checkAppUpdate(manual: Boolean = false) {
 
         refreshProtocolVersion(manual)
-        if (updateJob?.isActive == true || downloadJob?.isActive == true) return
+        if (updateJob?.isActive == true || downloadJob?.isActive == true || _sourceFallback.value != null) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (!manual && lastUpdateCheck != 0L && now - lastUpdateCheck < 300_000L) return
         lastUpdateCheck = now
@@ -508,15 +554,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         updateJob = viewModelScope.launch {
             _checkingUpdate.value = true
             try {
-                val fetched = withContext(Dispatchers.IO) { com.smartlife798.app.core.AppUpdate.fetch() }
-                val json = com.smartlife798.app.core.AppUpdate.retainHistory(fetched, Store.updatePolicyJson)
-                val policy = com.smartlife798.app.core.UpdatePolicy.parse(json)
-                if (policy != _updatePolicy.value) _updateDownload.value = UpdateDownload()
-                Store.updatePolicyJson = json
-                _updatePolicy.value = policy
-                _showUpdate.value = policy.available(BuildConfig.VERSION_CODE) &&
-                    (manual || dismissedUpdateCode != policy.versionCode)
-                if (manual && !policy.available(BuildConfig.VERSION_CODE)) notify("当前已是最新版本")
+                val preferred = _updateSource.value
+                val fetched = withContext(Dispatchers.IO) { com.smartlife798.app.core.AppUpdate.fetch(preferred) }
+                if (fetched.source != preferred) {
+                    _showUpdate.value = false
+                    _sourceFallback.value = SourceFallback(fetched.json, fetched.source)
+                } else {
+                    downloadSource = fetched.source
+                    applyUpdatePolicy(fetched.json, manual, trusted = fetched.source == com.smartlife798.app.core.UpdateSource.GITHUB)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: java.io.IOException) {

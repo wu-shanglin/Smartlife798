@@ -32,8 +32,8 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 64
-        versionName = "1.21.0"
+        versionCode = 65
+        versionName = "1.22.0"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -56,6 +56,7 @@ android {
         release {
             // Minification stays off until the R8 path is verified on a device;
             // app/proguard-rules.pro already carries the keeps needed to turn it on.
+            isDebuggable = false
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -128,6 +129,7 @@ dependencies {
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.android.tools.build:apksig:8.13.0")
     implementation("com.alipay.sdk:alipaysdk-android:15.8.35")
     // WeChat Pay SDK (same one the original APK ships); the app id/signature must
     // be registered on WeChat Open Platform for the vendor account.
