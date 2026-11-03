@@ -75,14 +75,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class PayRequest(val bill: Bill?, val note: String, val createdAt: Long = System.currentTimeMillis())
 
     init { Store.initializeGuide() }
-    private val _guideBasicsDone: MutableStateFlow<Boolean> = MutableStateFlow(Store.guideBasicsDone())
-    val guideBasicsDone: StateFlow<Boolean> = _guideBasicsDone.asStateFlow()
-    private val _guideSeen: MutableStateFlow<Set<String>> = MutableStateFlow(Store.guideSeen())
-    val guideSeen: StateFlow<Set<String>> = _guideSeen.asStateFlow()
-    fun acknowledgeGuide(keys: Set<String>, basicsDone: Boolean = false) {
-        Store.saveGuideSeen(keys, basicsDone || _guideBasicsDone.value)
-        _guideSeen.value = Store.guideSeen()
-        _guideBasicsDone.value = Store.guideBasicsDone()
+    private var guideSequence = 0
+    private val _guideDeck: MutableStateFlow<com.smartlife798.app.core.GuideDeck?> = MutableStateFlow(
+        com.smartlife798.app.core.FeatureGuide.pending(Store.guideSeen(), includeBasics = !Store.guideBasicsDone())
+            .takeIf { it.isNotEmpty() }?.let { com.smartlife798.app.core.GuideDeck(guideSequence, it, !Store.guideBasicsDone()) },
+    )
+    val guideDeck: StateFlow<com.smartlife798.app.core.GuideDeck?> = _guideDeck.asStateFlow()
+
+    fun readGuideCard(deckId: Int, key: String) {
+        val deck = _guideDeck.value?.takeIf { it.id == deckId } ?: return
+        val topic = deck.topics.firstOrNull { it.key == key } ?: return
+        Store.saveGuideSeen(setOf(key), Store.guideBasicsDone() || topic.basic)
+    }
+
+    fun finishGuide(deckId: Int) {
+        val deck = _guideDeck.value?.takeIf { it.id == deckId } ?: return
+        Store.saveGuideSeen(deck.topics.map { it.key }.toSet(), Store.guideBasicsDone() || deck.topics.any { it.basic })
+        _guideDeck.value = null
+    }
+
+    fun dismissGuide(deckId: Int) {
+        if (_guideDeck.value?.id == deckId) _guideDeck.value = null
+    }
+
+    fun replayGuides() {
+        _guideDeck.value = com.smartlife798.app.core.GuideDeck(++guideSequence,
+            com.smartlife798.app.core.FeatureGuide.current(), firstUse = false, manual = true)
+    }
+
+    fun resetGuides() {
+        if (!_developerToolsEnabled.value) return
+        Store.resetGuide()
+        _guideDeck.value = com.smartlife798.app.core.GuideDeck(++guideSequence,
+            com.smartlife798.app.core.FeatureGuide.current(), firstUse = true, manual = true)
     }
 
     private val gson = Gson()

@@ -18,6 +18,9 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -144,15 +147,27 @@ fun SmartLifeTheme(
         else -> LightScheme
     }
     val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            // enableEdgeToEdge() already makes the system bars transparent; only the
-            // icon polarity has to follow our scheme. Writing the deprecated colour
-            // properties here was a no-op that ran on every recomposition.
-            val window = (view.context as? Activity)?.window ?: return@SideEffect
+    val latestDark = rememberUpdatedState(darkTheme)
+    val window = (view.parent as? DialogWindowProvider)?.window ?: (context as? Activity)?.window
+    if (!view.isInEditMode && window != null) {
+        fun applySystemBars() {
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !darkTheme
-                isAppearanceLightNavigationBars = !darkTheme
+                isAppearanceLightStatusBars = !latestDark.value
+                isAppearanceLightNavigationBars = !latestDark.value
+            }
+        }
+        SideEffect { applySystemBars() }
+        // A full-screen guide has its own window. Restore the page's current
+        // icon polarity when that window closes or the activity regains focus.
+        DisposableEffect(view, window) {
+            val observer = view.viewTreeObserver
+            val listener = android.view.ViewTreeObserver.OnWindowFocusChangeListener { focused ->
+                if (focused) applySystemBars()
+            }
+            observer.addOnWindowFocusChangeListener(listener)
+            onDispose {
+                if (observer.isAlive) observer.removeOnWindowFocusChangeListener(listener)
+                else view.viewTreeObserver.removeOnWindowFocusChangeListener(listener)
             }
         }
     }
