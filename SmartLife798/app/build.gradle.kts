@@ -1,4 +1,6 @@
 import java.util.Properties
+import java.security.KeyStore
+import java.security.MessageDigest
 
 plugins {
     id("com.android.application")
@@ -23,6 +25,23 @@ val keystoreProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 val hasReleaseSigning = keystoreProperties.getProperty("storeFile") != null
+// Public certificate pin: release artifacts must use the independent 2.x identity.
+val releaseCertificateSha256 = "64cf1b1481361449f4ba4e2cd7c2854f0b8f9ac9c9fdd903017ac2f5459d501d"
+if (hasReleaseSigning) {
+    check(listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
+        !keystoreProperties.getProperty(it).isNullOrBlank()
+    }) { "Incomplete release signing configuration" }
+    val releaseStore = KeyStore.getInstance("JKS").apply {
+        rootProject.file(keystoreProperties.getProperty("storeFile")).inputStream().use {
+            load(it, keystoreProperties.getProperty("storePassword").toCharArray())
+        }
+    }
+    val alias = keystoreProperties.getProperty("keyAlias")
+    check(releaseStore.isKeyEntry(alias)) { "Release signing key missing" }
+    val fingerprint = MessageDigest.getInstance("SHA-256")
+        .digest(releaseStore.getCertificate(alias).encoded).joinToString("") { "%02x".format(it) }
+    check(fingerprint == releaseCertificateSha256) { "Release signing certificate does not match the approved 2.x identity" }
+}
 
 android {
     namespace = "com.smartlife798.app"
@@ -32,8 +51,8 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 65
-        versionName = "1.22.0"
+        versionCode = 66
+        versionName = "2.0.0"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
     }

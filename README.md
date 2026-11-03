@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.22.0`（`versionCode 65`） |
+| 当前版本 | `2.0.0`（`versionCode 66`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.19.6 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.6/SmartLife798-1.19.6-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.6) |
@@ -14,11 +14,11 @@
 
 ## 当前版本
 
-**1.22.0 / 65**（本地候选，未发布）：卡片背景减淡、设备页置顶排序与统一图钉标识；三页不可跳过的动画引导；可选更新优先源与确认后的临时回退；APK 密码学签名验证；交付改为非 debuggable 的 release 构建并保留原安装证书。真实手机与真实支付仍须独立验收。
+**2.0.0 / 66**（候选，发布状态以下表为准）：启用全新独立 release 签名，停止支持此前所有版本。旧签名应用无法覆盖升级，请先结束设备使用、核对账单，再卸载旧应用，从正式 Release 页面下载新版安装并重新登录。卸载会删除本机常用/最近/置顶及设置；服务端账号数据以重新登录后的返回为准。新版保留浅色卡片、统一置顶、三页引导及安全镜像更新。
 
 最新公开版本为 **1.19.6 / 62**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.6/SmartLife798-1.19.6-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
-旧客户端若在应用内更新后被厂商安装器提示“相同版本”，可用手机浏览器下载上述正式 APK 并从下载列表打开，覆盖安装一次，无须卸载或清数据。新版本已隔离不同产物的安装 URI；原厂商现场结果仍待确认。
+2.x 使用全新证书，1.x（含旧签名的 1.22.0 候选包）不能覆盖安装到 2.x。旧更新器拒绝不同证书的 APK 属于正确保护行为，不能关闭签名校验解决；请按新版 Release 的说明卸载后手动安装。未来 2.x 版本保持新签名连续性。
 
 ## 功能与边界
 
@@ -48,7 +48,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.22.0-release.apk`](dist/SmartLife798-1.22.0-release.apk) |
+| 产物 | [`dist/SmartLife798-2.0.0-release.apk`](dist/SmartLife798-2.0.0-release.apk) |
 
 交付包沿用既有签名，采用非 debuggable 的 performance 构建；附件保留更新通道的历史文件名。
 
