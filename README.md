@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `1.19.3`（`versionCode 59`） |
+| 当前版本 | `1.19.4`（`versionCode 60`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [1.19.1 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.1/SmartLife798-1.19.1-debug.apk) · [Release 说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v1.19.1) |
@@ -14,7 +14,7 @@
 
 ## 当前版本
 
-**1.19.3 / 59**（本地候选，未发布）：扫码区域采用更浅亮的 `#65C3F3` 与白色文字/图标，卡内入口使用半透明白色层次；保留详情返回交接修复。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
+**1.19.4 / 60**（本地候选，未发布）：浅色按第二张参考图取色：鲜蓝/白字、冷白页面、灰蓝设备卡、浅蓝选中底，底栏与页面同色；深色采用协调的浅蓝/深蓝字与中性深色表面，浅色提示条保留浅蓝底；保留详情返回交接修复。微信回调“包名不对”已定位平台身份校验，真实交易仍未打通；实际手机闪屏与帧率待验。
 
 最新公开版本为 **1.19.1 / 57**，普通更新、最低支持码 55（低于 55 的既有版本仍须升级）；公开附件为 APK、update.json 与 release-history.json。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v1.19.1/SmartLife798-1.19.1-debug.apk) · [GitHub latest](https://github.com/wu-shanglin/Smartlife798/releases/latest)。
 
@@ -48,7 +48,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-1.19.3-debug.apk`](dist/SmartLife798-1.19.3-debug.apk) |
+| 产物 | [`dist/SmartLife798-1.19.4-debug.apk`](dist/SmartLife798-1.19.4-debug.apk) |
 
 交付包沿用既有签名，采用非 debuggable 的 performance 构建；附件保留更新通道的历史文件名。
 
@@ -56,19 +56,19 @@
 
 ## 截图
 
-截图来源、版本及限制统一见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。首页、设备、订单和深色首页为 1.19.3 独立离线夹具；其余为表中所列历史截图，不能作为真实业务验收。
+截图来源、版本及限制统一见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。首页、设备、订单和深色首页为 1.19.4 独立离线夹具；其余为表中所列历史截图，不能作为真实业务验收。
 
 | 登录 | 首页 | 扫码 |
 |---|---|---|
-| ![1.8.0 登录页](screenshots/login.png) | ![1.19.3 首页离线夹具](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
+| ![1.8.0 登录页](screenshots/login.png) | ![1.19.4 首页离线夹具](screenshots/home.png) | ![1.8.0 虚拟相机扫码页](screenshots/scan.png) |
 
 | 手动输入 | 设备 | 设备详情 |
 |---|---|---|
-| ![1.8.0 手动输入](screenshots/manual.png) | ![1.19.3 设备列表离线夹具](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
+| ![1.8.0 手动输入](screenshots/manual.png) | ![1.19.4 设备列表离线夹具](screenshots/devices.png) | ![1.10.0 设备详情演示](screenshots/device.png) |
 
 | 消费记录 | 待付款筛选与角标 | 我的 |
 |---|---|---|
-| ![1.19.3 消费记录离线夹具](screenshots/orders.png) | ![1.19.3 待付款离线夹具](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
+| ![1.19.4 消费记录离线夹具](screenshots/orders.png) | ![1.19.4 待付款离线夹具](screenshots/preview_bills.png) | ![1.10.0 我的设置卡片演示](screenshots/me.png) |
 
 | 账单详情（演示，不执行支付） |
 |---|
@@ -80,4 +80,4 @@
 
 | 深色首页 | 外观（演示内深色选择） |
 |---|---|
-| ![1.19.3 深色首页演示](screenshots/dark.png) | ![1.10.0 深色设置卡片演示](screenshots/appearance_dark.png) |
+| ![1.19.4 深色首页演示](screenshots/dark.png) | ![1.10.0 深色设置卡片演示](screenshots/appearance_dark.png) |

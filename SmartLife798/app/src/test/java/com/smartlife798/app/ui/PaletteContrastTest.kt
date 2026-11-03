@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.compositeOver
 import org.junit.Test
 import kotlin.math.pow
 
@@ -26,14 +27,30 @@ class PaletteContrastTest {
             assertEquals(scheme.primaryContainer, scheme.tertiaryContainer)
         }
     }
-    // Owner-selected brand hero uses pale blue/white; other theme text roles
-    // retain their contrast checks below. Do not darken this hero to satisfy them.
-    @Test fun `scan hero is lighter than the previous blue and uses opaque white in both modes`() {
+    @Test fun `scan uses reference light blue white and dark periwinkle deep blue pairs`() {
+        assertEquals(Color(0xFF0055D6), LightScheme.scanCardColors().container)
+        assertEquals(Color.White, LightScheme.scanCardColors().content)
+        assertEquals(Color(0xFFB3C5FF), DarkScheme.scanCardColors().container)
+        assertEquals(Color(0xFF002C6D), DarkScheme.scanCardColors().content)
         listOf(LightScheme, DarkScheme).forEach { scheme ->
             val hero = scheme.scanCardColors()
-            assertEquals(Color(0xFF65C3F3), hero.container)
-            assertEquals(Color.White, hero.content)
-            assertTrue(hero.container.luminance() > Color(0xFF4DB5F2).luminance())
+            val decorated = hero.content.copy(alpha = 0.14f).compositeOver(hero.container)
+            val a = luminance(decorated); val b = luminance(hero.content)
+            assertTrue((maxOf(a,b)+0.05)/(minOf(a,b)+0.05) >= 4.5)
+        }
+    }
+    @Test fun `light reference image surface and selection colours remain paired`() {
+        assertEquals(Color(0xFFF9F8FE), LightScheme.background)
+        assertEquals(Color(0xFFE5E7F4), LightScheme.surfaceContainerHigh)
+        assertEquals(Color(0xFFDAE1FE), LightScheme.primaryContainer)
+        assertEquals(Color(0xFF0040A4), LightScheme.onPrimaryContainer)
+    }
+    @Test fun `light notices stay light and readable for brand and dynamic palettes`() {
+        listOf(LightScheme, lightColorScheme()).forEach { original ->
+            val scheme = original.unifiedControlScheme()
+            assertTrue(scheme.inverseSurface.luminance() > 0.5f)
+            val a = luminance(scheme.inverseSurface); val b = luminance(scheme.inverseOnSurface)
+            assertTrue((maxOf(a,b)+0.05)/(minOf(a,b)+0.05) >= 4.5)
         }
     }
     @Test fun `brand text and status pairs meet normal text contrast`() {
