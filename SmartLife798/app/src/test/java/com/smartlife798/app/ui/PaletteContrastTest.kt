@@ -45,6 +45,22 @@ class PaletteContrastTest {
         assertEquals(Color(0xFFDAE1FE), LightScheme.primaryContainer)
         assertEquals(Color(0xFF0040A4), LightScheme.onPrimaryContainer)
     }
+    @Test fun `page and card text keep separate reference tones`() {
+        assertEquals(Color(0xFF1B1A20), LightScheme.onBackground)
+        assertEquals(Color(0xFF181A29), LightScheme.onSurface)
+        assertEquals(Color(0xFF444654), LightScheme.onSurfaceVariant)
+        val subtitle = LightScheme.pageSupportingText().compositeOver(LightScheme.background)
+        assertTrue(kotlin.math.abs(subtitle.red - 0x48 / 255f) <= 2 / 255f)
+        assertTrue(kotlin.math.abs(subtitle.green - 0x47 / 255f) <= 2 / 255f)
+        assertTrue(kotlin.math.abs(subtitle.blue - 0x4D / 255f) <= 2 / 255f)
+    }
+    @Test fun `light action text stays distinct from the specified scan fill`() {
+        assertEquals(Color(0xFF0055D6), LightScheme.scanCardColors().container)
+        assertEquals(Color(0xFF0956CB), LightScheme.actionTextColor())
+        assertEquals(DarkScheme.primary, DarkScheme.actionTextColor())
+        val custom = lightColorScheme(primary = Color(0xFF795000))
+        assertEquals(custom.primary, custom.actionTextColor())
+    }
     @Test fun `light notices stay light and readable for brand and dynamic palettes`() {
         listOf(LightScheme, lightColorScheme()).forEach { original ->
             val scheme = original.unifiedControlScheme()
@@ -56,7 +72,11 @@ class PaletteContrastTest {
     @Test fun `brand text and status pairs meet normal text contrast`() {
         val pairs = listOf(WaterBlue40 to Color.White, WaterBlue80 to WaterBlue10,
             WaterBlue90 to WaterBlue10, WaterBlue30 to WaterBlue90,
-            Mist to Ink, Color.White to InkSoft,
+            Mist to Ink, Color.White to InkSoft, LightCard to CardInk, LightCard to InkSoft,
+            LightCard to ActionInk, Color.White to ActionInk,
+            LightScheme.primaryContainer to LightScheme.onSurfaceVariant,
+            DarkScheme.primaryContainer to DarkScheme.onSurfaceVariant,
+            LightScheme.background to LightScheme.pageSupportingText().compositeOver(LightScheme.background),
             SurfaceDarkAlt to DarkOnSurface, SurfaceDarkAlt to DarkOnSurfaceVariant)
         pairs.forEach { (background, text) ->
             val a = luminance(background); val b = luminance(text)

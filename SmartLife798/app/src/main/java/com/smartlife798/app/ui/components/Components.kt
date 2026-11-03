@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.smartlife798.app.ui.theme.actionTextColor
 import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceState
 import com.smartlife798.app.core.DeviceStateKind
@@ -50,12 +52,12 @@ import com.smartlife798.app.core.stateLabel
 @Composable
 fun StatusPill(state: DeviceState) {
     val (container, content) = when (state.kind) {
-        DeviceStateKind.ONLINE -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        DeviceStateKind.ONLINE -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSurfaceVariant
         DeviceStateKind.RUNNING -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         DeviceStateKind.STARTING -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
         DeviceStateKind.OFFLINE -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
         DeviceStateKind.DISABLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        DeviceStateKind.BLUETOOTH -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        DeviceStateKind.BLUETOOTH -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSurfaceVariant
     }
     val animatedContainer by animateColorAsState(
         container, MaterialTheme.motionScheme.fastEffectsSpec(), label = "statusContainer",
@@ -94,7 +96,13 @@ fun SectionHeader(
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (action != null && onAction != null) {
-            TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onAction) { Text(action, style = MaterialTheme.typography.labelLarge) }
+            TextButton(
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.actionTextColor()),
+                onClick = onAction,
+            ) {
+                Text(action, style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
@@ -248,6 +256,7 @@ fun DeviceCard(
                     Text(
                         device.name.ifBlank { DeviceType.nameOrNull(device.dtype) ?: "设备" },
                         style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -277,7 +286,7 @@ fun DeviceCard(
                     Text(
                         "已收藏",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.actionTextColor(),
                     )
                 }
             }

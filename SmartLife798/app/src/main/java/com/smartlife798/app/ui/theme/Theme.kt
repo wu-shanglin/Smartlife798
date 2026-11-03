@@ -42,7 +42,7 @@ internal val LightScheme = lightColorScheme(
     background = Mist,
     onBackground = Ink,
     surface = Color.White,
-    onSurface = Ink,
+    onSurface = CardInk,
     // Cards sit on `background`. With a dynamic scheme `surface == background`,
     // so card containers use the tonal token to keep their edge visible.
     surfaceContainerHigh = LightCard,
@@ -141,6 +141,14 @@ internal fun ColorScheme.unifiedControlScheme(): ColorScheme = copy(
     inverseOnSurface = if (background.luminance() > 0.5f) onPrimaryContainer else inverseOnSurface,
     inversePrimary = if (background.luminance() > 0.5f) primary else inversePrimary,
 )
+
+/** Text accents are distinct from the solid scan-card fill in the light reference. */
+internal fun ColorScheme.actionTextColor(): Color =
+    if (primary == WaterBlue40 && background.luminance() > 0.5f) ActionInk else primary
+
+/** Page subtitles fade the page ink; card supporting text has its own blue-grey role. */
+internal fun ColorScheme.pageSupportingText(): Color =
+    if (background.luminance() > 0.5f) onBackground.copy(alpha = 0.8f) else onSurfaceVariant
 
 internal data class ScanCardColors(val container: Color, val content: Color)
 
