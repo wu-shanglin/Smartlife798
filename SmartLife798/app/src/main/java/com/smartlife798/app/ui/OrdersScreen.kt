@@ -118,12 +118,12 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             val requestedPage = if (reset) 1 else page + 1
             if (reset) loading = bills.isEmpty() else loadingMore = true
             error = null
-            when (val res = vm.bills(page = requestedPage, size = 20)) {
+            when (val res = vm.bills(page = requestedPage, size = com.smartlife798.app.core.Paging.RECENT_BILLS_SIZE)) {
                 is Res.Ok -> {
                     val list = res.data.orEmpty()
                     bills = (if (reset) list else bills + list).distinctBy { it.id }
                     page = requestedPage
-                    endReached = list.size < 20
+                    endReached = list.size < com.smartlife798.app.core.Paging.RECENT_BILLS_SIZE
                 }
                 is Res.Fail -> {
                     error = res.msg

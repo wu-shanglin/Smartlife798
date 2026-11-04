@@ -1252,7 +1252,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val token = session.token
         if (token.isNullOrBlank()) return@withContext null
         val task = recentBillsRead?.takeIf { it.isActive } ?: viewModelScope.async {
-            withContext(Dispatchers.IO) { Api.bills(page = 0, size = HISTORY_PAGE_SIZE) }.let { res ->
+            withContext(Dispatchers.IO) { Api.bills(page = 0, size = Paging.RECENT_BILLS_SIZE) }.let { res ->
                 when (res) {
                     is Res.Ok -> res.data.orEmpty()
                     is Res.Fail -> null
@@ -1320,7 +1320,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val unpaid = run {
                 withContext(Dispatchers.IO) {
-                    when (val res = Api.bills(page = 0, size = HISTORY_PAGE_SIZE)) {
+                    when (val res = Api.bills(page = 0, size = Paging.RECENT_BILLS_SIZE)) {
                         is Res.Ok -> res.data.orEmpty().filter(::isUnpaidBill).maxByOrNull { it.ctime }
                         is Res.Fail -> null
                     }
@@ -2178,9 +2178,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         /** A stale "go pay" request must not pop up again minutes later. */
         const val PAY_REQUEST_TTL_MS = 5 * 60 * 1000L
-
-        /** Page-0 fetch that feeds the history index and the unpaid badge. */
-        const val HISTORY_PAGE_SIZE = 50
 
         /** `PGAgreementType.ALIPAY`（协议类型 20，不是支付渠道 21）。 */
         const val AGREEMENT_TYPE_ALIPAY = 20

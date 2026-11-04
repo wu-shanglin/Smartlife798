@@ -110,6 +110,7 @@ val Bill.statusLabel: String get() = BillStatus.label(status)
 /** Pagination bookkeeping shared by the repository layer and its tests. */
 object Paging {
     const val PAGE_SIZE = 20
+    const val RECENT_BILLS_SIZE = 50
 
     /**
      * The UI counts pages from 1, the production endpoint counts from 0.

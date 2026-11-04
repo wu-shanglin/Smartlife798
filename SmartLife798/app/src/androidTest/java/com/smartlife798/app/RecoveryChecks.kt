@@ -42,8 +42,9 @@ object RecoveryChecks {
                             val page = req.url.queryParameter("page")!!.toInt()
                             pages.add(page)
                             if (page == 1 && second.incrementAndGet() == 1) null
-                            else if (page == 0) (1..20).joinToString(",", "[", "]") {
-                                """{"id":"paid-$it","status":3,"prds":[{"name":"已完成记录$it"}]}"""
+                            else if (page == 0) (1..50).joinToString(",", "[", "]") {
+                                if (it == 21) """{"id":"recharge-21","status":1,"prds":[{"name":"待付款充值记录"}]}"""
+                                else """{"id":"closed-$it","status":9,"prds":[{"name":"已关闭记录$it"}]}"""
                             } else """[{"id":"older-unpaid","status":1,"payment":0.6,"prds":[{"name":"较早待付款记录"}]}]"""
                         }
                         "/api/v1/acc/wallet/owner" -> """{"aw":{"total":36.5,"ep":{"id":"offline-ep"}}}"""
@@ -63,12 +64,14 @@ object RecoveryChecks {
                 activity!!.setContent { SmartLifeTheme { OrdersScreen(vm) { _, _ -> } } }
             }
             stage = "empty local filter still permits paging"
-            await(test) { click(test, "待付款 0") }
+            await(test) { click(test, "已完成 0") }
             await(test) { click(test, "加载更多") }
             await(test) { second.get() == 1 }
             stage = "failed page retries the same page"
             SystemClock.sleep(300)
             await(test) { click(test, "加载更多") }
+            await(test) { click(test, "待付款 2") }
+            await(test) { text(test).contains("待付款充值记录") }
             await(test) { text(test).contains("较早待付款记录") }
             check(pages.toList() == listOf(0, 1, 1))
             stage = "wallet product retry reads products again"
@@ -78,7 +81,7 @@ object RecoveryChecks {
             await(test) { click(test, "重试") }
             await(test) { text(test).contains("恢复后的充值商品") }
             check(products.get() == 2 && writes.get() == 0)
-            result.putString("stream", "PASS: empty filter retains paging; failed page retries [0,1,1]; wallet product retry recovers; zero side effects\n")
+            result.putString("stream", "PASS: unpaid recharge at position 21 is visible; failed page retries [0,1,1]; wallet product retry recovers; zero side effects\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; pages=$pages,products=${products.get()},writes=${writes.get()}\n")
