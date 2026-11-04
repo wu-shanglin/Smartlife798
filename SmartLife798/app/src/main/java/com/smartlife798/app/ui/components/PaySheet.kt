@@ -48,6 +48,7 @@ import com.smartlife798.app.core.PaymentFlow
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.ui.Fmt
 import com.smartlife798.app.vm.MainViewModel
+import com.smartlife798.app.ui.AppLayout
 import kotlinx.coroutines.launch
 
 /** One bill, one explicit payment; server confirmation remains the only success authority. */
@@ -86,7 +87,7 @@ fun PaySheet(
 
     AppBottomSheet(onDismissRequest = { if (!paying) onDismiss() }, sheetState = sheetState, dismissEnabled = !paying) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = AppLayout.Page).padding(bottom = AppLayout.Page),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -182,7 +183,7 @@ fun PaySheet(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
                 shapes = ButtonDefaults.shapes(),
             ) {
                 if (paying) {

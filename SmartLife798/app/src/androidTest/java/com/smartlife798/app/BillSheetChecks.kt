@@ -125,6 +125,15 @@ object BillSheetChecks {
                 val before = stableTitle(test, "账单详情", measurements)
                 if (label == "长账单夹具") {
                     check(find(test, "去支付") != null)
+                    fun actionBounds(label: String): android.graphics.Rect {
+                        var node = find(test, label) ?: error("action missing: $label")
+                        while (!node.isClickable) node = node.parent ?: error("action has no click target")
+                        return bounds(node)
+                    }
+                    val cancel = actionBounds("取消订单")
+                    val pay = actionBounds("去支付")
+                    check(cancel.left < pay.left && cancel.top == pay.top && cancel.bottom == pay.bottom)
+                    check(kotlin.math.abs(cancel.width() - pay.width()) <= 1)
                     screenshot(test, "bill-detail.png")
                     stage = "long content scroll keeps header and payment reachable"
                     repeat(3) { scroll(test); Thread.sleep(180) }
@@ -193,7 +202,7 @@ object BillSheetChecks {
 
     private fun screenshot(test: Instrumentation, name: String) {
         val bitmap = test.uiAutomation.takeScreenshot() ?: error("missing screenshot")
-        File(test.targetContext.cacheDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        File(test.targetContext.getExternalFilesDir(null), name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
     }
 

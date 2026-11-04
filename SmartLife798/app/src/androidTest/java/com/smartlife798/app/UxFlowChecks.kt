@@ -12,6 +12,7 @@ import com.smartlife798.app.core.Appearance
 import com.smartlife798.app.core.ThemeMode
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.Store
+import com.smartlife798.app.core.session
 import com.smartlife798.app.vm.MainViewModel
 
 /** Offline, account-free checks; never logs in, pays, scans or starts a device. */
@@ -32,6 +33,7 @@ object UxFlowChecks {
         try {
             check(Store.token.isNullOrBlank())
             accountFree = true
+            test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
             for (page in StartupPage.entries) {
                 stage = "persist $page across account cleanup"
 
@@ -84,7 +86,7 @@ object UxFlowChecks {
                     val orderedNames = text(test)
                     check(orderedNames.indexOf(lastDevice.name) < orderedNames.indexOf(firstDevice.name))
                     test.uiAutomation.takeScreenshot()?.let { bitmap ->
-                        java.io.File(test.targetContext.cacheDir, "ux-devices-pinned.png").outputStream().use {
+                        java.io.File(test.targetContext.getExternalFilesDir(null), "ux-devices-pinned.png").outputStream().use {
                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                         }
                     }
@@ -128,7 +130,7 @@ object UxFlowChecks {
                     test.waitForIdleSync()
                     test.uiAutomation.waitForIdle(500, 5_000)
                     test.uiAutomation.takeScreenshot()?.let { bitmap ->
-                        java.io.File(test.targetContext.cacheDir, "ux-me.png").outputStream().use {
+                        java.io.File(test.targetContext.getExternalFilesDir(null), "ux-me.png").outputStream().use {
                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                         }
                     }
@@ -165,7 +167,7 @@ object UxFlowChecks {
                     }
                     check(frames.await(5, java.util.concurrent.TimeUnit.SECONDS))
                     test.uiAutomation.takeScreenshot()?.let { bitmap ->
-                        java.io.File(test.targetContext.cacheDir, "ux-appearance.png").outputStream().use {
+                        java.io.File(test.targetContext.getExternalFilesDir(null), "ux-appearance.png").outputStream().use {
                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                         }
                     }
@@ -182,17 +184,30 @@ object UxFlowChecks {
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             if (accountFree) test.uiAutomation.takeScreenshot()?.let { bitmap ->
-                java.io.File(test.targetContext.cacheDir, "ux-failure.png").outputStream().use {
+                java.io.File(test.targetContext.getExternalFilesDir(null), "ux-failure.png").outputStream().use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                 }
             }
             val frame = error.stackTrace.firstOrNull { it.className.startsWith("com.smartlife798.app") }
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}; source=${frame?.fileName}:${frame?.lineNumber}\n")
         } finally {
-            test.runOnMainSync { activity?.finish() }
+            test.runOnMainSync {
+                activity?.viewModelStore?.clear()
+                activity?.finish()
+                if (accountFree) session.clear()
+            }
 
             if (accountFree) Store.saveStartupPage(original)
-            if (accountFree) test.runOnMainSync { Appearance.restore() }
+            if (accountFree) test.runOnMainSync {
+                Appearance.setMode(ThemeMode.fromName(theme))
+                Appearance.setDynamicColor(dynamicColor)
+            }
+            if (accountFree) {
+                // All activities have finished already; flush apply() before instrumentation exits.
+                val field = Store::class.java.getDeclaredField("prefs").apply { isAccessible = true }
+                val preferences = field.get(null) as android.content.SharedPreferences
+                check(preferences.edit().commit())
+            }
         }
         test.finish(code, result)
     }

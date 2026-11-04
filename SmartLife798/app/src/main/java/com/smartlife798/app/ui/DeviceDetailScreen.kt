@@ -96,6 +96,7 @@ fun DeviceDetailScreen(
     listState: LazyListState? = null,
 ) {
     val scope = rememberCoroutineScope()
+    val pageActive = cardSceneActive()
     val awaitCardEntry = rememberAwaitCardEntry()
     val initialDevice = remember(deviceId) { vm.deviceEntry(deviceId) ?: Device(id = deviceId) }
     var entryReady by remember(deviceId) { mutableStateOf(false) }
@@ -194,10 +195,10 @@ fun DeviceDetailScreen(
         vm.setDetailDeviceOpen(deviceId, owner)
         onDispose { vm.releaseDetailDevice(owner) }
     }
-    LaunchedEffect(deviceId, nfcTicket) {
+    LaunchedEffect(deviceId, nfcTicket, pageActive) {
         // Navigation emits another tick after entry settles. Keep the first
         // in-flight response instead of cancelling it and starting a second read.
-        collectRefreshRequests(vm.refreshTick) { reload(detail == null) }
+        if (pageActive) collectRefreshRequests(vm.refreshTick) { reload(detail == null) }
     }
 
     // 设备状态轮询：只在页面处于 RESUMED 时运行；仅“启动中/运行中”或刚启动的
@@ -414,7 +415,7 @@ fun DeviceDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(shownDevice.name.ifBlank { "设备详情" }) },
+                title = { Text(shownDevice.name.ifBlank { "设备详情" }, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(shapes = androidx.compose.material3.IconButtonDefaults.shapes(), onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -436,8 +437,8 @@ fun DeviceDetailScreen(
             LazyColumn(
                 state = detailListState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 8.dp, 16.dp, 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = AppLayout.PagePadding,
+                verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
             ) {
                 item(key = "hero", contentType = "hero") {
                     HeroCard(
@@ -485,7 +486,7 @@ fun DeviceDetailScreen(
                         ) {
                             Text(
                                 error!!,
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.padding(AppLayout.Card),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
@@ -623,7 +624,7 @@ private fun HeroCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(AppLayout.Gap)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     // A partial `dev/status` snapshot has no `bm`: never let the
@@ -675,7 +676,7 @@ private fun HeroCard(
                     action in setOf(PrimaryAction.START, PrimaryAction.STOP),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 56.dp),
+                    .heightIn(min = AppLayout.ActionHeight),
                 shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(16.dp)),
             ) {
                 if (busy) {
@@ -716,8 +717,8 @@ private fun HeroCard(
                     shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     onClick = onFavorite,
                     enabled = confirmed && actionsReady,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = AppLayout.ActionHeight),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 10.dp),
                 ) {
                     Icon(
                         if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -725,14 +726,14 @@ private fun HeroCard(
                         modifier = Modifier.size(18.dp),
                         tint = if (favorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (favorite) "已收藏" else "收藏", maxLines = 1, softWrap = false)
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (favorite) "已收藏" else "收藏", style = MaterialTheme.typography.labelMedium, maxLines = 2)
                 }
                 OutlinedButton(
                     shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     onClick = onPin,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = AppLayout.ActionHeight),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 10.dp),
                 ) {
                     Icon(
                         com.smartlife798.app.ui.components.PinIcon,
@@ -740,16 +741,16 @@ private fun HeroCard(
                         modifier = Modifier.size(18.dp),
                         tint = if (pinned) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (pinned) "已置顶" else "置顶", maxLines = 1, softWrap = false)
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (pinned) "已置顶" else "置顶", style = MaterialTheme.typography.labelMedium, maxLines = 2)
                 }
                 OutlinedButton(
                     shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     onClick = onOpenOrders,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = AppLayout.ActionHeight),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 10.dp),
                 ) {
-                    Text("订单", maxLines = 1, softWrap = false)
+                    Text("订单", style = MaterialTheme.typography.labelMedium, maxLines = 2)
                 }
             }
             Text(

@@ -92,10 +92,10 @@ fun DeveloperToolsScreen(
             }
         })
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(AppLayout.PagePadding),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Surface(shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                Row(Modifier.fillMaxWidth().padding(AppLayout.Card), horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Settings, null, Modifier.size(40.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -113,7 +113,7 @@ fun DeveloperToolsScreen(
             Text("设备诊断", style = MaterialTheme.typography.titleMedium)
             DeveloperToolCard(Icons.Filled.Info, "NFC 采集", "读取卡片原始 NDEF 内容，查看或导出本机记录。",
                 enabled = enabled, onClick = onOpenNfc)
-            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
                 enabled = enabled, onClick = { if (enabled) { onDisable(); onBack() } }) { Text("关闭开发者工具") }
         }
     }
@@ -198,23 +198,23 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
             }
         })
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(AppLayout.PagePadding),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("点击开始后保持本页前台再碰卡。离开本页或锁屏会停止采集；返回后需重新开始。")
             Text("原始 NDEF 内容只保存在本机，不自动打开链接或启停设备。导出文件包含卡片原始链接与参数。")
             Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.secondaryContainer,
                 modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("采集状态", style = MaterialTheme.typography.labelLarge)
                     Text(if (!enabled) "开发者工具已关闭" else status, style = MaterialTheme.typography.titleMedium)
                 }
             }
-            Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), enabled = enabled && reader != null && !active,
+            Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight), enabled = enabled && reader != null && !active,
                 onClick = { status = reader?.start().orEmpty(); active = reader?.isActive() == true }) {
                 Text("开始采集")
             }
-            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth(), enabled = active, onClick = ::stop) { Text("停止采集") }
-            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth(), enabled = enabled && records.isNotBlank() && !busy,
+            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight), enabled = active, onClick = ::stop) { Text("停止采集") }
+            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight), enabled = enabled && records.isNotBlank() && !busy,
                 onClick = {
                     stop()
                     scope.launch {

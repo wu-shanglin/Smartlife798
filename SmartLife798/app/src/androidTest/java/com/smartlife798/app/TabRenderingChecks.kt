@@ -107,7 +107,7 @@ object TabRenderingChecks {
                 test.waitForIdleSync()
                 val bitmap = checkNotNull(test.uiAutomation.takeScreenshot())
                 try {
-                    java.io.File(test.targetContext.cacheDir, name).outputStream().use {
+                    java.io.File(test.targetContext.getExternalFilesDir(null), name).outputStream().use {
                         check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                     }
                 } finally { bitmap.recycle() }

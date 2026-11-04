@@ -26,7 +26,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun callActivityOnCreate(activity: Activity, state: Bundle?) {
-        val appRoot = mode in setOf("tabs", "interrupt", "ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
+        val appRoot = mode in setOf("visual", "detail-stress", "tabs", "interrupt", "ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
         if (appRoot && activity.intent?.getBooleanExtra("offlineFixture", false) == true) {
             ServiceLocator.init(activity)
             com.smartlife798.app.core.Store.saveAutoCheckIn(false)
@@ -56,6 +56,9 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun onStart() {
+        if (mode == "visual") { VisualAlignmentChecks.run(this); return }
+        if (mode == "detail-stress") { DetailStressChecks.run(this); return }
+        if (mode == "account-reads") { AccountReadChecks.run(this); return }
         if (mode == "update-sources") { UpdateSourceChecks.run(this); return }
         if (mode == "feature-guide") { FeatureGuideChecks.run(this); return }
         if (mode == "feature-order") { FeatureGuideChecks.run(this, orderOnly = true); return }

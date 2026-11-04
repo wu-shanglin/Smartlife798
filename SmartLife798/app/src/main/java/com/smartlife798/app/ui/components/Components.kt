@@ -47,17 +47,12 @@ import com.smartlife798.app.core.DeviceState
 import com.smartlife798.app.core.DeviceStateKind
 import com.smartlife798.app.core.DeviceType
 import com.smartlife798.app.core.stateLabel
+import com.smartlife798.app.ui.AppLayout
+import com.smartlife798.app.ui.theme.deviceStatusColors
 
 @Composable
 fun StatusPill(state: DeviceState) {
-    val (container, content) = when (state.kind) {
-        DeviceStateKind.ONLINE -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        DeviceStateKind.RUNNING -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        DeviceStateKind.STARTING -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        DeviceStateKind.OFFLINE -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-        DeviceStateKind.DISABLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        DeviceStateKind.BLUETOOTH -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-    }
+    val (container, content) = MaterialTheme.colorScheme.deviceStatusColors(state.kind)
     val animatedContainer by animateColorAsState(
         container, MaterialTheme.motionScheme.fastEffectsSpec(), label = "statusContainer",
     )
@@ -233,7 +228,7 @@ fun DeviceCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -331,4 +326,4 @@ fun deviceSubtitle(device: Device): String {
  * machine is running. Only the server snapshot may produce 「使用中」.
  */
 fun usagePillState(live: Device?): DeviceState =
-    live?.stateLabel() ?: DeviceState(DeviceStateKind.ONLINE, "同步中")
+    live?.stateLabel() ?: DeviceState(DeviceStateKind.OFFLINE, "同步中")
