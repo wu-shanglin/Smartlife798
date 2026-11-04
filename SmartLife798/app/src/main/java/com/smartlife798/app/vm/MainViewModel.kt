@@ -1368,10 +1368,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun developerLoginToken(): String? =
+        session.token?.takeIf { _developerToolsEnabled.value && !session.isCurrentTokenRejected() && it.isNotBlank() }
+
     suspend fun loadChannels(billId: String): Res<List<PayChannel>> = withContext(Dispatchers.IO) {
         run {
             when (val r = accountResponse { Api.payChannels(billId) }) {
-                is Res.Ok -> Res.Ok(r.data?.channels.orEmpty())
+                is Res.Ok -> Res.Ok(r.data?.channels.orEmpty().filter { com.smartlife798.app.core.PayType.isSupportedHere(it.type) })
                 is Res.Fail -> r
             }
         }
@@ -1392,7 +1395,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         val type = channel.type
         val alipay = type == com.smartlife798.app.core.PayType.ALIPAY
-        val wechat = type == com.smartlife798.app.core.PayType.WECHAT
         val walletChannel = com.smartlife798.app.core.PayType.isWallet(type)
         if (!com.smartlife798.app.core.PayType.isSupportedHere(type)) {
             return@withContext PaymentFlow.Outcome.Unavailable(
@@ -1404,31 +1406,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             "billId" to billId,
             "payType" to type,
             "alipayInstalled" to if (alipay) com.smartlife798.app.core.AlipaySdk.isInstalled(activity) else null,
-            "wechatInstalled" to if (wechat) com.smartlife798.app.core.WxPay.isInstalled(activity) else null,
         )
         var alipayStatus: String? = null
-        if (wechat) {
-            // WeChat returns the seven-field prepay object; the SDK result arrives in
-            // `wxapi.WXPayEntryActivity`, and only `trans/confirm` decides success.
-            val raw = Api.prepayJson(type, billId)
-            if (raw is Res.Fail) {
-                Diag.event("prepay.fail", "billId" to billId, "payType" to type, "code" to raw.code)
-                return@withContext PaymentFlow.Outcome.Failed(raw.msg)
-            }
-            val order = com.smartlife798.app.core.WxPay.parse((raw as Res.Ok).data)
-            if (order == null) {
-                Diag.event("wxpay.bad_payload", "billId" to billId)
-                return@withContext PaymentFlow.Outcome.Failed("服务端未返回完整的微信支付参数")
-            }
-            Diag.event("wxpay.begin", "billId" to billId)
-            val wx = com.smartlife798.app.core.WxPay.pay(activity, order)
-            Diag.event("wxpay.outcome", "billId" to billId, "errCode" to wx.code)
-            if (!wx.success) {
-                return@withContext PaymentFlow.Outcome.Failed(
-                    "微信未完成支付（${wx.code}）${wx.message.orEmpty()}",
-                )
-            }
-        } else {
+        run {
             val prepay = Api.prepay(type, billId)
             if (prepay is Res.Fail) {
                 Diag.event("prepay.fail", "billId" to billId, "payType" to type, "code" to prepay.code)

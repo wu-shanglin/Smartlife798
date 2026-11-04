@@ -363,10 +363,6 @@ object Api {
     suspend fun signPga(type: Int): Res<AccountSignData> =
         request("GET", "/api/v1/ui/app/sign-pga", mapOf("type" to "$type"), dataType = dataType<AccountSignData>())
 
-    /** GET /api/v1/trans/prepay/{type}?id= — raw payload (WeChat returns an object). */
-    suspend fun prepayJson(payType: Int, billId: String): Res<JsonElement?> =
-        request("GET", "/api/v1/trans/prepay/$payType", mapOf("id" to billId), dataType = dataType<JsonElement?>())
-
     /** GET /api/v1/trans/confirm?id= */
     suspend fun confirmPay(billId: String): Res<Unit> =
         request("GET", "/api/v1/trans/confirm", mapOf("id" to billId), dataType = dataType<Unit>())

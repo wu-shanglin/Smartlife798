@@ -166,7 +166,7 @@ fun DeviceDetailScreen(
                 error = if (res.data?.device == null) "设备不存在或已停用" else null
                 lastUpdate = System.currentTimeMillis()
                 if (payType == 0) {
-                    val items = res.data?.payItems.orEmpty().map { it.type }
+                    val items = res.data?.payItems.orEmpty().map { it.type }.filter { it != PayType.WECHAT }
                     // Balance first, then Alipay (免密/协议支付); a channel the
                     // client cannot settle is only picked when nothing else exists.
                     payType = com.smartlife798.app.core.PayChoice.devicePayType(
@@ -410,7 +410,7 @@ fun DeviceDetailScreen(
     }
 
     val parts = remember(shownDevice.bm) { shownDevice.bm?.parts.orEmpty().filter { it.mode > 0 } }
-    val payItems = remember(detail?.payItems) { detail?.payItems.orEmpty().map { it.type } }
+    val payItems = remember(detail?.payItems) { detail?.payItems.orEmpty().map { it.type }.filter { it != PayType.WECHAT } }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -528,7 +528,7 @@ fun DeviceDetailScreen(
                     }
                     item(key = "payment", contentType = "payment") {
                         PaySection(
-                            payItems = if (device == null) listOf(PayType.ALIPAY, PayType.WECHAT) else payItems,
+                            payItems = if (device == null) listOf(PayType.ALIPAY) else payItems,
                             loading = device == null,
                             selected = payType,
                             onSelect = { payType = it },

@@ -17,10 +17,10 @@ class BillingTest {
     }
 
     @Test
-    fun `alipay wallets and wechat are completable in this client`() {
+    fun `only alipay and wallets are completable in this client`() {
         assertTrue(PayType.isSupportedHere(PayType.ALIPAY))
         assertTrue(PayType.isSupportedHere(PayType.BALANCE))
-        assertTrue(PayType.isSupportedHere(PayType.WECHAT))
+        assertFalse(PayType.isSupportedHere(PayType.WECHAT))
         assertFalse(PayType.isSupportedHere(PayType.UNIONPAY))
         assertFalse(PayType.isSupportedHere(PayType.CMB))
         assertFalse(PayType.isSupportedHere(PayType.ABC))

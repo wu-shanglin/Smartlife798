@@ -228,7 +228,6 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             activity = activity,
             bill = target,
             onDismiss = { payTarget = null; vm.bumpRefresh() },
-            onCancelled = { payTarget = null; vm.bumpRefresh() },
             onPaid = {
                 payTarget = null
                 scope.launch { vm.refreshWallet() }

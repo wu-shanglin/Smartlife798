@@ -82,7 +82,7 @@
 | 支付渠道 | 共用 `Billing.kt` / `PayChoice`；不能静默选择客户端无法结算的渠道 |
 | 支付宝 | `prepay/21` 空 data 可表示免密扣款，仍调 `confirm`；有订单串才交 SDK |
 | 支付宝签约 | 协议类型 20；优先 `sign` 交 SDK，`code` 仅兜底。`acc-pgas` 是渠道集合，不能判断用户已签约 |
-| 微信 | SDK 已集成；包名+签名+appId 需开放平台匹配，回调入口为 `{applicationId}.wxapi.WXPayEntryActivity`。不得宣称真实支付已验 |
+| 微信 | 当前客户端未接入微信支付 SDK，不展示微信充值支付渠道；不得宣称真实支付已验 |
 
 ## 6. 改动联动
 
@@ -92,7 +92,7 @@
 |---|---|
 | 接口/字段 | `Api.kt`、`Models.kt`、VM、`docs/api-contract.json`、解析/映射测试 |
 | 状态机/主按钮/命令 | `DeviceTypes.kt`、`DeviceCommands.kt`、`StartWatch`、相关测试、docs/01、docs/02、docs/05 |
-| 支付/账单 | `Billing.kt`、`Payment.kt`、`WxPay.kt`、相关测试、docs/05；接口用法变化同步契约 |
+| 支付/账单 | `Billing.kt`、`Payment.kt`、相关测试、docs/05；接口用法变化同步契约 |
 | 页面/导航 | `MainActivity.kt`、页面、docs/02、README 截图区 |
 | 存储键/账号生命周期 | `Store.kt`、`clearAccount()` 分类、VM 任务清理、docs/06 的存储表 |
 | 依赖/SDK/JDK | Gradle、docs/03 技术选型；wrapper 升级同时更新 properties 与 jar |

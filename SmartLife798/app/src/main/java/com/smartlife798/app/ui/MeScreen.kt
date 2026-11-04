@@ -92,13 +92,11 @@ fun MeScreen(
     val profile by vm.profile.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val wallet by vm.wallet.collectAsStateWithLifecycle()
-    val recents by vm.recents.collectAsStateWithLifecycle()
     val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
     val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
     val themeMode by Appearance.mode.collectAsStateWithLifecycle()
     val dynamicColor by Appearance.dynamicColor.collectAsStateWithLifecycle()
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
-    val protocolVersion by vm.protocolVersion.collectAsStateWithLifecycle()
     val startupPage by vm.startupPage.collectAsStateWithLifecycle()
     val developerToolsEnabled by vm.developerToolsEnabled.collectAsStateWithLifecycle()
     val savingProfile by vm.savingProfile.collectAsStateWithLifecycle()
@@ -115,11 +113,8 @@ fun MeScreen(
         vm.refreshMePage()?.join()
     }
     val coroutineScope = rememberCoroutineScope()
-    var checking by remember { mutableStateOf(false) }
-    var checkResult by remember { mutableStateOf<String?>(null) }
     var developerTapCount by remember { mutableStateOf(0) }
     var lastDeveloperTap by remember { mutableStateOf(0L) }
-    var confirmClearRecents by remember { mutableStateOf(false) }
     var editNickname by remember { mutableStateOf(false) }
     var nickname by remember { mutableStateOf("") }
     var nicknameError by remember { mutableStateOf<String?>(null) }
@@ -321,62 +316,6 @@ fun MeScreen(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = vm::replayGuides) { Text("使用指南") }
-                    Text("服务端连接", style = MaterialTheme.typography.titleSmall)
-                    InfoRow("接口地址", Api.BASE_URL)
-                    InfoRow("客户端标识", "Android_ilife798_$protocolVersion")
-                    InfoRow("登录令牌", if (session.isLoggedIn) "已持有" else "无")
-                    InfoRow("本机最近设备", "${recents.size} 台")
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                            enabled = !checking,
-                            onClick = {
-                                if (checking) return@Button
-                                checking = true
-                                checkResult = null
-                                coroutineScope.launch {
-                                    try {
-                                        checkResult = vm.checkConnection()
-                                    } finally {
-                                        checking = false
-                                    }
-                                }
-                            },
-                        ) {
-                            if (checking) {
-                                LoadingIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Text("测试接口连通性")
-                        }
-                        if (recents.isNotEmpty()) {
-                            OutlinedButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { confirmClearRecents = true }) {
-                                Text("清空本机记录")
-                            }
-                        }
-                    }
-                    if (checkResult != null) {
-                        Text(
-                            checkResult!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-            ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("关于本客户端", style = MaterialTheme.typography.titleSmall)
                     Text(
@@ -404,15 +343,29 @@ fun MeScreen(
                     }
                     val preferredSource by vm.updateSource.collectAsStateWithLifecycle()
                     Text("优先更新源", style = MaterialTheme.typography.titleSmall)
-                    com.smartlife798.app.ui.components.ChoiceButtonGroup(
-                        labels = com.smartlife798.app.core.UpdateSource.entries.map { it.label },
-                        selectedIndex = preferredSource.ordinal,
-                        onSelect = { vm.setUpdateSource(com.smartlife798.app.core.UpdateSource.entries[it]) },
-                    )
+                    var sourceMenuExpanded by remember { mutableStateOf(false) }
+                    androidx.compose.material3.ExposedDropdownMenuBox(
+                        expanded = sourceMenuExpanded, onExpandedChange = { sourceMenuExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = preferredSource.label, onValueChange = {}, readOnly = true,
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded) },
+                        )
+                        ExposedDropdownMenu(expanded = sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
+                            com.smartlife798.app.core.UpdateSource.entries.forEach { source ->
+                                androidx.compose.material3.DropdownMenuItem(text = { Text(source.label) }, onClick = {
+                                    vm.setUpdateSource(source)
+                                    sourceMenuExpanded = false
+                                })
+                            }
+                        }
+                    }
                     Text("连接失败时依次尝试其他来源，临时切换需经你确认。", style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(
                         shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                         onClick = { vm.checkAppUpdate(manual = true) },
+                        modifier = Modifier.fillMaxWidth(),
                         enabled = !checkingUpdate,
                     ) { Text(if (checkingUpdate) "正在检查更新…" else "检查更新") }
                     Text(
@@ -421,18 +374,7 @@ fun MeScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                    Text(
-                        "已实现：手机号+图形验证码+短信登录、收藏同步、扫码解析、设备详情与实时状态、" +
-                            "启动/结束使用、消费记录与账单详情、支付宝与余额/钱包支付。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "微信 SDK 已集成，平台配置与真实支付待验；未集成云闪付/银行支付、门禁蓝牙与 IC 卡、E 袋洗与驾考模块。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = vm::replayGuides) { Text("使用指南") }
                 }
             }
 
@@ -485,24 +427,6 @@ fun MeScreen(
             },
             dismissButton = { TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                 enabled = !savingProfile, onClick = { editNickname = false }) { Text("取消") } },
-        )
-    }
-
-    if (confirmClearRecents) {
-        AlertDialog(
-            onDismissRequest = { confirmClearRecents = false },
-            title = { Text("清空本机最近记录？") },
-            text = { Text("只会删除本机保存的设备索引，不影响服务端账号、收藏与账单。") },
-            confirmButton = {
-                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = {
-                    confirmClearRecents = false
-                    vm.clearAllRecents()
-                    checkResult = "已清除本机最近记录"
-                }) { Text("清空") }
-            },
-            dismissButton = {
-                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { confirmClearRecents = false }) { Text("取消") }
-            },
         )
     }
 }

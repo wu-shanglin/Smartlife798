@@ -10,7 +10,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.*
 import com.smartlife798.app.ui.*
-import com.smartlife798.app.ui.components.PaySheet
 import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.*
@@ -20,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Only the isolated APK, synthetic account and terminal interceptors. */
 object FeatureGuideChecks {
-    fun run(test: Instrumentation) {
+    fun run(test: Instrumentation, orderOnly: Boolean = false) {
         test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo.apply {
             flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
@@ -40,7 +39,6 @@ object FeatureGuideChecks {
         var status = BillStatus.UNPAID
         var closeCode = 0
         var confirmCancellation = true
-        var closedUi = false
         var vm: MainViewModel? = null
         try {
             prefs.edit().clear().commit()
@@ -59,6 +57,7 @@ object FeatureGuideChecks {
                         if (closeCode == 0 && confirmCancellation) status = BillStatus.CANCELLED
                         "null"
                     }
+                    "/api/v1/bill/lst-owner" -> """[{"id":"fixture-bill","status":$status}]"""
                     "/api/v1/bill/pay/channels" -> """{"channels":[]}"""
                     else -> { responseCode = -1; "null" }
                 }
@@ -70,71 +69,79 @@ object FeatureGuideChecks {
             test.runOnMainSync {
                 vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
             }
-            stage = "first-use visible"
-            await(test, "轻盈体验，从登录开始")
-            snapshot(test, "guide-first.png")
-            stage = "first-use navigation"
-            click(test, "下一步")
-            stage = "second page visible"
-            await(test, "打开应用，碰一碰直达设备")
-            stage = "back button"
-            test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-            await(test, "轻盈体验，从登录开始")
-            check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:2"))
-            check(find(test, "跳过") == null)
-            click(test, "下一步")
-            click(test, "下一步")
-            click(test, "开始使用")
-            check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).isEmpty())
-            await(test, "手机号登录")
-            stage = "account retention and unified replay"
-            Store.clearAccount()
-            check(Store.guideBasicsDone() && Store.guideSeen().size == FeatureGuide.topics.size)
-            test.runOnMainSync { Appearance.setMode(ThemeMode.DARK); vm!!.replayGuides() }
-            await(test, "使用指南")
-            await(test, "轻盈体验，从登录开始")
-            snapshot(test, "guide-replay-dark.png")
-            check(find(test, "跳过") == null)
-            click(test, "下一步")
-            click(test, "下一步")
-            click(test, "开始使用")
-            test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
-            stage = "developer reset guard"
-            val seenBefore = Store.guideSeen()
-            test.runOnMainSync { vm!!.resetGuides() }
-            check(Store.guideSeen() == seenBefore && vm!!.guideDeck.value == null)
-            stage = "developer reset confirmation and layout"
-            test.runOnMainSync {
-                vm!!.setDeveloperToolsEnabled(true)
-                activity!!.setContent { SmartLifeTheme {
-                    val batch = vm!!.guideDeck.collectAsState().value
-                    if (batch != null) FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
-                        onFinish = { vm!!.finishGuide(batch.id) }, onExit = { vm!!.dismissGuide(batch.id) })
-                    else DeveloperToolsScreen(true, onOpenNfc = {}, onResetGuide = vm!!::resetGuides, onDisable = {}, onBack = {})
-                } }
+            if (!orderOnly) {
+                stage = "first-use visible"
+                await(test, "轻盈体验，从登录开始")
+                snapshot(test, "guide-first.png")
+                stage = "first-use navigation"
+                click(test, "下一步")
+                stage = "second page visible"
+                await(test, "打开应用，碰一碰直达设备")
+                stage = "back button"
+                test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+                await(test, "轻盈体验，从登录开始")
+                check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:2"))
+                check(find(test, "跳过") == null)
+                click(test, "下一步")
+                await(test, "打开应用，碰一碰直达设备")
+                click(test, "下一步")
+                await(test, "从你习惯的页面开始")
+                click(test, "开始使用")
+                check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).isEmpty())
+                await(test, "手机号登录")
+                stage = "account retention and unified replay"
+                Store.clearAccount()
+                check(Store.guideBasicsDone() && Store.guideSeen().size == FeatureGuide.topics.size)
+                test.runOnMainSync { Appearance.setMode(ThemeMode.DARK); vm!!.replayGuides() }
+                await(test, "使用指南")
+                await(test, "轻盈体验，从登录开始")
+                snapshot(test, "guide-replay-dark.png")
+                check(find(test, "跳过") == null)
+                click(test, "下一步")
+                await(test, "打开应用，碰一碰直达设备")
+                click(test, "下一步")
+                await(test, "从你习惯的页面开始")
+                click(test, "开始使用")
+                test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
+                stage = "developer reset guard"
+                val seenBefore = Store.guideSeen()
+                test.runOnMainSync { vm!!.resetGuides() }
+                check(Store.guideSeen() == seenBefore && vm!!.guideDeck.value == null)
+                stage = "developer reset confirmation and layout"
+                test.runOnMainSync {
+                    vm!!.setDeveloperToolsEnabled(true)
+                    activity!!.setContent { SmartLifeTheme {
+                        val batch = vm!!.guideDeck.collectAsState().value
+                        if (batch != null) FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
+                            onFinish = { vm!!.finishGuide(batch.id) }, onExit = { vm!!.dismissGuide(batch.id) })
+                        else DeveloperToolsScreen(true, onOpenNfc = {}, onCopyToken = {}, onResetGuide = vm!!::resetGuides, onDisable = {}, onBack = {})
+                    } }
+                }
+                await(test, "重置引导卡片")
+                snapshot(test, "developer-tools.png")
+                click(test, "重置引导卡片")
+                await(test, "重置引导卡片？")
+                click(test, "取消")
+                check(Store.guideSeen() == seenBefore)
+                click(test, "重置引导卡片")
+                click(test, "重置并查看")
+                check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
+                check(Store.developerToolsEnabled() && Store.themeModeName() == ThemeMode.LIGHT.name)
+                check(vm!!.guideDeck.value?.topics == FeatureGuide.current())
+                await(test, "轻盈体验，从登录开始")
+                test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+                await(test, "重置引导卡片")
+                check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
+                test.runOnMainSync { vm!!.replayGuides() }
+                await(test, "轻盈体验，从登录开始")
+                check(find(test, "跳过") == null)
+                click(test, "下一步")
+                await(test, "打开应用，碰一碰直达设备")
+                click(test, "下一步")
+                await(test, "从你习惯的页面开始")
+                click(test, "开始使用")
+                await(test, "重置引导卡片")
             }
-            await(test, "重置引导卡片")
-            snapshot(test, "developer-tools.png")
-            click(test, "重置引导卡片")
-            await(test, "重置引导卡片？")
-            click(test, "取消")
-            check(Store.guideSeen() == seenBefore)
-            click(test, "重置引导卡片")
-            click(test, "重置并查看")
-            check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
-            check(Store.developerToolsEnabled() && Store.themeModeName() == ThemeMode.LIGHT.name)
-            check(vm!!.guideDeck.value?.topics == FeatureGuide.current())
-            await(test, "轻盈体验，从登录开始")
-            test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-            await(test, "重置引导卡片")
-            check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
-            test.runOnMainSync { vm!!.replayGuides() }
-            await(test, "轻盈体验，从登录开始")
-            check(find(test, "跳过") == null)
-            click(test, "下一步")
-            click(test, "下一步")
-            click(test, "开始使用")
-            await(test, "重置引导卡片")
             stage = "read-only state blocks cancellation"
             session.token = "fixture-token"
             status = BillStatus.CONFIRMING
@@ -151,8 +158,10 @@ object FeatureGuideChecks {
             stage = "cancel UI confirmation and authoritative readback"
             confirmCancellation = true
             test.runOnMainSync { activity!!.setContent { SmartLifeTheme {
-                PaySheet(vm!!, activity, Bill(id = "fixture-bill", status = BillStatus.UNPAID), onDismiss = {}, onPaid = {}, onCancelled = { closedUi = true })
+                OrdersScreen(vm!!, onOpenDevice = { _, _ -> })
             } } }
+            click(test, "设备消费")
+            await(test, "账单详情")
             click(test, "取消订单")
             await(test, "取消这笔未付订单？")
             snapshot(test, "payment-cancel.png")
@@ -161,32 +170,34 @@ object FeatureGuideChecks {
             click(test, "取消订单")
             click(test, "确认取消")
             val until = android.os.SystemClock.elapsedRealtime() + 5000
-            while (!closedUi && android.os.SystemClock.elapsedRealtime() < until) Thread.sleep(50)
-            check(closedUi && closes.get() == 3 && status == BillStatus.CANCELLED)
+            while (status != BillStatus.CANCELLED && android.os.SystemClock.elapsedRealtime() < until) Thread.sleep(50)
+            check(closes.get() == 3 && status == BillStatus.CANCELLED)
             check(reads.get() >= 6)
-            stage = "old-install migration"
-            prefs.edit().remove("guideStarted").remove("guideBasicsDone").remove("guideSeen").commit()
-            Store.saveStartupPage(StartupPage.DEVICES)
-            Store.initializeGuide()
-            check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).size == FeatureGuide.topics.size)
-            stage = "upgrade uses the same fullscreen cards without basics"
-            test.runOnMainSync {
-                activity!!.viewModelStore.clear()
-                vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
-                val batch = checkNotNull(vm!!.guideDeck.value)
-                check(batch.topics == FeatureGuide.current())
-                activity!!.setContent { SmartLifeTheme {
-                    FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
-                        onFinish = { vm!!.finishGuide(batch.id) }, onExit = {})
-                } }
+            if (!orderOnly) {
+                stage = "old-install migration"
+                prefs.edit().remove("guideStarted").remove("guideBasicsDone").remove("guideSeen").commit()
+                Store.saveStartupPage(StartupPage.DEVICES)
+                Store.initializeGuide()
+                check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).size == FeatureGuide.topics.size)
+                stage = "upgrade uses the same fullscreen cards without basics"
+                test.runOnMainSync {
+                    activity!!.viewModelStore.clear()
+                    vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
+                    val batch = checkNotNull(vm!!.guideDeck.value)
+                    check(batch.topics == FeatureGuide.current())
+                    activity!!.setContent { SmartLifeTheme {
+                        FeatureGuideScreen(batch, onRead = { vm!!.readGuideCard(batch.id, it) },
+                            onFinish = { vm!!.finishGuide(batch.id) }, onExit = {})
+                    } }
+                }
+                await(test, "了解新功能")
+                await(test, "轻盈体验，从登录开始")
+                snapshot(test, "guide-update.png")
+                click(test, "下一步")
+                await(test, "打开应用，碰一碰直达设备")
+                check(Store.guideSeen() == setOf("welcome:2"))
             }
-            await(test, "了解新功能")
-            await(test, "轻盈体验，从登录开始")
-            snapshot(test, "guide-update.png")
-            click(test, "下一步")
-            await(test, "打开应用，碰一碰直达设备")
-            check(Store.guideSeen() == setOf("welcome:2"))
-            result.putString("stream", "PASS: first-use next/back/no-skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; blocked confirming; server refusal; unconfirmed close; cancel UI keep/confirm and authoritative readback; terminal fixtures only\n")
+            result.putString("stream", if (orderOnly) "PASS: blocked confirming; server refusal; unconfirmed close; order detail cancel UI and authoritative readback; terminal fixtures only\n" else "PASS: first-use next/back/no-skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; blocked confirming; server refusal; unconfirmed close; order detail cancel UI and authoritative readback; terminal fixtures only\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             snapshot(test, "guide-failure.png")

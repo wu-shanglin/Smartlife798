@@ -36,7 +36,7 @@ object PayType {
         type == MERCHANT_WALLET || type == BALANCE || type == ONE_CARD
 
     /** Channels this client can actually complete end to end. */
-    fun isSupportedHere(type: Int): Boolean = isWallet(type) || type == ALIPAY || type == WECHAT
+    fun isSupportedHere(type: Int): Boolean = isWallet(type) || type == ALIPAY
 
     fun label(type: Int, fallback: String? = null): String =
         names[type] ?: fallback?.takeIf { it.isNotBlank() } ?: "支付方式 $type"
