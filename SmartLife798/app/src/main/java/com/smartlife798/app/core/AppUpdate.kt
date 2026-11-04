@@ -3,6 +3,7 @@ package com.smartlife798.app.core
 import com.google.gson.JsonParser
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.ensureActive
 
 data class UpdateRelease(val versionName: String, val notes: String)
 
@@ -117,6 +118,16 @@ object AppUpdate {
         val root = JsonParser.parseString(freshJson).asJsonObject
         root.add("releases", com.google.gson.Gson().toJsonTree(cached.releases))
         return root.toString()
+    }
+
+    /** The caller owns lifecycle; cancellation stops the foreground polling loop. */
+    suspend fun poll(intervalMillis: Long = 300_000L, check: () -> Unit) {
+        require(intervalMillis > 0)
+        while (true) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            check()
+            kotlinx.coroutines.delay(intervalMillis)
+        }
     }
 
     data class Result(val json: String, val source: UpdateSource)

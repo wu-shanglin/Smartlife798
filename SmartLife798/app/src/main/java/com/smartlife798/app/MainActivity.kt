@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -93,6 +94,7 @@ import androidx.navigation.NavBackStackEntry
 import androidx.lifecycle.withResumed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -192,12 +194,15 @@ private fun AppRoot(
 
 
 
-    // Every resume refreshes the visible page — no manual refresh buttons anywhere.
+    // Poll only while the activity is resumed; manual checks bypass the interval.
+    val updatePollingScope = rememberCoroutineScope()
     LifecycleResumeEffect(Unit) {
         vm.setAppResumed(true, allowAutoCheckIn = true)
-        vm.checkAppUpdate()
+        val polling = updatePollingScope.launch {
+            com.smartlife798.app.core.AppUpdate.poll { vm.checkAppUpdate() }
+        }
         if (loggedIn) vm.bumpRefresh()
-        onPauseOrDispose { vm.setAppResumed(false) }
+        onPauseOrDispose { polling.cancel(); vm.setAppResumed(false) }
     }
 
 
