@@ -9,6 +9,28 @@ import org.junit.Test
 import kotlin.math.pow
 
 class PaletteContrastTest {
+    @Test fun `unconfirmed bookmark status uses a neutral colour until a server snapshot arrives`() {
+        val state = com.smartlife798.app.ui.components.usagePillState(null)
+        assertEquals("同步中", state.label)
+        listOf(LightScheme, DarkScheme).forEach { scheme ->
+            assertEquals(scheme.surfaceVariant to scheme.onSurfaceVariant, scheme.deviceStatusColors(state.kind))
+        }
+    }
+    @Test fun `online green and running yellow remain readable and offline keeps its neutral role`() {
+        listOf(LightScheme, DarkScheme).forEach { scheme ->
+            val online = scheme.deviceStatusColors(com.smartlife798.app.core.DeviceStateKind.ONLINE)
+            val running = scheme.deviceStatusColors(com.smartlife798.app.core.DeviceStateKind.RUNNING)
+            assertTrue(online.first.green > online.first.red)
+            assertTrue(running.first.red > running.first.blue)
+            assertEquals(running, scheme.deviceStatusColors(com.smartlife798.app.core.DeviceStateKind.STARTING))
+            assertEquals(scheme.surfaceVariant to scheme.onSurfaceVariant,
+                scheme.deviceStatusColors(com.smartlife798.app.core.DeviceStateKind.OFFLINE))
+            listOf(online, running).forEach { (background, text) ->
+                val a = luminance(background); val b = luminance(text)
+                assertTrue((maxOf(a, b) + .05) / (minOf(a, b) + .05) >= 4.5)
+            }
+        }
+    }
     private fun luminance(c: Color): Double {
         fun channel(v: Float): Double = if (v <= 0.04045f) v / 12.92 else ((v + 0.055) / 1.055).pow(2.4)
         return channel(c.red) * 0.2126 + channel(c.green) * 0.7152 + channel(c.blue) * 0.0722

@@ -49,7 +49,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -675,16 +674,16 @@ private fun RowScope.ExpressiveNavItem(
                     CompositionLocalProvider(LocalContentColor provides content) { icon() }
                 }
             }
-            if (badgeCount > 0) {
-                BadgedBox(
-                    badge = {
-                        Badge(containerColor = MaterialTheme.colorScheme.error) {
-                            Text(if (badgeCount > 99) "99+" else "$badgeCount")
-                        }
-                    },
-                ) { iconContent() }
-            } else {
+            // Badge's default outside anchor gets clipped by the navigation
+            // pill at larger fonts. Reserve its horizontal space inside the icon
+            // slot, keeping all icons and labels on the same vertical baseline.
+            Box(Modifier.size(width = 48.dp, height = 24.dp), contentAlignment = Alignment.Center) {
                 iconContent()
+                if (badgeCount > 0) {
+                    Badge(modifier = Modifier.align(Alignment.TopEnd), containerColor = MaterialTheme.colorScheme.error) {
+                        Text(if (badgeCount > 99) "99+" else "$badgeCount")
+                    }
+                }
             }
             Spacer(Modifier.height(3.dp))
             Text(

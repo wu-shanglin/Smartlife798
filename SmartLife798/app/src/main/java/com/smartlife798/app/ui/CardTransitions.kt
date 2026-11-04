@@ -42,6 +42,10 @@ private data class CardScene(
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
 
+/** A retained outgoing scene can still be composed after navigation has already moved on. */
+@Composable
+internal fun cardSceneActive(): Boolean = LocalCardScene.current?.active?.value ?: true
+
 @Composable
 fun SharedCardScene(
     shared: SharedTransitionScope,
@@ -52,7 +56,10 @@ fun SharedCardScene(
     content: @Composable () -> Unit,
 ) {
     val activeState = rememberUpdatedState(active)
-    CompositionLocalProvider(LocalCardScene provides CardScene(shared, visibility, entryId, activeState)) {
+    // Retain one navigation context across recompositions. Only the existing
+    // State's value needs to change when this scene becomes active or inactive.
+    val scene = remember(shared, visibility, entryId) { CardScene(shared, visibility, entryId, activeState) }
+    CompositionLocalProvider(LocalCardScene provides scene) {
         // Full-screen pages retained above a popped source must not block touches.
         // Peer tabs retain their pixels until NavHost draws the replacement; hiding
         // them on currentEntry changes can precede the new scene by a whole frame.
@@ -124,12 +131,15 @@ fun SharedCardPage(source: CardSource?, itemId: String = "", content: @Composabl
 @Composable
 private fun Modifier.cardHandoffOverlay(): Modifier {
     val scene = LocalCardScene.current ?: return this
+    val transition = scene.visibility.transition
+    // Keep the layer node stable. Attaching it only on Back rebuilds the page's
+    // modifier chain precisely when the source list starts handling a gesture.
     return with(scene.shared) {
         this@cardHandoffOverlay.renderInSharedTransitionScopeOverlay(
             zIndexInOverlay = 1f,
             renderInOverlay = {
                 !scene.active.value && !isTransitionActive &&
-                    scene.visibility.transition.currentState == EnterExitState.Visible
+                    transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
             },
         )
     }

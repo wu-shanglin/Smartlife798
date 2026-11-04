@@ -117,7 +117,7 @@ object NavigationInterruptionChecks {
 
     private fun capture(test: Instrumentation, name: String) {
         test.uiAutomation.takeScreenshot()?.let { bitmap ->
-            java.io.File(test.targetContext.cacheDir, name).outputStream().use {
+            java.io.File(test.targetContext.getExternalFilesDir(null), name).outputStream().use {
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }
             bitmap.recycle()

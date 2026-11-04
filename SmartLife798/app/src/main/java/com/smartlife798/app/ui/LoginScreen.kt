@@ -110,7 +110,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = AppLayout.Page),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Spacer(Modifier.height(56.dp))
@@ -119,7 +119,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(Modifier.padding(horizontal = 22.dp, vertical = 24.dp)) {
+                Column(Modifier.padding(AppLayout.Card)) {
                     Text(
                         "慧生活 798",
                         style = MaterialTheme.typography.headlineMedium,
@@ -149,7 +149,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(AppLayout.Card),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Text("手机号登录", style = MaterialTheme.typography.titleMedium)
@@ -174,7 +174,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         Spacer(Modifier.width(10.dp))
                         Box(
                             modifier = Modifier
-                                .size(width = 108.dp, height = 54.dp)
+                                .size(width = 108.dp, height = AppLayout.ActionHeight)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center,
@@ -208,6 +208,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         Spacer(Modifier.width(10.dp))
                         TextButton(
                             shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                            modifier = Modifier.heightIn(min = AppLayout.ActionHeight),
                             enabled = countdown == 0 && !sending && phone.length == 11 && captchaInput.isNotBlank(),
                             onClick = {
                                 if (sending || captchaLoading || countdown > 0) return@TextButton
@@ -262,7 +263,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 56.dp),
+                            .heightIn(min = AppLayout.ActionHeight),
                         shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(16.dp)),
                     ) {
                         if (submitting) {

@@ -48,6 +48,7 @@ import com.smartlife798.app.core.access
 import com.smartlife798.app.core.isStandby
 import com.smartlife798.app.core.isUnpaid
 import com.smartlife798.app.core.mergeStatus
+import com.smartlife798.app.core.mergeRecentDevices
 import com.smartlife798.app.core.statusOnly
 import com.smartlife798.app.core.session
 import com.smartlife798.app.core.stateLabel
@@ -785,6 +786,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _payRequest = MutableStateFlow<PayRequest?>(null)
     val payRequest: StateFlow<PayRequest?> = _payRequest.asStateFlow()
+    private var unpaidLookupJob: Job? = null
 
     /** Incremented on every resume / navigation so screens reload without manual buttons. */
     private val _refreshTick = MutableStateFlow(0)
@@ -1064,6 +1066,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         watchJob?.cancel()
         masterJob?.cancel()
         cancelAccountReads()
+        unpaidLookupJob?.cancel()
+        unpaidLookupJob = null
         nfcResolveJob?.cancel()
         _nfcDevice.value = null
         nfcAutoStart.clear()
@@ -1269,6 +1273,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun fetchRecentBills(): List<Bill>? = withContext(Dispatchers.Main.immediate) {
+        accountRestoreJob?.join()
         val generation = accountGeneration
         val token = session.token
         if (token.isNullOrBlank()) return@withContext null
@@ -1288,24 +1293,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun applyCloudHistory(bills: List<Bill>) {
-        val grouped = LinkedHashMap<String, RecentDevice>()
-        bills.forEach { bill ->
-            val dev = bill.dev ?: return@forEach
-            if (dev.id.isBlank()) return@forEach
-            val existing = grouped[dev.id]
-            grouped[dev.id] = RecentDevice(
-                id = dev.id,
-                name = dev.name.ifBlank { existing?.name ?: "未命名设备" },
-                dtype = dev.dtype,
-                lastUsedAt = maxOf(bill.ctime, existing?.lastUsedAt ?: 0L),
-                uses = (existing?.uses ?: 0) + 1,
-                scannedOnly = false,
-            )
-        }
-        val cloud = grouped.values.sortedByDescending { it.lastUsedAt }
-        val cloudIds = cloud.map { it.id }.toSet()
-        val localOnly = _recents.value.filter { it.id !in cloudIds }
-        val merged = (cloud + localOnly).take(60)
+        val merged = mergeRecentDevices(_recents.value, bills)
         if (_recents.value != merged) {
             saveRecentSnapshot(merged)
         }
@@ -1336,17 +1324,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called when the server refuses `dev/start` with an unpaid-bill code. */
     fun requestPaymentForUnpaid(note: String) {
+        if (!session.isLoggedIn || unpaidLookupJob?.isActive == true) return
         val pending = _payRequest.value
         if (pending != null && System.currentTimeMillis() - pending.createdAt < PAY_REQUEST_TTL_MS) return
-        viewModelScope.launch {
-            val unpaid = run {
-                withContext(Dispatchers.IO) {
-                    when (val res = Api.bills(page = 0, size = Paging.RECENT_BILLS_SIZE)) {
-                        is Res.Ok -> res.data.orEmpty().filter(::isUnpaidBill).maxByOrNull { it.ctime }
-                        is Res.Fail -> null
-                    }
-                }
+        val token = session.token
+        val generation = accountGeneration
+        unpaidLookupJob = viewModelScope.launch {
+            val bills = fetchRecentBills()
+            if (token != session.token || generation != accountGeneration || !session.isLoggedIn) return@launch
+            if (bills == null) {
+                _message.value = "账单查询失败，请到订单页刷新后重试"
+                return@launch
             }
+            val unpaid = bills.filter(::isUnpaidBill).maxByOrNull { it.ctime }
             if (unpaid == null) {
                 _message.value = "$note 未查询到待支付账单，请稍后到订单页重试"
                 return@launch
@@ -1374,18 +1364,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Close once, then require an authoritative cancelled snapshot. Shares the payment lock. */
     suspend fun cancelBill(billId: String): Res<Unit> = accountTransaction(Res.Fail(-1, "请先登录或等待当前交易完成")) {
         withContext(Dispatchers.IO) {
-            if (billId.isBlank()) return@withContext Res.Fail(-1, "订单编号为空")
-            val before = accountResponse { Api.billDetail(billId) }
-            if (before is Res.Fail) return@withContext before
-            val bill = (before as Res.Ok).data?.bill
-            if (bill?.id != billId || !bill.isUnpaid) return@withContext Res.Fail(-1, "当前订单不可取消，请刷新查看状态")
-            val closed = accountResponse { Api.closePay(billId) }
-            bumpRefresh()
-            if (closed is Res.Fail) return@withContext Res.Fail(closed.code, "取消未确认：${closed.msg}，请刷新订单核对")
-            val after = accountResponse { Api.billDetail(billId) }
-            val updated = (after as? Res.Ok)?.data?.bill
-            if (updated?.id == billId && updated.status == com.smartlife798.app.core.BillStatus.CANCELLED) Res.Ok(Unit)
-            else Res.Fail(-1, "取消结果待确认，请刷新订单核对；请勿重复支付")
+            com.smartlife798.app.core.BillCancellation.execute(
+                billId,
+                read = { accountResponse { Api.billDetail(billId) } },
+                close = { accountResponse { Api.closePay(billId) } },
+            ).also { bumpRefresh() }
         }
     }
 
@@ -1480,7 +1463,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun refreshMasterInternal() = accountRead("master") {
         if (!session.isLoggedIn) return@accountRead
-        _loadingMaster.value = true
+        _loadingMaster.value = _favorites.value.isEmpty()
         _masterError.value = null
         val tokenAtStart = session.token
         val revisionAtStart = profileRevision

@@ -58,7 +58,7 @@ fun FeatureGuideScreen(
     val page = topics.indexOfFirst { it.key == currentKey }.coerceAtLeast(0)
     BackHandler { if (page > 0) currentKey = topics[page - 1].key else onExit() }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { insets ->
-        Column(Modifier.fillMaxSize().padding(insets).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxSize().padding(insets).padding(AppLayout.Page), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (deck.manual) "使用指南" else if (deck.firstUse) "欢迎使用慧生活798" else "了解新功能",
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -88,8 +88,8 @@ fun FeatureGuideScreen(
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (page > 0) OutlinedButton(shapes = ButtonDefaults.shapes(), onClick = { currentKey = topics[page - 1].key }) { Text("上一步") }
-                Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = 56.dp), onClick = {
+                if (page > 0) OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.heightIn(min = AppLayout.ActionHeight), onClick = { currentKey = topics[page - 1].key }) { Text("上一步") }
+                Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f).heightIn(min = AppLayout.ActionHeight), onClick = {
                     onRead(topics[page].key)
                     if (page < topics.lastIndex) currentKey = topics[page + 1].key else onFinish()
                 }) { Text(if (page == topics.lastIndex) "开始使用" else "下一步") }

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -218,7 +219,7 @@ fun ScanScreen(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(top = 8.dp, end = 10.dp)
+                .padding(top = 8.dp, end = AppLayout.Page)
                 .sharedCard(CardOrigin.SCAN_MANUAL),
         ) {
             TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onManualInput) {
@@ -242,7 +243,8 @@ fun ScanScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(AppLayout.Page)
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Surface(
@@ -286,7 +288,7 @@ private fun ErrorBanner(error: String?, onDismiss: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

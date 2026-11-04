@@ -105,8 +105,8 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = AppLayout.PagePadding,
+            verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
         ) {
             item {
                 Card(
@@ -114,7 +114,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             "钱包余额",
                             style = MaterialTheme.typography.labelMedium,

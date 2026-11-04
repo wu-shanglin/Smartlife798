@@ -150,13 +150,8 @@ fun HomeScreen(
     ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 20.dp,
-            bottom = 28.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = AppLayout.PagePadding,
+        verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
     ) {
         item {
             Row(
@@ -167,7 +162,7 @@ fun HomeScreen(
                 Column {
                     Text(
                         Fmt.greeting() + "，" + (profile?.name?.takeIf { it.isNotBlank() } ?: "同学"),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
@@ -257,7 +252,7 @@ fun HomeScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
+                            .padding(AppLayout.Card),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
@@ -335,7 +330,7 @@ private fun ScanHeroCard(onScan: () -> Unit) {
                     drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.64f, center)
                     drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.40f, center)
                 }
-                .padding(24.dp),
+                .padding(AppLayout.Card),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
@@ -493,7 +488,7 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
         colors = CardDefaults.cardColors(containerColor = if (pinned) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -503,15 +498,18 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
                     DeviceType.nameOrNull(device.dtype) ?: "设备",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (pinned) com.smartlife798.app.ui.components.PinBadge()
+                com.smartlife798.app.ui.components.PinBadge(visible = pinned)
             }
             Text(
                 device.name.ifBlank { DeviceType.nameOrNull(device.dtype) ?: "设备" },
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
-                minLines = 1,
+                minLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -533,7 +531,7 @@ private fun EmptyStateCard(title: String, description: String) {
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(
                 description,

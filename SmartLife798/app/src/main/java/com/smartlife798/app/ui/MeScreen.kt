@@ -131,8 +131,8 @@ fun MeScreen(
         // of recreating button groups and auto-sized text at each lazy-item boundary.
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(16.dp, 20.dp, 16.dp, 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(AppLayout.PagePadding),
+            verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NetworkAvatar(bitmap = avatarContent, name = profile?.name.orEmpty(), modifier = Modifier.size(56.dp))
@@ -386,7 +386,7 @@ fun MeScreen(
                 onClick = { vm.logout() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .heightIn(min = AppLayout.ActionHeight),
                 shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
             ) {
                 Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))

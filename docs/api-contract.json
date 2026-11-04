@@ -299,7 +299,7 @@
         "id"
       ],
       "response": "BaseReq",
-      "use": "close unpaid transaction explicitly; read bill/view-full before (same id, status 1/4) and after (status 9 required); no automatic retry; not ord/cancel or refund",
+      "use": "close payment transaction once; does not establish recharge-bill cancellation support; read same bill before (status 1/4) and up to four times after (1s intervals, 15s deadline); only status 9 proves cancellation; status 3 is a paid race, persistent 1/4 is ineffective; no automatic write retry; not ord/cancel or refund",
       "verified": "static"
     },
     {

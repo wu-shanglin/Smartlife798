@@ -114,8 +114,8 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 16.dp, 16.dp, 28.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = AppLayout.PagePadding,
+            verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

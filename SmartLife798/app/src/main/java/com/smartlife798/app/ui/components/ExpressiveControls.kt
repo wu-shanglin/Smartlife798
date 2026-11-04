@@ -6,6 +6,7 @@
 package com.smartlife798.app.ui.components
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.PaddingValues
@@ -153,11 +154,12 @@ private fun AdaptiveChoiceGroup(
                                         checkedShape = RoundedCornerShape(14.dp),
                                     ),
                                     colors = ToggleButtonDefaults.tonalToggleButtonColors(
-                                        containerColor = if (secondary) androidx.compose.ui.graphics.Color.Transparent else colors.surfaceContainerLow,
+                                        containerColor = colors.surfaceContainerHighest,
                                         checkedContainerColor = colors.primaryContainer,
                                         contentColor = if (secondary) colors.onSurfaceVariant else colors.onSurface,
                                         checkedContentColor = colors.onPrimaryContainer,
                                     ),
+                                    border = if (isSelected) null else BorderStroke(1.dp, colors.outlineVariant),
                                     contentPadding = padding,
                                     content = content,
                                 )
@@ -169,6 +171,13 @@ private fun AdaptiveChoiceGroup(
                                         shape = RoundedCornerShape(14.dp),
                                         checkedShape = RoundedCornerShape(14.dp),
                                     ),
+                                    colors = ToggleButtonDefaults.toggleButtonColors(
+                                        containerColor = colors.surfaceContainerHighest,
+                                        contentColor = colors.onSurface,
+                                        checkedContainerColor = colors.primary,
+                                        checkedContentColor = colors.onPrimary,
+                                    ),
+                                    border = if (isSelected) null else BorderStroke(1.dp, colors.outlineVariant),
                                     contentPadding = padding, content = content)
                             }
                         },

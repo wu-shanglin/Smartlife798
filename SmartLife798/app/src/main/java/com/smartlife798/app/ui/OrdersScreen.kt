@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -90,7 +92,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? Activity
-    val active by vm.active.collectAsStateWithLifecycle()
+    val active = vm.active.collectAsStateWithLifecycle().value
     val live by vm.liveStatus.collectAsStateWithLifecycle()
     val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
     // `liveStatus` is global; only this device's snapshot may describe this session.
@@ -177,8 +179,8 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp, 16.dp, 16.dp, 28.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = AppLayout.PagePadding,
+            verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -219,7 +221,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 } else {
                     item {
                         Card(
-                            modifier = Modifier.clickable { onOpenDevice(active!!.deviceId, CardOrigin.ORDERS_ACTIVE) }.sharedCard(CardOrigin.ORDERS_ACTIVE, active!!.deviceId).fillMaxWidth(),
+                            modifier = Modifier.clickable { onOpenDevice(active.deviceId, CardOrigin.ORDERS_ACTIVE) }.sharedCard(CardOrigin.ORDERS_ACTIVE, active.deviceId).fillMaxWidth(),
                             shape = MaterialTheme.shapes.large,
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                         ) {
@@ -228,24 +230,24 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                     StatusPill(usagePillState(liveForActive))
                                     Spacer(Modifier.width(10.dp))
                                     Text(
-                                        active!!.name,
+                                        active.name,
                                         style = MaterialTheme.typography.titleMedium,
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
                                 UsageDuration(
-                                    startedAt = active!!.startedAt,
+                                    startedAt = active.startedAt,
                                     style = MaterialTheme.typography.headlineMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                 )
                                 Text(
-                                    "设备类型：${DeviceType.name(active!!.dtype)} · 开始于 ${Fmt.clock(active!!.startedAt)}" +
+                                    "设备类型：${DeviceType.name(active.dtype)} · 开始于 ${Fmt.clock(active.startedAt)}" +
                                     if (liveForActive != null && liveAt > 0) " · 服务端 ${Fmt.clock(liveAt)}" else "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                 )
-                                Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { onOpenDevice(active!!.deviceId, CardOrigin.ORDERS_ACTIVE) }) { Text("打开设备") }
+                                Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { onOpenDevice(active.deviceId, CardOrigin.ORDERS_ACTIVE) }) { Text("打开设备") }
                             }
                         }
                     }
@@ -413,6 +415,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 detail = detailValue,
                 enabled = !closing && !cancelling && cancelError == null,
                 cancelError = cancelError,
+                cancelling = cancelling,
                 onCancel = { confirmCancel = true },
                 onDismiss = { closeDetail() },
                 onPay = { bill -> closeDetail { payTarget = bill } },
@@ -457,7 +460,7 @@ private fun BillRow(bill: Bill, onClick: () -> Unit, onPay: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -509,11 +512,12 @@ private fun BillDetailSheet(
     onPay: (Bill) -> Unit,
     onCancel: () -> Unit,
     cancelError: String?,
+    cancelling: Boolean,
 ) {
     val bill = detail.bill
     val payableBill = bill?.takeIf { it.isUnpaid }
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = AppLayout.Page).padding(bottom = AppLayout.Page),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -586,14 +590,20 @@ private fun BillDetailSheet(
         }
         cancelError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (payableBill != null) {
-            androidx.compose.material3.OutlinedButton(onClick = onCancel, enabled = enabled,
-                modifier = Modifier.fillMaxWidth()) { Text("取消订单") }
-            Button(
-                onClick = { onPay(payableBill) },
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-            ) { Text("去支付") }
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(AppLayout.Gap)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onCancel,
+                    enabled = enabled,
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = AppLayout.ActionHeight),
+                ) { Text(if (cancelling) "正在核对…" else "取消订单") }
+                Button(
+                    onClick = { onPay(payableBill) },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = AppLayout.ActionHeight),
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                ) { Text("去支付") }
+            }
         }
     }
 }
