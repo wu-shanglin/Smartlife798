@@ -6,7 +6,7 @@
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
 | 当前版本 | `2.1.0`（`versionCode 68`） |
-| 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay / WeChat SDK |
+| 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [2.0.1 release APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.0.1/SmartLife798-2.0.1-release.apk) · [发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.0.1) |
 
