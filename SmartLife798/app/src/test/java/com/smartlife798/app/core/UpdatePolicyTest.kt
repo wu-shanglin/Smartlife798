@@ -2,6 +2,7 @@ package com.smartlife798.app.core
 
 import org.junit.Assert.*
 import org.junit.Test
+import kotlinx.coroutines.launch
 
 class UpdatePolicyTest {
     @Test fun explicitReleaseArtifactAndLegacyDefaultAreRestricted() {
@@ -9,6 +10,24 @@ class UpdatePolicyTest {
         val release = json().dropLast(1) + ",\"apkName\":\"SmartLife798-1.7.0-release.apk\"}"
         assertEquals("SmartLife798-1.7.0-release.apk", UpdatePolicy.parse(release).apkName)
         assertNull(UpdatePolicy.cached(release.replace("SmartLife798-1.7.0-release.apk", "../evil.apk")))
+    }
+
+    @Test fun pollingRepeatsAndStopsWhenCancelled() = kotlinx.coroutines.runBlocking {
+        val third = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var calls = 0
+        val job = launch {
+            AppUpdate.poll(intervalMillis = 5) {
+                calls += 1
+                if (calls == 3) third.complete(Unit)
+            }
+        }
+        kotlinx.coroutines.withTimeout(2_000) { third.await() }
+        job.cancel()
+        job.join()
+        val stoppedAt = calls
+        kotlinx.coroutines.delay(20)
+        assertEquals(stoppedAt, calls)
+        assertTrue(calls >= 3)
     }
 
     @Test fun sourceFallbackOrderFailureAndCancellation() = kotlinx.coroutines.runBlocking {

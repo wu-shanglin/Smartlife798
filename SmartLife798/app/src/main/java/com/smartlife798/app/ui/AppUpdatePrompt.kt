@@ -58,7 +58,7 @@ fun AppUpdatePrompt(
         AlertDialog(
             onDismissRequest = { vm.answerSourceFallback(false) },
             title = { Text("临时切换更新源？") },
-            text = { Text("当前选择的优先源无法连接，是否暂时切换至${result.source.label}？此次选择不会修改“我的”中的优先源。确认后，如有新版本将开始下载。") },
+            text = { Text("当前选择的优先源无法连接，是否暂时切换至${result.source.label}？确认后将开始下载，且不会修改“我的”中的优先源。") },
             confirmButton = { TextButton(onClick = { vm.answerSourceFallback(true) }) { Text("是，临时切换") } },
             dismissButton = { TextButton(onClick = { vm.answerSourceFallback(false) }) { Text("否") } },
         )
