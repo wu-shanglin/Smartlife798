@@ -8,15 +8,15 @@
 | 当前版本 | `2.1.0`（`versionCode 68`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
-| 最新已发布 | [2.0.1 release APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.0.1/SmartLife798-2.0.1-release.apk) · [发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.0.1) |
+| 最新已发布 | [2.1.0 release APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.1.0/SmartLife798-2.1.0-release.apk) · [发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.1.0) |
 
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
 
-**2.1.0 / 68**（发布准备中）：调整订单取消、支付渠道及个人设置，前台自动轮询更新并在备用源发现新版本时征询临时切换。2.0.0 启用全新独立 release 签名，停止支持此前所有版本。旧签名应用无法覆盖升级，请先结束设备使用、核对账单，再卸载旧应用，从正式 Release 页面下载新版安装并重新登录。卸载会删除本机常用/最近/置顶及设置；服务端账号数据以重新登录后的返回为准。新版保留浅色卡片、统一置顶、三页引导及安全镜像更新。
+**2.1.0 / 68**（已正式发布）：调整订单取消、支付渠道及个人设置，前台自动轮询更新并在备用源发现新版本时征询临时切换。2.0.0 启用全新独立 release 签名，停止支持此前所有版本。旧签名应用无法覆盖升级，请先结束设备使用、核对账单，再卸载旧应用，从正式 Release 页面下载新版安装并重新登录。卸载会删除本机常用/最近/置顶及设置；服务端账号数据以重新登录后的返回为准。新版保留浅色卡片、统一置顶、三页引导及安全镜像更新。
 
-最新公开版本为 **2.0.1 / 67**，最低支持码 **66**，全部更早版本停止支持。官方 latest 更新策略已核对；镜像同步状态以实际访问为准。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.0.1/SmartLife798-2.0.1-release.apk) · [安装与发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.0.1)。停用仅约束已取得有效官方策略且具有门禁功能的客户端，不能远程停用离线或无门禁旧版。
+最新公开版本为 **2.1.0 / 68**，最低支持码 **66**，全部更早版本停止支持。官方 latest 更新策略已核对；镜像同步状态以实际访问为准。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.1.0/SmartLife798-2.1.0-release.apk) · [安装与发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.1.0)。停用仅约束已取得有效官方策略且具有门禁功能的客户端，不能远程停用离线或无门禁旧版。
 
 2.x 使用全新证书，1.x（含旧签名的 1.22.0 候选包）不能覆盖安装到 2.x。旧更新器拒绝不同证书的 APK 属于正确保护行为，不能关闭签名校验解决；请按新版 Release 的说明卸载后手动安装。未来 2.x 版本保持新签名连续性。
 
