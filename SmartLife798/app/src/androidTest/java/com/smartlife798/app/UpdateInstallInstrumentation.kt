@@ -58,6 +58,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     override fun onStart() {
         if (mode == "update-sources") { UpdateSourceChecks.run(this); return }
         if (mode == "feature-guide") { FeatureGuideChecks.run(this); return }
+        if (mode == "feature-order") { FeatureGuideChecks.run(this, orderOnly = true); return }
         if (mode == "update-handoff") { UpdateHandoffChecks.run(this); return }
         if (mode == "card-handoff") { CardHandoffChecks.run(this); return }
         if (mode == "tabs") { TabRenderingChecks.run(this); return }
@@ -65,7 +66,6 @@ class UpdateInstallInstrumentation : Instrumentation() {
         if (mode == "interrupt") { NavigationInterruptionChecks.run(this); return }
         if (mode == "login-init") { LoginInitializationChecks.run(this); return }
         if (mode == "transactions") { TransactionChecks.run(this); return }
-        if (mode == "wx-callback") { WxCallbackChecks.run(this); return }
         if (mode == "recovery") { RecoveryChecks.run(this); return }
 
         if (mode == "refresh") {

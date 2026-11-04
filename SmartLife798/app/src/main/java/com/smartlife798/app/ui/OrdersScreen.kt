@@ -372,8 +372,31 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     if (detailValue != null && payTarget == null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         var closing by remember(detailValue.bill?.id) { mutableStateOf(false) }
+        var cancelling by remember(detailValue.bill?.id) { mutableStateOf(false) }
+        var confirmCancel by remember(detailValue.bill?.id) { mutableStateOf(false) }
+        var cancelError by remember(detailValue.bill?.id) { mutableStateOf<String?>(null) }
+        if (confirmCancel) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmCancel = false },
+            title = { Text("取消这笔未付订单？") },
+            text = { Text("取消结果以服务端为准。若刚完成付款，请先刷新订单核对。") },
+            confirmButton = { TextButton(onClick = {
+                if (!cancelling) {
+                    cancelling = true
+                    confirmCancel = false
+                    scope.launch {
+                        try {
+                            when (val response = vm.cancelBill(detailValue.bill?.id.orEmpty())) {
+                                is Res.Ok -> { vm.notify("订单已取消"); detail = null; loadBills(true) }
+                                is Res.Fail -> { cancelError = response.msg; loadBills(true) }
+                            }
+                        } finally { cancelling = false }
+                    }
+                }
+            }) { Text("确认取消") } },
+            dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("保留订单") } },
+        )
         fun closeDetail(next: (() -> Unit)? = null) {
-            if (closing) return
+            if (closing || cancelling) return
             closing = true
             scope.launch {
                 try {
@@ -385,10 +408,12 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 }
             }
         }
-        AppBottomSheet(onDismissRequest = { detail = null }, sheetState = sheetState) {
+        AppBottomSheet(onDismissRequest = { if (!cancelling) detail = null }, sheetState = sheetState, dismissEnabled = !cancelling) {
             BillDetailSheet(
                 detail = detailValue,
-                enabled = !closing,
+                enabled = !closing && !cancelling && cancelError == null,
+                cancelError = cancelError,
+                onCancel = { confirmCancel = true },
                 onDismiss = { closeDetail() },
                 onPay = { bill -> closeDetail { payTarget = bill } },
             )
@@ -402,7 +427,6 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             activity = activity,
             bill = target,
             onDismiss = { payTarget = null },
-            onCancelled = { payTarget = null; detail = null; scope.launch { loadBills(true) } },
             onPaid = {
                 payTarget = null
                 detail = null
@@ -483,6 +507,8 @@ private fun BillDetailSheet(
     enabled: Boolean,
     onDismiss: () -> Unit,
     onPay: (Bill) -> Unit,
+    onCancel: () -> Unit,
+    cancelError: String?,
 ) {
     val bill = detail.bill
     val payableBill = bill?.takeIf { it.isUnpaid }
@@ -494,7 +520,7 @@ private fun BillDetailSheet(
             Text("账单详情", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             FilledTonalIconButton(
                 onClick = onDismiss,
-                enabled = enabled,
+                enabled = true,
                 shapes = IconButtonDefaults.shapes(),
             ) { Icon(Icons.Filled.Close, contentDescription = "关闭账单详情") }
         }
@@ -558,7 +584,10 @@ private fun BillDetailSheet(
                 )
             }
         }
+        cancelError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (payableBill != null) {
+            androidx.compose.material3.OutlinedButton(onClick = onCancel, enabled = enabled,
+                modifier = Modifier.fillMaxWidth()) { Text("取消订单") }
             Button(
                 onClick = { onPay(payableBill) },
                 enabled = enabled,

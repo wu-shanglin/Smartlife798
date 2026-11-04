@@ -51,8 +51,8 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 67
-        versionName = "2.0.1"
+        versionCode = 68
+        versionName = "2.1.0"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -150,9 +150,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("com.android.tools.build:apksig:8.13.0")
     implementation("com.alipay.sdk:alipaysdk-android:15.8.35")
-    // WeChat Pay SDK (same one the original APK ships); the app id/signature must
-    // be registered on WeChat Open Platform for the vendor account.
-    implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.0")
 
     testImplementation("junit:junit:4.13.2")
 

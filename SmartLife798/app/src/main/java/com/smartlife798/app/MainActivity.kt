@@ -395,6 +395,20 @@ private fun AppRoot(
                         DeveloperToolsScreen(
                             enabled = enabled,
                             onOpenNfc = { navController.navigate("developer-tools/nfc") { launchSingleTop = true } },
+                            onCopyToken = {
+                                val token = vm.developerLoginToken()
+                                if (token == null) vm.notify("当前没有可用的登录令牌")
+                                else {
+                                    val clip = android.content.ClipData.newPlainText("登录令牌", token)
+                                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                        clip.description.extras = android.os.PersistableBundle().apply {
+                                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                        }
+                                    }
+                                    (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+                                    vm.notify("登录令牌已复制，请妥善保管")
+                                }
+                            },
                             onResetGuide = vm::resetGuides,
                             onDisable = { vm.setDeveloperToolsEnabled(false) },
                             onBack = { navController.popBackStack() },

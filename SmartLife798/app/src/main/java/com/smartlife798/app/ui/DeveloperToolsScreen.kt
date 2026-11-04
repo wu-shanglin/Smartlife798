@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 fun DeveloperToolsScreen(
     enabled: Boolean,
     onOpenNfc: () -> Unit,
+    onCopyToken: () -> Unit,
     onResetGuide: () -> Unit,
     onDisable: () -> Unit,
     onBack: () -> Unit,
@@ -106,6 +107,9 @@ fun DeveloperToolsScreen(
             Text("界面与引导", style = MaterialTheme.typography.titleMedium)
             DeveloperToolCard(Icons.Filled.Refresh, "重置引导卡片", "清除已读进度，重新体验基础与新增功能卡片。",
                 enabled = enabled, onClick = { if (enabled) confirmReset = true })
+            Text("账号诊断", style = MaterialTheme.typography.titleMedium)
+            DeveloperToolCard(Icons.Filled.Info, "导出登录令牌", "点击复制当前登录令牌，请妥善保管。",
+                enabled = enabled, onClick = onCopyToken)
             Text("设备诊断", style = MaterialTheme.typography.titleMedium)
             DeveloperToolCard(Icons.Filled.Info, "NFC 采集", "读取卡片原始 NDEF 内容，查看或导出本机记录。",
                 enabled = enabled, onClick = onOpenNfc)
