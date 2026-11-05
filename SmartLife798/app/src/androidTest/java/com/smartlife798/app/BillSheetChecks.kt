@@ -197,10 +197,20 @@ object BillSheetChecks {
             await { find(test, "账单详情") == null && find(test, "短账单夹具") != null }
             Thread.sleep(2200)
             check(find(test, "账单详情") == null) { "late detail response reopened dismissed sheet" }
-            check(details.get() == 3 && writes.get() == 0)
+            stage = "drag handle dismisses detail"
+            click(test, "短账单夹具")
+            await { find(test, "账单详情") != null }
+            val dragTitle = stableTitle(test, "账单详情", measurements)
+            val display = test.targetContext.resources.displayMetrics
+            val startY = (dragTitle.top - 32 * display.density).toInt()
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
+                "input swipe ${display.widthPixels / 2} $startY ${display.widthPixels / 2} ${display.heightPixels - 40} 500"
+            )).use { it.readBytes() }
+            await { find(test, "账单详情") == null }
+            check(details.get() == 4 && writes.get() == 0)
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
             check(Store.updatePolicyJson == originalPolicy && Store.originalAppVersion == originalProtocol)
-            result.putString("stream", "PASS: immediate summary, late response cannot reopen, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
+            result.putString("stream", "PASS: immediate summary, late response cannot reopen, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen, handle drag dismiss; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             screenshot(test, "bill-sheet-failure.png")
