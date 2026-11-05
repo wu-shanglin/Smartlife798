@@ -91,6 +91,22 @@ object VisualAlignmentChecks {
                 open("我的")
                 await { find(test, "修改昵称") != null }
                 capture("me-${theme.name.lowercase()}")
+                stage = "update button $theme"
+                await {
+                    val button = find(test, "检查更新")
+                    if (button == null) {
+                        nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable && it.isVisibleToUser }
+                            ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                        false
+                    } else true
+                }
+                capture("update-${theme.name.lowercase()}")
+                repeat(6) {
+                    nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable && it.isVisibleToUser }
+                        ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                    SystemClock.sleep(100)
+                }
+                stage = "wallet navigation $theme"
                 open("钱包")
                 await { find(test, "充值金额") != null }
                 capture("wallet-${theme.name.lowercase()}")
@@ -118,7 +134,9 @@ object VisualAlignmentChecks {
             await { vm.guideDeck.value == null }
             stage = "scanner and manual input"
             open("首页")
-            open("扫码")
+            await { find(test, "打开相机扫码") != null }
+            SystemClock.sleep(500)
+            open("打开相机扫码")
             await { find(test, "手动输入") != null }
             capture("scan")
             open("手动输入")

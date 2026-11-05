@@ -154,10 +154,10 @@ private fun AdaptiveChoiceGroup(
                                         checkedShape = RoundedCornerShape(14.dp),
                                     ),
                                     colors = ToggleButtonDefaults.tonalToggleButtonColors(
-                                        containerColor = colors.surfaceContainerHighest,
-                                        checkedContainerColor = colors.primaryContainer,
+                                        containerColor = if (secondary) colors.surfaceContainerLow else colors.surfaceContainer,
+                                        checkedContainerColor = colors.primary.copy(alpha = if (secondary) 0.08f else 0.12f),
                                         contentColor = if (secondary) colors.onSurfaceVariant else colors.onSurface,
-                                        checkedContentColor = colors.onPrimaryContainer,
+                                        checkedContentColor = colors.primary,
                                     ),
                                     border = if (isSelected) null else BorderStroke(1.dp, colors.outlineVariant),
                                     contentPadding = padding,
@@ -172,10 +172,10 @@ private fun AdaptiveChoiceGroup(
                                         checkedShape = RoundedCornerShape(14.dp),
                                     ),
                                     colors = ToggleButtonDefaults.toggleButtonColors(
-                                        containerColor = colors.surfaceContainerHighest,
+                                        containerColor = if (secondary) colors.surfaceContainerLow else colors.surfaceContainer,
                                         contentColor = colors.onSurface,
-                                        checkedContainerColor = colors.primary,
-                                        checkedContentColor = colors.onPrimary,
+                                        checkedContainerColor = colors.primary.copy(alpha = 0.16f),
+                                        checkedContentColor = colors.primary,
                                     ),
                                     border = if (isSelected) null else BorderStroke(1.dp, colors.outlineVariant),
                                     contentPadding = padding, content = content)
