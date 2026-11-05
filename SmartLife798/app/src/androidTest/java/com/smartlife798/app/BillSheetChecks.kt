@@ -124,6 +124,35 @@ object BillSheetChecks {
                 await { find(test, "账单详情") != null }
                 stage = "settled height $label"
                 val before = stableTitle(test, "账单详情", measurements)
+                if (android.os.Build.VERSION.SDK_INT >= 34 && label == "短账单夹具") {
+                    stage = "predictive back previews and cancels"
+                    val display = test.targetContext.resources.displayMetrics
+                    val down = SystemClock.uptimeMillis()
+                    fun touch(action: Int, x: Float) {
+                        val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(),
+                            action, x, display.heightPixels * 0.6f, 0)
+                        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                        check(test.uiAutomation.injectInputEvent(event, true))
+                        event.recycle()
+                    }
+                    touch(android.view.MotionEvent.ACTION_DOWN, 1f)
+                    for (step in 1..20) {
+                        touch(android.view.MotionEvent.ACTION_MOVE, display.widthPixels * 0.4f * step / 20)
+                        Thread.sleep(20)
+                    }
+                    Thread.sleep(200)
+                    val preview = bounds(find(test, "账单详情") ?: error("preview missing"))
+                    screenshot(test, "bill-back-preview.png")
+                    for (step in 19 downTo 0) {
+                        touch(android.view.MotionEvent.ACTION_MOVE, 1f + display.widthPixels * 0.4f * step / 20)
+                        Thread.sleep(20)
+                    }
+                    touch(android.view.MotionEvent.ACTION_UP, 1f)
+                    Thread.sleep(500)
+                    check(find(test, "账单详情") != null) { "cancel dismissed detail" }
+                    check(preview.width() < before.width()) { "no predictive scaling: before=$before preview=$preview" }
+                    measurements.add("predictive width ${before.width()} -> ${preview.width()}, cancel retained detail")
+                }
                 if (label == "长账单夹具") {
                     check(find(test, "去支付") != null)
                     fun actionBounds(label: String): android.graphics.Rect {
