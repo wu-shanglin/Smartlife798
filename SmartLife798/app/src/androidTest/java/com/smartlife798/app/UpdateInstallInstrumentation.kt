@@ -137,6 +137,8 @@ class UpdateInstallInstrumentation : Instrumentation() {
             ProfileFlowChecks.run(this)
             return
         }
+        if (mode == "sheet-motion-baseline") { SheetMotionChecks.run(this, balanced = false); return }
+        if (mode == "sheet-motion") { SheetMotionChecks.run(this); return }
         if (mode == "bill-sheets") {
             BillSheetChecks.run(this)
             return
