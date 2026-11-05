@@ -485,7 +485,7 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
         colors = CardDefaults.cardColors(containerColor = if (pinned) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -505,8 +505,7 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
                 device.name.ifBlank { DeviceType.nameOrNull(device.dtype) ?: "设备" },
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                minLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(

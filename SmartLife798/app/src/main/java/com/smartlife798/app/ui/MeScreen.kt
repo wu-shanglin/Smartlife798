@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -363,12 +364,26 @@ fun MeScreen(
                         }
                     }
                     Text("连接失败时依次尝试其他来源，临时切换需经你确认。", style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(
-                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    androidx.compose.material3.FilledTonalButton(
+                        shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
+                        colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
                         onClick = { vm.checkAppUpdate(manual = true) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         enabled = !checkingUpdate,
-                    ) { Text(if (checkingUpdate) "正在检查更新…" else "检查更新") }
+                    ) {
+                        if (checkingUpdate) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (checkingUpdate) "正在检查更新…" else "检查更新")
+                    }
                     Text(
                         "本应用是「慧生活798」服务端的独立重制客户端：登录、扫码、设备状态、启用/停用设备、" +
                             "计费与账单全部调用官方接口，界面与交互完全重新设计。",
