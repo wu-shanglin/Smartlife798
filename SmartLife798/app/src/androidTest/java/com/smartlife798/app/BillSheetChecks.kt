@@ -71,8 +71,8 @@ object BillSheetChecks {
                 val data = when {
                     path.endsWith("/bill/lst-owner") -> gson.toJson(rows)
                     path.endsWith("/bill/view-full") -> {
-                        details.incrementAndGet()
-                        Thread.sleep(250)
+                        val read = details.incrementAndGet()
+                        Thread.sleep(if (read >= 3) 1800 else 250)
                         val id = chain.request().url.queryParameter("id")
                         // Also cover view-full omitting bill: production must retain the clicked row.
                         gson.toJson(if (id == short.id) BillDetail() else BillDetail(bill = long))
@@ -119,7 +119,8 @@ object BillSheetChecks {
                 stage = "open $label"
                 await { find(test, label) != null }
                 click(test, label)
-                click(test, label)
+                // The summary now opens immediately and covers the source row.
+                // A second tap must target the visible sheet, not the hidden list.
                 await { find(test, "账单详情") != null }
                 stage = "settled height $label"
                 val before = stableTitle(test, "账单详情", measurements)
@@ -163,13 +164,14 @@ object BillSheetChecks {
             stage = "reopen and logout isolation"
             click(test, "短账单夹具")
             await { find(test, "账单详情") != null }
-            stableTitle(test, "账单详情", measurements)
             click(test, "关闭账单详情")
             await { find(test, "账单详情") == null && find(test, "短账单夹具") != null }
+            Thread.sleep(2200)
+            check(find(test, "账单详情") == null) { "late detail response reopened dismissed sheet" }
             check(details.get() == 3 && writes.get() == 0)
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
             check(Store.updatePolicyJson == originalPolicy && Store.originalAppVersion == originalProtocol)
-            result.putString("stream", "PASS: rapid taps coalesce, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
+            result.putString("stream", "PASS: immediate summary, late response cannot reopen, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             screenshot(test, "bill-sheet-failure.png")

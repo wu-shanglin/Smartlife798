@@ -306,13 +306,14 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                 bill = bill,
                                 onClick = openDetail@{
                                     if (!sceneActiveState.value || detailLoading || detail != null || payTarget != null) return@openDetail
+                                    detail = BillDetail(bill = bill)
                                     detailLoading = true
                                     detailScope.launch {
                                         try {
                                             when (val res = vm.billDetail(bill.id)) {
                                                 is Res.Ok -> {
                                                     // A newer payment request takes precedence over this read.
-                                                    if (sceneActiveState.value && payTarget == null) {
+                                                    if (sceneActiveState.value && payTarget == null && detail?.bill?.id == bill.id) {
                                                         val loaded = res.data
                                                         detail = if (loaded?.bill != null) loaded
                                                         else BillDetail(bill = bill, cnt = loaded?.cnt)
@@ -398,6 +399,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             BillDetailSheet(
                 detail = detailValue,
                 enabled = !closing,
+                loading = detailLoading,
                 onDismiss = { closeDetail() },
                 onPay = { bill -> closeDetail { payTarget = bill } },
             )
@@ -489,6 +491,7 @@ private fun BillRow(bill: Bill, onClick: () -> Unit, onPay: () -> Unit) {
 private fun BillDetailSheet(
     detail: BillDetail,
     enabled: Boolean,
+    loading: Boolean,
     onDismiss: () -> Unit,
     onPay: (Bill) -> Unit,
 ) {
@@ -506,9 +509,12 @@ private fun BillDetailSheet(
                 shapes = IconButtonDefaults.shapes(),
             ) { Icon(Icons.Filled.Close, contentDescription = "关闭账单详情") }
         }
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(4.dp)) {
+            if (loading) LinearWavyProgressIndicator(Modifier.fillMaxWidth())
+        }
         if (bill != null) {
             Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -576,7 +582,7 @@ private fun BillDetailSheet(
                 ) { Text("暂不支付") }
                 Button(
                     onClick = { onPay(payableBill) },
-                    enabled = enabled,
+                    enabled = enabled && !loading,
                     modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = AppLayout.ActionHeight),
                     shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                 ) { Text("去支付") }

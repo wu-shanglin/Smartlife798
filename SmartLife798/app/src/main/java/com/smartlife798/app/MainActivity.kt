@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.EnterTransition
@@ -64,7 +63,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -530,13 +528,7 @@ private fun AppRoot(
                         }
                     }
                 }
-                // NavHost can ignore Back while the incoming entry is STARTED.
-                // A normal Back must also reverse an unfinished card transition.
-                val navigationState = currentEntry?.lifecycle?.currentStateAsState()?.value
-                BackHandler(enabled = navController.previousBackStackEntry != null &&
-                    (sharedScope.isTransitionActive || navigationState == androidx.lifecycle.Lifecycle.State.STARTED)) {
-                    navController.popBackStack()
-                }
+
             }
         }
     }
