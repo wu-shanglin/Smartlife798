@@ -57,10 +57,12 @@ object SheetMotionChecks {
                             repeat(12) { withFrameNanos { it } }
                             val hideStart = SystemClock.elapsedRealtimeNanos()
                             val hideIntervals = mutableListOf<Long>()
+                            val hideOffsets = mutableListOf<Float>()
                             var hideLastFrame = withFrameNanos { it }
                             val hide = launch { sheet.hide() }
                             while (hide.isActive) {
                                 val frame = withFrameNanos { it }
+                                hideOffsets += sheet.requireOffset()
                                 hideIntervals += frame - hideLastFrame
                                 hideLastFrame = frame
                             }
@@ -70,7 +72,11 @@ object SheetMotionChecks {
                             check(!balanced || (hideMs >= showMs * 0.65 && hideMs <= showMs * 1.5)) {
                                 "asymmetric sheet motion: show=$showMs ms hide=$hideMs ms"
                             }
-                            result = "balanced=$balanced show=${showMs}ms hide=${hideMs}ms showFrames=$frames; " +
+                            val reverse = hideOffsets.zipWithNext().count { (a, b) -> b < a - 0.5f }
+                            val hidden = sheet.requireOffset()
+                            check(!balanced || reverse == 0) { "exit reversed direction in $reverse frames" }
+                            check(!balanced || hideOffsets.none { it > hidden + 0.5f }) { "exit overshot Hidden" }
+                            result = "reverseFrames=$reverse balanced=$balanced show=${showMs}ms hide=${hideMs}ms showFrames=$frames; " +
                                 "largest show frame interval=${(intervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
                                 "hide frames=${hideIntervals.size}, largest hide interval=${(hideIntervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
                                 "offset lifetime measurement, not a physical-device frame benchmark"

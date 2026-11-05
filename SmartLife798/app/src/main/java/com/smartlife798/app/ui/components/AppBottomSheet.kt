@@ -19,6 +19,8 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -44,7 +46,9 @@ fun AppBottomSheet(
         if (balancedMotion) BalancedSheetMotion(inheritedMotion) else inheritedMotion
     }
     // Material3 alpha14 uses FastEffects for hide(), unlike DefaultSpatial for show().
-    // Scope the substitution to this sheet; child controls retain their normal effects.
+    // Use a critically damped exit: an underdamped entrance spring crosses Hidden,
+    // then rebounds into the viewport while the invisible dialog still intercepts input.
+    // Keep the scrim on the same non-bouncy envelope; child effects remain inherited.
     MaterialExpressiveTheme(motionScheme = sheetMotion) {
         ModalBottomSheet(
             onDismissRequest = onDismissRequest,
@@ -72,5 +76,15 @@ fun AppBottomSheet(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 private class BalancedSheetMotion(private val inherited: MotionScheme) : MotionScheme by inherited {
-    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = inherited.defaultSpatialSpec()
+    private fun <T> exitSpec(): FiniteAnimationSpec<T> {
+        val spatial = inherited.defaultSpatialSpec<T>()
+        return if (spatial is SpringSpec<T>) spring(
+            dampingRatio = maxOf(1f, spatial.dampingRatio),
+            stiffness = spatial.stiffness,
+            visibilityThreshold = spatial.visibilityThreshold,
+        ) else inherited.defaultEffectsSpec()
+    }
+
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = exitSpec()
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = exitSpec()
 }
