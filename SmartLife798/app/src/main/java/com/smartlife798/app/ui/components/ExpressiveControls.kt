@@ -182,6 +182,7 @@ private fun AdaptiveChoiceGroup(
                             }
                         },
                         menuContent = { menu ->
+                            com.smartlife798.app.ui.PageInactiveEffect { menu.dismiss() }
                             DropdownMenuItem(
                                 text = { Text(label) },
                                 enabled = enabled,

@@ -33,6 +33,11 @@ object NfcNavigationChecks {
         val application = test.targetContext.applicationContext as Application
         val screen = AtomicReference<MainActivity?>()
         val qrReads = AtomicInteger()
+        val billGate = AtomicReference<java.util.concurrent.CountDownLatch?>()
+        val billEntered = java.util.concurrent.CountDownLatch(1)
+        val releaseBill = java.util.concurrent.CountDownLatch(1)
+        val blockedBill = AtomicReference<okhttp3.Call>()
+        val retainedBill = """{"id":"retained-bill","status":1,"payment":1.0,"prds":[{"name":"留存账单"}]}"""
         val startCalls = AtomicInteger()
         val startResult = AtomicInteger(if (rejectStart) -1 else 0)
         val deviceStates = java.util.concurrent.ConcurrentHashMap<String, Int>()
@@ -76,13 +81,21 @@ object NfcNavigationChecks {
             val data = when (request.url.encodedPath) {
                 "/api/v1/ui/app/master" -> """{"account":{"id":"offline-nfc-navigation-user","name":"离线用户","pn":""},"favos":[]}"""
                 "/api/v1/acc/wallet/owner" -> """{"aw":{"total":0.0,"owner":{"id":"offline-nfc-navigation-user"}}}"""
-                "/api/v1/bill/lst-owner" -> "[]"
+                "/api/v1/bill/lst-owner" -> if (automatic) "[]" else "[$retainedBill]"
+                "/api/v1/bill/view-full" -> {
+                    billGate.getAndSet(null)?.let { gate ->
+                        blockedBill.set(chain.call())
+                        billEntered.countDown()
+                        check(gate.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    }
+                    """{"bill":$retainedBill}"""
+                }
                 "/api/v1/acc/score/mission-lst" -> """{"accScoreRsp":{"validScore":"0","daily":{"week":1}}}"""
                 "/api/v1/qr/use" -> {
                     qrReads.incrementAndGet()
                     val qr = request.url.queryParameter("id")
-                    check(qr in listOf("fixture-cold-qr", "fixture-warm-qr"))
-                    """{"qr":{"type":3},"dev":${gson.toJson(device(qr == "fixture-warm-qr"))}}"""
+                    check(qr in listOf("fixture-cold-qr", "fixture-warm-qr", "fixture-modal-qr", "fixture-late-qr", "fixture-nickname-qr"))
+                    """{"qr":{"type":3},"dev":${gson.toJson(device(qr != "fixture-cold-qr"))}}"""
                 }
                 "/api/v1/dev/start" -> {
                     check(automatic)
@@ -109,12 +122,12 @@ object NfcNavigationChecks {
         }.build()
         fun root(): android.view.accessibility.AccessibilityNodeInfo? {
             if (android.os.Build.VERSION.SDK_INT >= 33) test.uiAutomation.clearCache()
-            else test.uiAutomation.serviceInfo = test.uiAutomation.serviceInfo
             return test.uiAutomation.rootInActiveWindow
         }
         fun find(label: String, visibleOnly: Boolean = true): android.view.accessibility.AccessibilityNodeInfo? {
             fun search(node: android.view.accessibility.AccessibilityNodeInfo?): android.view.accessibility.AccessibilityNodeInfo? {
                 if (node == null) return null
+                if (android.os.Build.VERSION.SDK_INT < 33 && !node.refresh()) return null
                 if ((!visibleOnly || node.isVisibleToUser) && (node.text?.toString() == label || node.contentDescription?.toString() == label)) return node
                 for (index in 0 until node.childCount) search(node.getChild(index))?.let { return it }
                 return null
@@ -143,7 +156,7 @@ object NfcNavigationChecks {
             }
             stage = "cold NDEF intent resolves and enters real detail without starting"
             val uri = "https://i.ilife798.com/nfc.html?q=fixture-cold-qr"
-            test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
+            test.targetContext.startActivity(Intent(test.targetContext, MainActivity::class.java)
                 .setAction(NfcAdapter.ACTION_NDEF_DISCOVERED).setData(Uri.parse(uri))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
             await { visible("NFC冷启动离线设备") }
@@ -246,13 +259,58 @@ object NfcNavigationChecks {
                     "PASS: background NDEF opens detail; one rejected simulated NFC start; recreation/refresh adds zero retries; terminal fixtures only\n"
                     else "PASS: background NDEF resumes real detail; forged URI extra cannot auto-start; simulated verified reader starts once; recreation/running retap adds zero commands; terminal fixtures only\n")
             } else {
-                result.putString("stream", "PASS: cold NDEF and warm VIEW Activity/Compose detail navigation; consumed intent recreation makes zero extra QR reads; no commands/payments; terminal fixtures only\n")
+                fun overlay(qr: String) {
+                    test.targetContext.startActivity(Intent(test.targetContext, MainActivity::class.java)
+                        .setAction(Intent.ACTION_VIEW).setData(Uri.parse("https://i.ilife798.com/nfc.html?q=$qr"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                    await { visible("NFC热启动离线设备") && visible("当前模式") }
+                }
+                stage = "retained order dialog closes when a VIEW intent covers it"
+                click("返回")
+                await { visible("NFC冷启动离线设备") && !visible("NFC热启动离线设备") }
+                click("返回")
+                await { visible("首页") }
+                click("订单")
+                await { visible("留存账单") }
+                click("留存账单")
+                await { visible("账单详情") }
+                overlay("fixture-modal-qr")
+                check(!visible("账单详情"))
+                click("返回")
+                await { visible("订单与记录") }
+                check(!visible("账单详情"))
+
+                stage = "inactive order read cancels and its late response cannot reopen a dialog"
+                billGate.set(releaseBill)
+                click("留存账单")
+                check(billEntered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                overlay("fixture-late-qr")
+                await { blockedBill.get()?.isCanceled() == true }
+                releaseBill.countDown()
+                SystemClock.sleep(200)
+                click("返回")
+                await { visible("订单与记录") }
+                check(!visible("账单详情"))
+
+                stage = "retained nickname dialog closes without submitting a change"
+                click("我的")
+                await { visible("修改昵称") }
+                click("修改昵称")
+                await { visible("昵称") }
+                overlay("fixture-nickname-qr")
+                check(!visible("昵称"))
+                click("返回")
+                await { visible("修改昵称") }
+                check(!visible("昵称"))
+                check(qrReads.get() == 5 && forbidden.get() == 0 && startCalls.get() == 0)
+                result.putString("stream", "PASS: cold/warm NFC VIEW navigation and consumed-intent recreation; retained order/nickname dialogs dismiss on navigation; blocked old bill read cancels and never reopens a sheet; zero commands/payments/profile writes; terminal fixtures only\n")
             }
             code = Activity.RESULT_OK
         } catch (e: Exception) {
-            val visibleLabels = labels(root())
+            val visibleLabels = if (started) labels(root()) else emptyList()
             result.putString("stream", "FAIL at $stage: ${e.javaClass.simpleName}; labels=$visibleLabels; backs=$backTrace; finishing=${screen.get()?.isFinishing}; qr=${qrReads.get()},forbidden=${forbidden.get()},path=${unexpectedPath.get()},start=${startCalls.get()},line=${e.stackTrace.firstOrNull { it.className.contains("NfcNavigationChecks") }?.lineNumber}\n")
         } finally {
+            releaseBill.countDown()
             activeGate?.countDown()
             if (started) test.runOnMainSync {
                 screen.get()?.viewModelStore?.clear()
@@ -262,6 +320,11 @@ object NfcNavigationChecks {
                 Store.clearAccount()
                 clientField.set(null, originalClient)
                 screen.get()?.finish()
+            }
+            if (started) {
+                val prefs = Store::class.java.getDeclaredField("prefs").apply { isAccessible = true }
+                    .get(null) as android.content.SharedPreferences
+                check(prefs.edit().commit())
             }
         }
         test.finish(code, result)

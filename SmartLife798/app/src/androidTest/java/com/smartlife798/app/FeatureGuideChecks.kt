@@ -12,7 +12,6 @@ import com.smartlife798.app.core.*
 import com.smartlife798.app.ui.*
 import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
-import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,11 +33,9 @@ object FeatureGuideChecks {
         val saved = prefs.all.toMap()
         val client = Api.client
         val field = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
-        val closes = AtomicInteger()
+        val writes = AtomicInteger()
         val reads = AtomicInteger()
-        var status = BillStatus.UNPAID
-        var closeCode = 0
-        var confirmCancellation = true
+        val bill = """{"id":"fixture-bill","status":1,"payment":1.0,"prds":[{"name":"充值账单夹具"}]}"""
         var vm: MainViewModel? = null
         try {
             prefs.edit().clear().commit()
@@ -47,17 +44,12 @@ object FeatureGuideChecks {
             check(!Store.guideBasicsDone())
             val fixture = client.newBuilder().apply { interceptors().clear() }.addInterceptor { chain ->
                 val request = chain.request()
+                if (request.method != "GET" || request.url.encodedPath.startsWith("/api/v1/trans/") ||
+                    request.url.encodedPath.startsWith("/api/v1/ord/")) writes.incrementAndGet()
                 var responseCode = 0
                 val data = when (request.url.encodedPath) {
-                    "/api/v1/bill/view-full" -> { reads.incrementAndGet(); """{"bill":{"id":"fixture-bill","status":$status}}""" }
-                    "/api/v1/trans/close" -> {
-                        check(request.url.queryParameter("id") == "fixture-bill")
-                        closes.incrementAndGet(); Thread.sleep(200)
-                        responseCode = closeCode
-                        if (closeCode == 0 && confirmCancellation) status = BillStatus.CANCELLED
-                        "null"
-                    }
-                    "/api/v1/bill/lst-owner" -> """[{"id":"fixture-bill","status":$status}]"""
+                    "/api/v1/bill/view-full" -> { reads.incrementAndGet(); """{"bill":$bill}""" }
+                    "/api/v1/bill/lst-owner" -> "[$bill]"
                     "/api/v1/bill/pay/channels" -> """{"channels":[]}"""
                     else -> { responseCode = -1; "null" }
                 }
@@ -142,37 +134,27 @@ object FeatureGuideChecks {
                 click(test, "开始使用")
                 await(test, "重置引导卡片")
             }
-            stage = "read-only state blocks cancellation"
+            stage = "defer payment preserves the unpaid recharge bill without a command"
             session.token = "fixture-token"
-            status = BillStatus.CONFIRMING
-            runBlocking { check(vm!!.cancelBill("fixture-bill") is Res.Fail) }
-            check(closes.get() == 0)
-            stage = "server refusal preserved"
-            status = BillStatus.UNPAID; closeCode = -1
-            runBlocking { check(vm!!.cancelBill("fixture-bill") is Res.Fail) }
-            check(closes.get() == 1 && status == BillStatus.UNPAID)
-            stage = "accepted but unconfirmed is not cancelled"
-            closeCode = 0; confirmCancellation = false
-            runBlocking { check(vm!!.cancelBill("fixture-bill") is Res.Fail) }
-            check(closes.get() == 2)
-            stage = "cancel UI confirmation and authoritative readback"
-            confirmCancellation = true
             test.runOnMainSync { activity!!.setContent { SmartLifeTheme {
                 OrdersScreen(vm!!, onOpenDevice = { _, _ -> })
             } } }
-            click(test, "设备消费")
-            await(test, "账单详情")
-            click(test, "取消订单")
-            await(test, "取消这笔未付订单？")
-            snapshot(test, "payment-cancel.png")
-            click(test, "保留订单")
-            check(closes.get() == 2)
-            click(test, "取消订单")
-            click(test, "确认取消")
-            val until = android.os.SystemClock.elapsedRealtime() + 5000
-            while (status != BillStatus.CANCELLED && android.os.SystemClock.elapsedRealtime() < until) Thread.sleep(50)
-            check(closes.get() == 3 && status == BillStatus.CANCELLED)
-            check(reads.get() >= 6)
+            repeat(2) {
+                click(test, "充值账单夹具")
+                await(test, "账单详情")
+                await(test, "暂不支付")
+                check(find(test, "取消订单") == null && find(test, "已取消") == null)
+                check(find(test, "去支付") != null)
+                val before = reads.get()
+                click(test, "暂不支付")
+                val until = android.os.SystemClock.elapsedRealtime() + 5000
+                while (find(test, "账单详情") != null && android.os.SystemClock.elapsedRealtime() < until) Thread.sleep(50)
+                check(find(test, "账单详情") == null)
+                await(test, "充值账单夹具")
+                check(find(test, "未付款") != null && find(test, "已取消") == null)
+                check(reads.get() == before && writes.get() == 0)
+            }
+            check(reads.get() == 2)
             if (!orderOnly) {
                 stage = "old-install migration"
                 prefs.edit().remove("guideStarted").remove("guideBasicsDone").remove("guideSeen").commit()
@@ -197,11 +179,11 @@ object FeatureGuideChecks {
                 await(test, "打开应用，碰一碰直达设备")
                 check(Store.guideSeen() == setOf("welcome:2"))
             }
-            result.putString("stream", if (orderOnly) "PASS: blocked confirming; server refusal; unconfirmed close; order detail cancel UI and authoritative readback; terminal fixtures only\n" else "PASS: first-use next/back/no-skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; blocked confirming; server refusal; unconfirmed close; order detail cancel UI and authoritative readback; terminal fixtures only\n")
+            result.putString("stream", if (orderOnly) "PASS: defer payment closes detail, preserves unpaid recharge bill and permits reopening; no close/cancel/prepay/confirm commands; terminal fixtures only\n" else "PASS: first-use next/back/no-skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; defer payment preserves unpaid recharge bill, reopening succeeds, zero business commands; terminal fixtures only\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             snapshot(test, "guide-failure.png")
-            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName} at ${failure.stackTrace.firstOrNull { it.className.contains("FeatureGuideChecks") }?.lineNumber}; closes=${closes.get()}, reads=${reads.get()}\n")
+            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName} at ${failure.stackTrace.firstOrNull { it.className.contains("FeatureGuideChecks") }?.lineNumber}; writes=${writes.get()}, reads=${reads.get()}\n")
         } finally {
             test.runOnMainSync { activity?.viewModelStore?.clear(); activity?.finish(); session.clear() }
             field.set(null, client)

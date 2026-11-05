@@ -1361,17 +1361,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return result
     }
 
-    /** Close once, then require an authoritative cancelled snapshot. Shares the payment lock. */
-    suspend fun cancelBill(billId: String): Res<Unit> = accountTransaction(Res.Fail(-1, "请先登录或等待当前交易完成")) {
-        withContext(Dispatchers.IO) {
-            com.smartlife798.app.core.BillCancellation.execute(
-                billId,
-                read = { accountResponse { Api.billDetail(billId) } },
-                close = { accountResponse { Api.closePay(billId) } },
-            ).also { bumpRefresh() }
-        }
-    }
-
     fun developerLoginToken(): String? =
         session.token?.takeIf { _developerToolsEnabled.value && !session.isCurrentTokenRejected() && it.isNotBlank() }
 

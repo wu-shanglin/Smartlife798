@@ -44,7 +44,8 @@ private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { nu
 
 /** A retained outgoing scene can still be composed after navigation has already moved on. */
 @Composable
-internal fun cardSceneActive(): Boolean = LocalCardScene.current?.active?.value ?: true
+internal fun cardSceneActiveState(): State<Boolean> =
+    LocalCardScene.current?.active ?: rememberUpdatedState(true)
 
 @Composable
 fun SharedCardScene(

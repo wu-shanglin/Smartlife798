@@ -24,6 +24,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -74,6 +75,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
@@ -256,6 +258,8 @@ private fun AppRoot(
     val startDestination = rememberSaveable { vm.startupPage.value.route }
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
+    var mainTabScene by remember { mutableStateOf<MainTabScene?>(null) }
+    val mainTabState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner, visibleDeck?.id) {
         val raw = incomingNfc ?: return@LaunchedEffect
@@ -299,7 +303,7 @@ private fun AppRoot(
         }
     }
 
-    val hasBottomBar = currentEntry?.destination?.route in setOf("home", "devices", "orders", "me")
+    val hasBottomBar = currentEntry?.destination?.route in mainTabRoutes
     var bottomBarHeight by remember { mutableIntStateOf(0) }
     val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarBottom = if (hasBottomBar)
@@ -328,6 +332,24 @@ private fun AppRoot(
                         }
                     }
                 }
+                // Keep one source tab placed while a detail covers it. NavHost may
+                // recreate a popped source a frame after its logical entry changes.
+                // Its real visibility scope still drives the shared/predictive motion.
+                mainTabScene?.let { scene ->
+                    androidx.compose.runtime.SideEffect { scene.stateOwner.bind(mainTabState, scene.entry.id) }
+                    mainTabState.SaveableStateProvider(scene.entry.id) {
+                        CompositionLocalProvider(
+                            androidx.lifecycle.compose.LocalLifecycleOwner provides scene.entry,
+                            androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner provides scene.entry,
+                            androidx.savedstate.compose.LocalSavedStateRegistryOwner provides scene.entry,
+                        ) {
+                            SharedCardScene(sharedScope, scene.visibility, scene.entry.id,
+                                active = currentEntry?.id == scene.entry.id, clipWhenInactive = false) {
+                                MainTabContent(scene.entry, navController, vm, unpaidCount) { bottomBarHeight = it }
+                            }
+                        }
+                    }
+                }
                 NavHost(
                     navController = navController,
                     startDestination = startDestination,
@@ -337,60 +359,23 @@ private fun AppRoot(
                     popEnterTransition = { EnterTransition.None },
                     popExitTransition = { ExitTransition.None },
                 ) {
-                    composable("home") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
-                            MainTabPage("home", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
-                                HomeScreen(
-                                    vm = vm,
-                                    onScan = {
-                                        openCardPage(navController, "scan", CardSource(entry.id, CardOrigin.HOME_SCAN))
-                                    },
-                                    onOpenDevice = { id, origin ->
-                                        openDeviceCard(navController, id, CardSource(entry.id, origin))
-                                    },
-                                    onOpenDevices = { shelf ->
-                                        vm.requestShelf(shelf)
-                                        navigateTab(navController, "devices")
-                                    },
-                                    onOpenOrders = { navigateTab(navController, "orders") },
-                                )
-                            }
-                        }
-                    }
-                    composable("devices") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
-                            MainTabPage("devices", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
-                                DevicesScreen(
-                                    vm = vm,
-                                    onOpenDevice = { id, origin ->
-                                        openDeviceCard(navController, id, CardSource(entry.id, origin))
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    composable("orders") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
-                            MainTabPage("orders", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
-                                OrdersScreen(
-                                    vm = vm,
-                                    onOpenDevice = { id, origin ->
-                                        openDeviceCard(navController, id, CardSource(entry.id, origin))
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    composable("me") { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id, clipWhenInactive = false) {
-                            MainTabPage("me", navController, unpaidCount, onBottomBarHeight = { bottomBarHeight = it }) {
-                                MeScreen(
-                                    vm = vm,
-                                    onOpenDeveloperTools = { navController.navigate("developer-tools") { launchSingleTop = true } },
-                                    onOpenWallet = {
-                                        openCardPage(navController, "wallet", CardSource(entry.id, CardOrigin.WALLET))
-                                    },
-                                )
+                    for (route in mainTabRoutes) {
+                        composable(route) { entry ->
+                            val visibility = this
+                            val stateOwner = viewModel<MainTabStateOwner>(
+                                viewModelStoreOwner = entry,
+                                key = "retained-main-tab-state",
+                                initializer = { MainTabStateOwner() },
+                            )
+                            androidx.compose.runtime.SideEffect {
+                                val logical = navController.currentBackStackEntry
+                                val currentOrPreview = logical?.id == entry.id ||
+                                    (logical?.destination?.route !in mainTabRoutes &&
+                                        (mainTabScene == null || mainTabScene?.entry?.id == entry.id))
+                                if (currentOrPreview &&
+                                    (mainTabScene?.entry != entry || mainTabScene?.visibility !== visibility)) {
+                                    mainTabScene = MainTabScene(entry, visibility, stateOwner)
+                                }
                             }
                         }
                     }
@@ -557,6 +542,80 @@ private fun AppRoot(
     }
 }
 
+private val mainTabRoutes = listOf("home", "devices", "orders", "me")
+
+/** Mirrors entry lifetime: saved tab stacks retain state; a permanent pop releases it. */
+private class MainTabStateOwner : androidx.lifecycle.ViewModel() {
+    private var holder: java.lang.ref.WeakReference<androidx.compose.runtime.saveable.SaveableStateHolder>? = null
+    private var stateKey: String? = null
+    private var cleared = false
+
+    fun bind(value: androidx.compose.runtime.saveable.SaveableStateHolder, key: String) {
+        if (cleared) {
+            value.removeState(key)
+            return
+        }
+        holder = java.lang.ref.WeakReference(value)
+        stateKey = key
+    }
+
+    override fun onCleared() {
+        cleared = true
+        stateKey?.let { holder?.get()?.removeState(it) }
+        holder = null
+    }
+}
+
+private data class MainTabScene(
+    val entry: NavBackStackEntry,
+    val visibility: androidx.compose.animation.AnimatedVisibilityScope,
+    val stateOwner: MainTabStateOwner,
+)
+
+@Composable
+private fun MainTabContent(
+    entry: NavBackStackEntry,
+    nav: NavHostController,
+    vm: MainViewModel,
+    unpaidCount: Int,
+    onBottomBarHeight: (Int) -> Unit,
+) {
+    val route = entry.destination.route.orEmpty()
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    var hasSourceFocus by remember(entry.id) { mutableStateOf(false) }
+    com.smartlife798.app.ui.PageInactiveEffect {
+        // Only clear focus still owned by this source, never a newly focused destination.
+        if (hasSourceFocus) focus.clearFocus(force = true)
+    }
+    fun leaveSource(navigate: () -> Unit) {
+        if (nav.currentBackStackEntry?.id != entry.id) return
+        keyboard?.hide()
+        focus.clearFocus(force = true)
+        navigate()
+    }
+    MainTabPage(route, nav, unpaidCount, onBottomBarHeight,
+        onNavigate = ::leaveSource,
+        modifier = Modifier.onFocusChanged { hasSourceFocus = it.hasFocus }.focusGroup()) {
+        when (route) {
+            "home" -> HomeScreen(
+                vm = vm,
+                onScan = { leaveSource { openCardPage(nav, "scan", CardSource(entry.id, CardOrigin.HOME_SCAN)) } },
+                onOpenDevice = { id, origin -> leaveSource { openDeviceCard(nav, id, CardSource(entry.id, origin)) } },
+                onOpenDevices = { shelf -> leaveSource { vm.requestShelf(shelf); navigateTab(nav, "devices") } },
+                onOpenOrders = { leaveSource { navigateTab(nav, "orders") } },
+            )
+            "devices" -> DevicesScreen(vm) { id, origin -> leaveSource { openDeviceCard(nav, id, CardSource(entry.id, origin)) } }
+            "orders" -> OrdersScreen(vm) { id, origin -> leaveSource { openDeviceCard(nav, id, CardSource(entry.id, origin)) } }
+            "me" -> MeScreen(
+                vm = vm,
+                onOpenDeveloperTools = { leaveSource { nav.navigate("developer-tools") { launchSingleTop = true } } },
+                onOpenWallet = { leaveSource { openCardPage(nav, "wallet", CardSource(entry.id, CardOrigin.WALLET)) } },
+            )
+        }
+    }
+}
+
 /** Keep bottom navigation in the page being previewed, without resizing NavHost on pop. */
 @Composable
 private fun MainTabPage(
@@ -564,6 +623,8 @@ private fun MainTabPage(
     nav: NavHostController,
     unpaidCount: Int,
     onBottomBarHeight: (Int) -> Unit,
+    onNavigate: ((() -> Unit) -> Unit),
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val tabs = listOf(
@@ -574,6 +635,7 @@ private fun MainTabPage(
     )
     val scanSource = currentCardSource(CardOrigin.NAV_SCAN)
     Scaffold(
+        modifier = modifier,
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.background,
@@ -586,17 +648,17 @@ private fun MainTabPage(
                         label = tab.label,
                         icon = tab.icon,
                         badgeCount = 0,
-                        onClick = { navigateTab(nav, tab.route) },
+                        onClick = { onNavigate { navigateTab(nav, tab.route) } },
                     )
                 }
-                ScanNavButton(onClick = { openCardPage(nav, "scan", scanSource) })
+                ScanNavButton(onClick = { onNavigate { openCardPage(nav, "scan", scanSource) } })
                 tabs.drop(2).forEach { tab ->
                     ExpressiveNavItem(
                         selected = route == tab.route,
                         label = tab.label,
                         icon = tab.icon,
                         badgeCount = if (tab.route == "orders") unpaidCount else 0,
-                        onClick = { navigateTab(nav, tab.route) },
+                        onClick = { onNavigate { navigateTab(nav, tab.route) } },
                     )
                 }
             }

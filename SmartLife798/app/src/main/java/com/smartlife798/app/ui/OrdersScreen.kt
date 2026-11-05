@@ -76,9 +76,9 @@ import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
 import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.ui.components.usagePillState
-import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelChildren
 
 private enum class OrderFilter(val label: String) {
     ALL("全部"),
@@ -90,6 +90,9 @@ private enum class OrderFilter(val label: String) {
 @Composable
 fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) {
     val scope = rememberCoroutineScope()
+    val detailScope = rememberCoroutineScope()
+    val sceneActiveState = cardSceneActiveState()
+    val sceneActive by sceneActiveState
     val context = LocalContext.current
     val activity = context as? Activity
     val active = vm.active.collectAsStateWithLifecycle().value
@@ -112,6 +115,11 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     var detailLoading by remember { mutableStateOf(false) }
     var loadingMore by remember { mutableStateOf(false) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
+    PageInactiveEffect {
+        detailScope.coroutineContext.cancelChildren()
+        detail = null
+        payTarget = null
+    }
 
     val billLoad = remember { Mutex() }
     suspend fun loadBills(reset: Boolean) {
@@ -141,15 +149,14 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
 
     // Bills plus the local session: the 「进行中」 card must not survive a refresh
     // once the server reports the machine idle or gone.
-    LaunchedEffect(vm) {
-        collectRefreshRequests(vm.refreshTick) {
-            loadBills(true)
-            vm.syncActiveStatus()
-        }
+    PageRefreshEffect(vm) {
+        loadBills(true)
+        vm.syncActiveStatus()
     }
 
     // A failed dev/start raises this request; land directly on the outstanding bill.
-    LaunchedEffect(payRequest) {
+    LaunchedEffect(payRequest, sceneActive) {
+        if (!sceneActive) return@LaunchedEffect
         val request = payRequest ?: return@LaunchedEffect
         tab = 1
         filter = OrderFilter.UNPAID
@@ -298,14 +305,14 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                             BillRow(
                                 bill = bill,
                                 onClick = openDetail@{
-                                    if (detailLoading || detail != null || payTarget != null) return@openDetail
+                                    if (!sceneActiveState.value || detailLoading || detail != null || payTarget != null) return@openDetail
                                     detailLoading = true
-                                    scope.launch {
+                                    detailScope.launch {
                                         try {
                                             when (val res = vm.billDetail(bill.id)) {
                                                 is Res.Ok -> {
                                                     // A newer payment request takes precedence over this read.
-                                                    if (payTarget == null) {
+                                                    if (sceneActiveState.value && payTarget == null) {
                                                         val loaded = res.data
                                                         detail = if (loaded?.bill != null) loaded
                                                         else BillDetail(bill = bill, cnt = loaded?.cnt)
@@ -318,7 +325,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                         }
                                     }
                                 },
-                                onPay = { payTarget = bill },
+                                onPay = { if (sceneActiveState.value) payTarget = bill },
                             )
                         }
 
@@ -371,52 +378,26 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     }
 
     val detailValue = detail
-    if (detailValue != null && payTarget == null) {
+    if (sceneActive && detailValue != null && payTarget == null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         var closing by remember(detailValue.bill?.id) { mutableStateOf(false) }
-        var cancelling by remember(detailValue.bill?.id) { mutableStateOf(false) }
-        var confirmCancel by remember(detailValue.bill?.id) { mutableStateOf(false) }
-        var cancelError by remember(detailValue.bill?.id) { mutableStateOf<String?>(null) }
-        if (confirmCancel) androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmCancel = false },
-            title = { Text("取消这笔未付订单？") },
-            text = { Text("取消结果以服务端为准。若刚完成付款，请先刷新订单核对。") },
-            confirmButton = { TextButton(onClick = {
-                if (!cancelling) {
-                    cancelling = true
-                    confirmCancel = false
-                    scope.launch {
-                        try {
-                            when (val response = vm.cancelBill(detailValue.bill?.id.orEmpty())) {
-                                is Res.Ok -> { vm.notify("订单已取消"); detail = null; loadBills(true) }
-                                is Res.Fail -> { cancelError = response.msg; loadBills(true) }
-                            }
-                        } finally { cancelling = false }
-                    }
-                }
-            }) { Text("确认取消") } },
-            dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("保留订单") } },
-        )
         fun closeDetail(next: (() -> Unit)? = null) {
-            if (closing || cancelling) return
+            if (closing) return
             closing = true
-            scope.launch {
+            detailScope.launch {
                 try {
                     sheetState.hide()
                     detail = null
-                    next?.invoke()
+                    if (sceneActiveState.value) next?.invoke()
                 } finally {
                     closing = false
                 }
             }
         }
-        AppBottomSheet(onDismissRequest = { if (!cancelling) detail = null }, sheetState = sheetState, dismissEnabled = !cancelling) {
+        AppBottomSheet(onDismissRequest = { if (!closing) detail = null }, sheetState = sheetState, dismissEnabled = !closing) {
             BillDetailSheet(
                 detail = detailValue,
-                enabled = !closing && !cancelling && cancelError == null,
-                cancelError = cancelError,
-                cancelling = cancelling,
-                onCancel = { confirmCancel = true },
+                enabled = !closing,
                 onDismiss = { closeDetail() },
                 onPay = { bill -> closeDetail { payTarget = bill } },
             )
@@ -424,7 +405,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     }
 
     val target = payTarget
-    if (target != null) {
+    if (sceneActive && target != null) {
         PaySheet(
             vm = vm,
             activity = activity,
@@ -510,9 +491,6 @@ private fun BillDetailSheet(
     enabled: Boolean,
     onDismiss: () -> Unit,
     onPay: (Bill) -> Unit,
-    onCancel: () -> Unit,
-    cancelError: String?,
-    cancelling: Boolean,
 ) {
     val bill = detail.bill
     val payableBill = bill?.takeIf { it.isUnpaid }
@@ -524,7 +502,7 @@ private fun BillDetailSheet(
             Text("账单详情", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             FilledTonalIconButton(
                 onClick = onDismiss,
-                enabled = true,
+                enabled = enabled,
                 shapes = IconButtonDefaults.shapes(),
             ) { Icon(Icons.Filled.Close, contentDescription = "关闭账单详情") }
         }
@@ -549,7 +527,7 @@ private fun BillDetailSheet(
             } else {
                 if (payableBill != null) {
                     Text(
-                        "该账单尚未支付，完成支付后服务端才会更新状态。",
+                        "该账单尚未支付；暂不支付会保留待付账单，可稍后在订单页继续支付。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -588,15 +566,14 @@ private fun BillDetailSheet(
                 )
             }
         }
-        cancelError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (payableBill != null) {
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(AppLayout.Gap)) {
                 androidx.compose.material3.OutlinedButton(
-                    onClick = onCancel,
+                    onClick = onDismiss,
                     enabled = enabled,
                     shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = AppLayout.ActionHeight),
-                ) { Text(if (cancelling) "正在核对…" else "取消订单") }
+                ) { Text("暂不支付") }
                 Button(
                     onClick = { onPay(payableBill) },
                     enabled = enabled,

@@ -82,7 +82,7 @@ object BillSheetChecks {
                         Thread.sleep(450)
                         """{"channels":[{"type":92,"name":"账户余额"},{"type":21,"name":"支付宝"}]}"""
                     }
-                    path.contains("prepay") || path.endsWith("/confirm") || path.contains("/dev/start") || path.contains("/dev/end") -> {
+                    chain.request().method != "GET" || path.startsWith("/api/v1/trans/") || path.contains("/dev/start") || path.contains("/dev/end") -> {
                         writes.incrementAndGet()
                         "null"
                     }
@@ -130,7 +130,7 @@ object BillSheetChecks {
                         while (!node.isClickable) node = node.parent ?: error("action has no click target")
                         return bounds(node)
                     }
-                    val cancel = actionBounds("取消订单")
+                    val cancel = actionBounds("暂不支付")
                     val pay = actionBounds("去支付")
                     check(cancel.left < pay.left && cancel.top == pay.top && cancel.bottom == pay.bottom)
                     check(kotlin.math.abs(cancel.width() - pay.width()) <= 1)
