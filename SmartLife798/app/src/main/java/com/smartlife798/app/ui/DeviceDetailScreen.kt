@@ -43,12 +43,14 @@ import com.smartlife798.app.ui.components.ChoiceButtonGroup
 import androidx.compose.material3.TopAppBar
 import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.withResumed
@@ -96,7 +98,7 @@ fun DeviceDetailScreen(
     listState: LazyListState? = null,
 ) {
     val scope = rememberCoroutineScope()
-    val pageActive = cardSceneActive()
+    val pageActive = cardSceneActiveState()
     val awaitCardEntry = rememberAwaitCardEntry()
     val initialDevice = remember(deviceId) { vm.deviceEntry(deviceId) ?: Device(id = deviceId) }
     var entryReady by remember(deviceId) { mutableStateOf(false) }
@@ -195,11 +197,7 @@ fun DeviceDetailScreen(
         vm.setDetailDeviceOpen(deviceId, owner)
         onDispose { vm.releaseDetailDevice(owner) }
     }
-    LaunchedEffect(deviceId, nfcTicket, pageActive) {
-        // Navigation emits another tick after entry settles. Keep the first
-        // in-flight response instead of cancelling it and starting a second read.
-        if (pageActive) collectRefreshRequests(vm.refreshTick) { reload(detail == null) }
-    }
+    DetailRefreshEffect(vm, deviceId, nfcTicket, pageActive) { reload(detail == null) }
 
     // 设备状态轮询：只在页面处于 RESUMED 时运行；仅“启动中/运行中”或刚启动的
     // 窗口内每 2s 一次，空闲与异常状态不轮询。
@@ -877,5 +875,21 @@ private fun InfoCard(detail: DeviceDetail) {
             if (!device.memo.isNullOrBlank()) InfoRow("使用说明", device.memo!!)
             InfoRow("收藏状态", if (detail.deviceShare != null) "已收藏" else "未收藏")
         }
+    }
+}
+
+/** Observe navigation activity in this effect's restart scope, keeping it out of the detail UI. */
+@Composable
+private fun DetailRefreshEffect(
+    vm: MainViewModel,
+    deviceId: String,
+    nfcTicket: String,
+    pageActive: State<Boolean>,
+    reload: suspend () -> Unit,
+) {
+    val active = pageActive.value
+    val currentReload by rememberUpdatedState(reload)
+    LaunchedEffect(vm, deviceId, nfcTicket, active) {
+        if (active) collectRefreshRequests(vm.refreshTick) { currentReload() }
     }
 }

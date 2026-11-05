@@ -299,7 +299,7 @@
         "id"
       ],
       "response": "BaseReq",
-      "use": "close payment transaction once; does not establish recharge-bill cancellation support; read same bill before (status 1/4) and up to four times after (1s intervals, 15s deadline); only status 9 proves cancellation; status 3 is a paid race, persistent 1/4 is ineffective; no automatic write retry; not ord/cancel or refund",
+      "use": "static reference only, not invoked by this client; 3.1.10 TransViewModel close forwards id to x3.l.a with GET and only Query(id), independently confirmed from DEX annotations; legacy bill close response only reloads the bill, no extra cancel-confirm step; does not establish recharge-bill cancellation support; defer-payment UI only dismisses the sheet and preserves the unpaid bill; not ord/cancel or refund",
       "verified": "static"
     },
     {
@@ -353,10 +353,11 @@
       "method": "POST",
       "path": "/api/v1/ord/cancel",
       "body": [
-        "id"
+        "id",
+        "note"
       ],
       "response": "BaseReq",
-      "use": "cancel order",
+      "use": "cancel cleaning work order using its work-order id, with note empty in the original OrderDetailsActivity.s0 call; not a recharge-bill cancellation endpoint",
       "verified": "static"
     },
     {

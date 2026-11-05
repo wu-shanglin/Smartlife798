@@ -367,10 +367,6 @@ object Api {
     suspend fun confirmPay(billId: String): Res<Unit> =
         request("GET", "/api/v1/trans/confirm", mapOf("id" to billId), dataType = dataType<Unit>())
 
-    /** GET /api/v1/trans/close?id= */
-    suspend fun closePay(billId: String): Res<Unit> =
-        request("GET", "/api/v1/trans/close", mapOf("id" to billId), dataType = dataType<Unit>())
-
     /** GET /api/v1/prd/lst?eid=&type=1&status=1&all=false&did=&page=0&size=100&hasCount=false — 充值商品 */
     suspend fun rechargeProducts(eid: String): Res<List<Product>> = request(
         "GET", "/api/v1/prd/lst",

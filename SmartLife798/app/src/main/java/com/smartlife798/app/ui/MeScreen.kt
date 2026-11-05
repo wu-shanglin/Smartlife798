@@ -46,7 +46,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,11 +88,11 @@ fun MeScreen(
     onOpenWallet: () -> Unit,
     onOpenDeveloperTools: () -> Unit = {},
 ) {
+    val sceneActive by cardSceneActiveState()
     val profile by vm.profile.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val wallet by vm.wallet.collectAsStateWithLifecycle()
     val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
-    val refreshTick by vm.refreshTick.collectAsStateWithLifecycle()
     val themeMode by Appearance.mode.collectAsStateWithLifecycle()
     val dynamicColor by Appearance.dynamicColor.collectAsStateWithLifecycle()
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
@@ -109,7 +108,7 @@ fun MeScreen(
     // Keep decoded pixels for the page lifetime, independently of scroll position.
     val avatarContent = com.smartlife798.app.ui.components.rememberAvatar(
         profile?.id, profile?.img, vm::loadAvatar, initial = vm.cachedAvatar(profile?.img))
-    LaunchedEffect(refreshTick) {
+    PageRefreshEffect(vm) {
         vm.refreshMePage()?.join()
     }
     val coroutineScope = rememberCoroutineScope()
@@ -118,6 +117,7 @@ fun MeScreen(
     var editNickname by remember { mutableStateOf(false) }
     var nickname by remember { mutableStateOf("") }
     var nicknameError by remember { mutableStateOf<String?>(null) }
+    PageInactiveEffect { editNickname = false; nicknameError = null }
 
     ExpressiveRefreshBox(
         onRefresh = {
@@ -344,15 +344,16 @@ fun MeScreen(
                     val preferredSource by vm.updateSource.collectAsStateWithLifecycle()
                     Text("优先更新源", style = MaterialTheme.typography.titleSmall)
                     var sourceMenuExpanded by remember { mutableStateOf(false) }
+                    PageInactiveEffect { sourceMenuExpanded = false }
                     androidx.compose.material3.ExposedDropdownMenuBox(
-                        expanded = sourceMenuExpanded, onExpandedChange = { sourceMenuExpanded = it },
+                        expanded = sceneActive && sourceMenuExpanded, onExpandedChange = { sourceMenuExpanded = it },
                     ) {
                         OutlinedTextField(
                             value = preferredSource.label, onValueChange = {}, readOnly = true,
                             modifier = Modifier.fillMaxWidth().menuAnchor(),
                             trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded) },
                         )
-                        ExposedDropdownMenu(expanded = sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
+                        ExposedDropdownMenu(expanded = sceneActive && sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
                             com.smartlife798.app.core.UpdateSource.entries.forEach { source ->
                                 androidx.compose.material3.DropdownMenuItem(text = { Text(source.label) }, onClick = {
                                     vm.setUpdateSource(source)
@@ -402,7 +403,7 @@ fun MeScreen(
         }
     }
 
-    if (editNickname) {
+    if (sceneActive && editNickname) {
         AlertDialog(
             onDismissRequest = { if (!savingProfile) editNickname = false },
             title = { Text("修改昵称") },

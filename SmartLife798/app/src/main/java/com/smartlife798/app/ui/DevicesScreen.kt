@@ -42,7 +42,6 @@ import com.smartlife798.app.ui.components.EmptyState
 import com.smartlife798.app.ui.components.ErrorState
 import com.smartlife798.app.ui.components.LoadingBlock
 import com.smartlife798.app.ui.components.deviceSubtitle
-import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
 
 @OptIn(
@@ -65,9 +64,7 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
 
     // Same silent auto-refresh contract as the other tabs; without it this page
     // only ever refreshed through pull-to-refresh.
-    LaunchedEffect(vm) {
-        collectRefreshRequests(vm.refreshTick) { vm.refreshMaster().join() }
-    }
+    PageRefreshEffect(vm) { vm.refreshMaster().join() }
 
     val favoriteIds = remember(favorites) { favorites.mapTo(hashSetOf()) { it.id } }
     val favoritesById = remember(favorites) { favorites.associateBy { it.id } }

@@ -66,7 +66,6 @@ import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
 import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.ui.components.usagePillState
-import com.smartlife798.app.core.collectRefreshRequests
 import com.smartlife798.app.vm.MainViewModel
 import com.smartlife798.app.ui.theme.scanCardColors
 import kotlinx.coroutines.launch
@@ -123,9 +122,7 @@ fun HomeScreen(
     val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
     // Full refresh (not just master): the 「进行中」 card is reconciled with
     // `dev/status` here, so a pull-to-refresh can never leave a stale session.
-    LaunchedEffect(vm) {
-        collectRefreshRequests(vm.refreshTick) { vm.refreshAll() }
-    }
+    PageRefreshEffect(vm) { vm.refreshAll() }
 
     val ordered = remember(favorites, pinned, recents) {
         val recentById = recents.associateBy { it.id }

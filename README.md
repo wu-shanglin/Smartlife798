@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | 新客户端包名 | `com.smartlife798.app` |
-| 当前版本 | `2.1.1`（`versionCode 69`） |
+| 当前版本 | `2.1.2`（`versionCode 70`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 最新已发布 | [2.1.0 release APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.1.0/SmartLife798-2.1.0-release.apk) · [发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.1.0) |
@@ -14,9 +14,9 @@
 
 ## 当前版本
 
-**2.1.1 / 69**（本地候选，未发布）：统一页面对齐与按钮高度、在线绿色/使用中黄色状态及未选中按钮背景，修复置顶卡片高度、近期记录合并与待付查询账号隔离；清理详情失活后的展示读取与无效交接绘制。充值账单真实取消仍未验明，关闭交易不等于账单已取消，见 docs/05。2.0.0 启用全新独立 release 签名，停止支持此前所有版本。旧签名应用无法覆盖升级，请先结束设备使用、核对账单，再卸载旧应用，从正式 Release 页面下载新版安装并重新登录。卸载会删除本机常用/最近/置顶及设置；服务端账号数据以重新登录后的返回为准。新版保留浅色卡片、统一置顶、三页引导及安全镜像更新。
+**2.1.2 / 70**（本地候选，未发布）：统一页面对齐与按钮高度、在线绿色/使用中黄色状态及未选中按钮背景，修复置顶卡片高度、近期记录合并与待付查询账号隔离；详情保留当前来源页并隔离后台刷新，避免快速返回时列表重建；账单左键“暂不支付”只关闭面板并保留待付，真实取消仍需接口依据，见 docs/05。2.0.0 启用全新独立 release 签名，停止支持此前所有版本。旧签名应用无法覆盖升级，请先结束设备使用、核对账单，再卸载旧应用，从正式 Release 页面下载新版安装并重新登录。卸载会删除本机常用/最近/置顶及设置；服务端账号数据以重新登录后的返回为准。新版保留浅色卡片、统一置顶、三页引导及安全镜像更新。
 
-最新公开版本为 **2.1.0 / 68**，最低支持码 **66**，全部更早版本停止支持。官方 latest 更新策略已核对；镜像同步状态以实际访问为准。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.1.0/SmartLife798-2.1.0-release.apk) · [安装与发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.1.0)。停用仅约束已取得有效官方策略且具有门禁功能的客户端，不能远程停用离线或无门禁旧版。
+最新公开版本为 **2.1.0 / 68**，最低支持码 **66**，低于该码的版本停止支持。官方 latest 更新策略已核对；镜像同步状态以实际访问为准。[正式 APK](https://github.com/wu-shanglin/Smartlife798/releases/download/v2.1.0/SmartLife798-2.1.0-release.apk) · [安装与发布说明](https://github.com/wu-shanglin/Smartlife798/releases/tag/v2.1.0)。停用仅约束已取得有效官方策略且具有门禁功能的客户端，不能远程停用离线或无门禁旧版。
 
 2.x 使用全新证书，1.x（含旧签名的 1.22.0 候选包）不能覆盖安装到 2.x。旧更新器拒绝不同证书的 APK 属于正确保护行为，不能关闭签名校验解决；请按新版 Release 的说明卸载后手动安装。未来 2.x 版本保持新签名连续性。
 
@@ -48,7 +48,7 @@
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-2.1.1-release.apk`](dist/SmartLife798-2.1.1-release.apk) |
+| 产物 | [`dist/SmartLife798-2.1.2-release.apk`](dist/SmartLife798-2.1.2-release.apk) |
 
 交付包使用既有 2.x release 签名的非 debuggable release 构建。
 
@@ -82,9 +82,9 @@
 
 扫码与输入界面：[扫码](screenshots/scan.png) · [手动输入](screenshots/manual.png)。
 
-| 首次使用 | 深色引导重看 | 取消订单确认 |
-|---|---|---|
-| ![首次使用](screenshots/guide-first.png) | ![功能指南](screenshots/guide-replay-dark.png) | ![取消订单](screenshots/payment-cancel.png) |
+| 首次使用 | 深色引导重看 |
+|---|---|
+| ![首次使用](screenshots/guide-first.png) | ![功能指南](screenshots/guide-replay-dark.png) |
 
 | 更新引导 | 开发者工具 |
 |---|---|

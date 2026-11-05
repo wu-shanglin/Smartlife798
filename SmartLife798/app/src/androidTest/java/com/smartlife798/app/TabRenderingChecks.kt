@@ -33,6 +33,7 @@ object TabRenderingChecks {
         val result = Bundle()
         var code = Activity.RESULT_CANCELED
         var activity: Activity? = null
+        var started = false
         val worker = HandlerThread("tab-pixels").apply { start() }
         val copying = AtomicBoolean()
         val samples = AtomicInteger()
@@ -43,7 +44,9 @@ object TabRenderingChecks {
         val originalMode = Store.themeModeName()
         val originalDynamic = Store.dynamicColor()
         try {
-            check(Store.token.isNullOrBlank())
+            check(Store.token.isNullOrBlank() && Store.profileJson == null &&
+                Store.active() == null && Store.pendingStart() == null)
+            started = true
             test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT); Appearance.setDynamicColor(false) }
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -159,14 +162,16 @@ object TabRenderingChecks {
             tap("我的")
             await { find(test, "修改昵称") != null }
             stage = "capture appearance in both modes"
+            val appearanceAnchor = if (android.os.Build.VERSION.SDK_INT >= 31) "动态取色开关" else "跟随系统"
             repeat(12) {
-                if (find(test, "动态取色开关") == null) {
+                if (find(test, appearanceAnchor) == null) {
                     val scroll = nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable }
                     check(scroll?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true)
                     Thread.sleep(250)
                 }
             }
-            check(find(test, "动态取色开关") != null)
+            check(find(test, appearanceAnchor) != null)
+            if (android.os.Build.VERSION.SDK_INT < 31) check(find(test, "动态取色开关") == null)
             capture("appearance_light.png")
             test.runOnMainSync { Appearance.setMode(ThemeMode.DARK) }
             Thread.sleep(600)
@@ -184,14 +189,23 @@ object TabRenderingChecks {
             result.putString("stream", "PASS: 16 real main-tab switches; rendered scan-button samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}; light/dark palette, main pages, device detail, wallet and settings captures; offline only, not an FPS measurement\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
-            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}: ${failure.message}; root=${test.uiAutomation.rootInActiveWindow?.packageName}, finishing=${activity?.isFinishing}; samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}\n")
+            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; root=${test.uiAutomation.rootInActiveWindow?.packageName}, finishing=${activity?.isFinishing}; samples=${samples.get()}, missing=${missing.get()}, copyErrors=${errors.get()}\n")
         } finally {
             test.runOnMainSync {
                 listener?.let { activity?.window?.decorView?.viewTreeObserver?.removeOnDrawListener(it) }
                 activity?.finish()
+                if (started) {
+                    (activity as? MainActivity)?.viewModelStore?.clear()
+                    com.smartlife798.app.core.session.clear()
+                }
                 Appearance.setMode(ThemeMode.fromName(originalMode)); Appearance.setDynamicColor(originalDynamic)
             }
             worker.quitSafely()
+            if (started) {
+                val prefs = Store::class.java.getDeclaredField("prefs").apply { isAccessible = true }
+                    .get(null) as android.content.SharedPreferences
+                check(prefs.edit().commit())
+            }
         }
         test.finish(code, result)
     }
