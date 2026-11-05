@@ -327,24 +327,24 @@ private fun ScanHeroCard(onScan: () -> Unit) {
                     drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.64f, center)
                     drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.40f, center)
                 }
-                .padding(AppLayout.Card),
+                .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
                 "扫码即刻使用",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = onContainer,
                 fontWeight = FontWeight.Bold,
             )
             Text(
                 "扫描设备上的二维码，自动识别水控、淋浴、洗衣等设备并进入使用页",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Normal,
                 color = onContainer,
             )
             Spacer(Modifier.height(6.dp))
             Surface(
-                color = onContainer,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                 shape = RoundedCornerShape(50),
             ) {
                 Row(
@@ -354,10 +354,10 @@ private fun ScanHeroCard(onScan: () -> Unit) {
                     Text(
                         "打开相机扫码",
                         style = MaterialTheme.typography.labelLarge,
-                        color = container,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("→", color = container)
+                    Text("→", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

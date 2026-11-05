@@ -71,8 +71,8 @@ object BillSheetChecks {
                 val data = when {
                     path.endsWith("/bill/lst-owner") -> gson.toJson(rows)
                     path.endsWith("/bill/view-full") -> {
-                        details.incrementAndGet()
-                        Thread.sleep(250)
+                        val read = details.incrementAndGet()
+                        Thread.sleep(if (read >= 3) 1800 else 250)
                         val id = chain.request().url.queryParameter("id")
                         // Also cover view-full omitting bill: production must retain the clicked row.
                         gson.toJson(if (id == short.id) BillDetail() else BillDetail(bill = long))
@@ -119,10 +119,40 @@ object BillSheetChecks {
                 stage = "open $label"
                 await { find(test, label) != null }
                 click(test, label)
-                click(test, label)
+                // The summary now opens immediately and covers the source row.
+                // A second tap must target the visible sheet, not the hidden list.
                 await { find(test, "账单详情") != null }
                 stage = "settled height $label"
                 val before = stableTitle(test, "账单详情", measurements)
+                if (android.os.Build.VERSION.SDK_INT >= 34 && label == "短账单夹具") {
+                    stage = "predictive back previews and cancels"
+                    val display = test.targetContext.resources.displayMetrics
+                    val down = SystemClock.uptimeMillis()
+                    fun touch(action: Int, x: Float) {
+                        val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(),
+                            action, x, display.heightPixels * 0.6f, 0)
+                        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+                        check(test.uiAutomation.injectInputEvent(event, true))
+                        event.recycle()
+                    }
+                    touch(android.view.MotionEvent.ACTION_DOWN, 1f)
+                    for (step in 1..20) {
+                        touch(android.view.MotionEvent.ACTION_MOVE, display.widthPixels * 0.4f * step / 20)
+                        Thread.sleep(20)
+                    }
+                    Thread.sleep(200)
+                    val preview = bounds(find(test, "账单详情") ?: error("preview missing"))
+                    screenshot(test, "bill-back-preview.png")
+                    for (step in 19 downTo 0) {
+                        touch(android.view.MotionEvent.ACTION_MOVE, 1f + display.widthPixels * 0.4f * step / 20)
+                        Thread.sleep(20)
+                    }
+                    touch(android.view.MotionEvent.ACTION_UP, 1f)
+                    Thread.sleep(500)
+                    check(find(test, "账单详情") != null) { "cancel dismissed detail" }
+                    check(preview.width() < before.width()) { "no predictive scaling: before=$before preview=$preview" }
+                    measurements.add("predictive width ${before.width()} -> ${preview.width()}, cancel retained detail")
+                }
                 if (label == "长账单夹具") {
                     check(find(test, "去支付") != null)
                     fun actionBounds(label: String): android.graphics.Rect {
@@ -163,13 +193,14 @@ object BillSheetChecks {
             stage = "reopen and logout isolation"
             click(test, "短账单夹具")
             await { find(test, "账单详情") != null }
-            stableTitle(test, "账单详情", measurements)
             click(test, "关闭账单详情")
             await { find(test, "账单详情") == null && find(test, "短账单夹具") != null }
+            Thread.sleep(2200)
+            check(find(test, "账单详情") == null) { "late detail response reopened dismissed sheet" }
             check(details.get() == 3 && writes.get() == 0)
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
             check(Store.updatePolicyJson == originalPolicy && Store.originalAppVersion == originalProtocol)
-            result.putString("stream", "PASS: rapid taps coalesce, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
+            result.putString("stream", "PASS: immediate summary, late response cannot reopen, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             screenshot(test, "bill-sheet-failure.png")
