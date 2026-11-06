@@ -131,14 +131,14 @@ object BillSheetChecks {
                 stage = "settled height $label"
                 val before = stableTitle(test, "账单详情", measurements)
                 if (predictiveBack && label == "短账单夹具") {
-                    stage = "predictive back previews downward and cancels"
+                    stage = "native predictive back scales the sheet and cancels"
                     val cancel = startBackGesture(test)
                     val preview = bounds(find(test, "账单详情") ?: error("preview missing"))
-                    check(preview.top > before.top + 16 && preview.width() == before.width()) {
-                        "expected vertical preview: before=$before preview=$preview"
-                    }
                     screenshot(test, "bill-back-preview.png")
                     cancel(false)
+                    check(preview.width() < before.width()) {
+                        "expected native scaling: before=$before preview=$preview"
+                    }
                     await { find(test, "账单详情")?.let { bounds(it) } == before }
 
                     stage = "committed back continues below the preview before removing detail"
