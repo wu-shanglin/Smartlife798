@@ -105,6 +105,7 @@ import com.smartlife798.app.ui.CardDestination
 import com.smartlife798.app.ui.CardOrigin
 import com.smartlife798.app.ui.CardSource
 import com.smartlife798.app.ui.SharedCardScene
+import com.smartlife798.app.ui.rememberCardSourceVisibility
 import com.smartlife798.app.ui.currentCardSource
 import com.smartlife798.app.ui.sharedCard
 import com.smartlife798.app.ui.SharedCardPage
@@ -257,6 +258,7 @@ private fun AppRoot(
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
     var mainTabScene by remember { mutableStateOf<MainTabScene?>(null) }
+    var deviceCardSource by remember { mutableStateOf<RetainedCardSource?>(null) }
     val mainTabState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner, visibleDeck?.id) {
@@ -341,7 +343,10 @@ private fun AppRoot(
                             androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner provides scene.entry,
                             androidx.savedstate.compose.LocalSavedStateRegistryOwner provides scene.entry,
                         ) {
-                            SharedCardScene(sharedScope, scene.visibility, scene.entry.id,
+                            val sourceVisibility = deviceCardSource
+                                ?.takeIf { it.sourceEntryId == scene.entry.id && it.includes(currentEntry?.id) }
+                                ?.visibility ?: scene.visibility
+                            SharedCardScene(sharedScope, sourceVisibility, scene.entry.id,
                                 active = currentEntry?.id == scene.entry.id, clipWhenInactive = false) {
                                 MainTabContent(scene.entry, navController, vm, unpaidCount) { bottomBarHeight = it }
                             }
@@ -507,8 +512,23 @@ private fun AppRoot(
                     ) { entry ->
                         val id = entry.arguments?.getString("id").orEmpty()
                         val autoStart = entry.arguments?.getBoolean("autoStart") ?: false
+                        val source = entry.cardSource(CardDestination.DEVICE)
+                        if (source != null) {
+                            val visibility = rememberCardSourceVisibility()
+                            // The retained tab outlives its NavHost slot. Use the detail's
+                            // inverse visibility until its return or interruption ends.
+                            androidx.compose.runtime.SideEffect {
+                                if (navController.currentBackStackEntry?.id == entry.id) {
+                                    deviceCardSource = RetainedCardSource(source.entryId, entry.id, visibility)
+                                }
+                            }
+                            androidx.compose.runtime.DisposableEffect(visibility) {
+                                onDispose {
+                                    if (deviceCardSource?.visibility === visibility) deviceCardSource = null
+                                }
+                            }
+                        }
                         SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
-                            val source = entry.cardSource(CardDestination.DEVICE)
                             SharedCardPage(source, id) {
                                 DeviceDetailScreen(
                                     vm = vm,
@@ -563,6 +583,14 @@ private data class MainTabScene(
     val visibility: androidx.compose.animation.AnimatedVisibilityScope,
     val stateOwner: MainTabStateOwner,
 )
+
+private data class RetainedCardSource(
+    val sourceEntryId: String,
+    val detailEntryId: String,
+    val visibility: androidx.compose.animation.AnimatedVisibilityScope,
+) {
+    fun includes(entryId: String?): Boolean = entryId == sourceEntryId || entryId == detailEntryId
+}
 
 @Composable
 private fun MainTabContent(
