@@ -4,6 +4,9 @@ import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.TwoWayConverter
+import androidx.compose.animation.core.AnimationVector
+import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
@@ -34,6 +37,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.math.roundToInt
 
 /** Keep the expanded anchor independent of content, scrolling and animated inset consumption. */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -51,10 +55,10 @@ fun AppBottomSheet(
         (windowHeight * 0.9f).toDp()
     }
     val inheritedMotion = MaterialTheme.motionScheme
-    val sheetMotion = remember(inheritedMotion, balancedMotion) {
-        if (balancedMotion) BalancedSheetMotion(inheritedMotion) else inheritedMotion
-    }
     val backTravel = remember(sheetState) { Animatable(0f) }
+    val sheetMotion = remember(inheritedMotion, balancedMotion, backTravel) {
+        if (balancedMotion) BalancedSheetMotion(inheritedMotion) { backTravel.value } else inheritedMotion
+    }
     val canDismiss = rememberUpdatedState(dismissEnabled)
     val back = rememberUpdatedState(onBack)
     MaterialExpressiveTheme(motionScheme = sheetMotion) {
@@ -95,7 +99,7 @@ fun AppBottomSheet(
                         }
                     } catch (_: CancellationException) {
                         currentCoroutineContext().ensureActive()
-                        if (canDismiss.value) backTravel.animateTo(0f, sheetTransitionSpec())
+                        if (canDismiss.value) backTravel.animateTo(0f, tween(180, easing = sheetEasing))
                         return@PredictiveBackHandler
                     }
                     if (canDismiss.value) back.value?.invoke()
@@ -113,12 +117,28 @@ fun AppBottomSheet(
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-private class BalancedSheetMotion(private val inherited: MotionScheme) : MotionScheme by inherited {
+private class BalancedSheetMotion(
+    inherited: MotionScheme,
+    private val previewTravel: () -> Float,
+) : MotionScheme by inherited {
     // Material3 uses different tokens for opening, closing and the scrim.
     override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = sheetTransitionSpec()
-    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = sheetTransitionSpec()
-    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = sheetTransitionSpec()
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = settleSpec()
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = settleSpec()
+
+    // Capture gesture travel when the animation starts, even if release arrives before the
+    // last gesture frame recomposes. A shorter path keeps the same average travel speed.
+    private fun <T> settleSpec(): FiniteAnimationSpec<T> = object : FiniteAnimationSpec<T> {
+        override fun <V : AnimationVector> vectorize(
+            converter: TwoWayConverter<T, V>,
+        ): VectorizedFiniteAnimationSpec<V> = sheetTransitionSpec<T>(
+            durationMillis = (SheetDurationMillis * (1f - previewTravel())).roundToInt(),
+        ).vectorize(converter)
+    }
 }
 
-private fun <T> sheetTransitionSpec(): FiniteAnimationSpec<T> =
-    tween(durationMillis = 420, easing = CubicBezierEasing(0.4f, 0f, 0.6f, 1f))
+private const val SheetDurationMillis = 360
+private val sheetEasing = CubicBezierEasing(0.25f, 0.20f, 0.60f, 1f)
+
+private fun <T> sheetTransitionSpec(durationMillis: Int = SheetDurationMillis): FiniteAnimationSpec<T> =
+    tween(durationMillis = durationMillis, easing = sheetEasing)

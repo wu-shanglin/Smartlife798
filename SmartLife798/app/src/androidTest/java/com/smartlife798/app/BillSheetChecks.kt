@@ -5,9 +5,11 @@ import android.app.Instrumentation
 import android.content.Intent
 import android.graphics.Rect
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.runtime.mutableStateOf
@@ -142,10 +144,11 @@ object BillSheetChecks {
                     stage = "committed back continues below the preview before removing detail"
                     val commit = startBackGesture(test)
                     val releaseTop = bounds(find(test, "账单详情") ?: error("preview missing")).top
+                    val handle = captureHandle(test)
                     commit(true)
-                    val exitTop = awaitVisibleExit(test, releaseTop)
+                    val exitTravel = awaitVisibleExit(test, handle)
                     await { find(test, "账单详情") == null && find(test, label) != null }
-                    measurements.add("predictive cancel restored bounds; top=${before.top} -> $releaseTop -> $exitTop at commit")
+                    measurements.add("predictive cancel restored bounds; top=${before.top} -> $releaseTop, visible exit +${exitTravel}px")
 
                     stage = "reopen after committed back"
                     click(test, label)
@@ -186,9 +189,17 @@ object BillSheetChecks {
                     check(channels.get() == 2 && writes.get() == 0)
                 }
                 stage = "Back closes sheet for $label"
-                val backStart = find(test, "账单详情")?.let { bounds(it).top }
-                check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
-                if (backStart != null) awaitVisibleExit(test, backStart)
+                if (label == "短账单夹具") {
+                    val handle = captureHandle(test)
+                    val down = SystemClock.uptimeMillis()
+                    for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                        val key = KeyEvent(down, SystemClock.uptimeMillis(), action, KeyEvent.KEYCODE_BACK, 0)
+                        check(test.uiAutomation.injectInputEvent(key, false))
+                    }
+                    measurements.add("settled Back visible exit +${awaitVisibleExit(test, handle)}px")
+                } else {
+                    check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+                }
                 await { find(test, "账单详情") == null && find(test, "支付账单") == null && find(test, "短账单夹具") != null }
             }
             stage = "reopen and logout isolation"
@@ -256,17 +267,56 @@ object BillSheetChecks {
         }
     }
 
-    private fun awaitVisibleExit(test: Instrumentation, fromTop: Int): Int {
-        val deadline = SystemClock.uptimeMillis() + 750
-        val displayBottom = test.targetContext.resources.displayMetrics.heightPixels
-        while (SystemClock.uptimeMillis() < deadline) {
-            val title = find(test, "账单详情") ?: error("detail disappeared before a visible exit frame")
-            val rect = bounds(title)
-            if (rect.top >= fromTop + 16 && rect.height() > 0 && rect.bottom < displayBottom) return rect.top
-            Thread.sleep(16)
+    private data class Handle(val top: Int, val widthProbe: Int, val color: Int, val surface: Int)
+
+    private fun captureHandle(test: Instrumentation): Handle {
+        val titleTop = bounds(find(test, "账单详情") ?: error("missing sheet title")).top
+        val density = test.targetContext.resources.displayMetrics.density
+        val screenshot = test.uiAutomation.takeScreenshot() ?: error("missing initial frame")
+        return try {
+            val x = screenshot.width / 2
+            val probe = (6 * density).toInt()
+            val handleY = (titleTop - (40 * density).toInt()..titleTop - (19 * density).toInt())
+                .minBy { y -> Color.red(screenshot.getPixel(x, y)) }
+            val surface = screenshot.getPixel(x, handleY - probe)
+            val color = screenshot.getPixel(x, handleY)
+            check(!similar(color, surface, 32)) { "could not locate the rendered drag handle" }
+            Handle(handleY, probe, color, surface)
+        } finally {
+            screenshot.recycle()
         }
-        error("no visible downward exit after top=$fromTop")
     }
+
+    private fun awaitVisibleExit(test: Instrumentation, handle: Handle): Int {
+        val deadline = SystemClock.uptimeMillis() + 900
+        while (SystemClock.uptimeMillis() < deadline) {
+            val y = findHandle(test, handle, handle.top + 16..Int.MAX_VALUE)
+            if (y != null) return y - handle.top
+        }
+        error("no rendered handle below its release position")
+    }
+
+    private fun findHandle(test: Instrumentation, handle: Handle, range: IntRange): Int? {
+        // The accessibility window can lose focus during system Back before its pixels leave.
+        val frame = test.uiAutomation.takeScreenshot() ?: error("missing sheet frame")
+        try {
+            val x = frame.width / 2
+            val probe = handle.widthProbe
+            return (range.first.coerceAtLeast(probe)..range.last.coerceAtMost(frame.height - probe - 1)).firstOrNull { y ->
+                similar(frame.getPixel(x - probe, y), handle.color) &&
+                    similar(frame.getPixel(x + probe, y), handle.color) &&
+                    similar(frame.getPixel(x, y - probe), handle.surface) &&
+                    similar(frame.getPixel(x, y + probe), handle.surface)
+            }
+        } finally {
+            frame.recycle()
+        }
+    }
+
+    private fun similar(a: Int, b: Int, tolerance: Int = 8): Boolean =
+        kotlin.math.abs(Color.red(a) - Color.red(b)) <= tolerance &&
+            kotlin.math.abs(Color.green(a) - Color.green(b)) <= tolerance &&
+            kotlin.math.abs(Color.blue(a) - Color.blue(b)) <= tolerance
 
     private fun stableTitle(test: Instrumentation, title: String, measurements: MutableList<String>): Rect {
         Thread.sleep(1200)
