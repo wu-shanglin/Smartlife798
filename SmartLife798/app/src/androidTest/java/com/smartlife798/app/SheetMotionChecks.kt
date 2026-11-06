@@ -79,16 +79,21 @@ object SheetMotionChecks {
                             val reverse = hideOffsets.zipWithNext().count { (a, b) -> b < a - 0.5f }
                             val hidden = sheet.requireOffset()
                             val travel = hidden - previous
-                            val openingMid = (hidden - halfwayOffset(showPositions)) / travel
-                            val closingMid = (halfwayOffset(hidePositions) - previous) / travel
-                            check(!balanced || (openingMid in 0.3f..0.7f && closingMid in 0.3f..0.7f)) {
-                                "sheet travels too early or too late: opening=$openingMid closing=$closingMid"
+                            val openingMid = (hidden - offsetAt(showPositions, 0.5)) / travel
+                            val closingMid = (offsetAt(hidePositions, 0.5) - previous) / travel
+                            val closingQuarter = (offsetAt(hidePositions, 0.25) - previous) / travel
+                            check(!balanced || (openingMid in 0.3f..0.85f && closingMid in 0.4f..0.8f)) {
+                                "sheet midpoint travel out of bounds: opening=$openingMid closing=$closingMid"
+                            }
+                            check(!balanced || closingQuarter in 0.12f..0.5f) {
+                                "settled close should already be moving at its first quarter: $closingQuarter"
                             }
                             check(!balanced || reverse == 0) { "exit reversed direction in $reverse frames" }
                             check(!balanced || hideOffsets.none { it > hidden + 0.5f }) { "exit overshot Hidden" }
                             result = "reverseFrames=$reverse balanced=$balanced show=${showMs}ms hide=${hideMs}ms showFrames=$frames; " +
                                 "largest show frame interval=${(intervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
-                                "midpoint travel show=$openingMid hide=$closingMid; hide frames=${hideIntervals.size}, " +
+                                "midpoint travel show=$openingMid hide=$closingMid; closingQuarter=$closingQuarter; " +
+                                "hide frames=${hideIntervals.size}, " +
                                 "largest hide interval=${(hideIntervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
                                 "offset lifetime measurement, not a physical-device frame benchmark"
                         } catch (error: Throwable) {
@@ -108,8 +113,8 @@ object SheetMotionChecks {
         test.finish(if (completed && failure == null) Activity.RESULT_OK else Activity.RESULT_CANCELED, output)
     }
 
-    private fun halfwayOffset(positions: List<Pair<Long, Float>>): Float {
-        val midpoint = positions.last().first / 2
-        return positions.minBy { (time, _) -> kotlin.math.abs(time - midpoint) }.second
+    private fun offsetAt(positions: List<Pair<Long, Float>>, fraction: Double): Float {
+        val target = positions.last().first * fraction
+        return positions.minBy { (time, _) -> kotlin.math.abs(time - target) }.second
     }
 }
