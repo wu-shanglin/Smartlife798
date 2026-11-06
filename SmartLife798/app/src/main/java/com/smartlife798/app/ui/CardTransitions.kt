@@ -3,7 +3,9 @@ package com.smartlife798.app.ui
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.ExperimentalTransitionApi
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.createChildTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +43,20 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
+
+/** A retained source must change visibility in the same transition as its detail. */
+@OptIn(ExperimentalTransitionApi::class)
+@Composable
+internal fun AnimatedVisibilityScope.rememberCardSourceVisibility(): AnimatedVisibilityScope {
+    val sourceTransition = transition.createChildTransition("retained card source") { phase ->
+        if (phase == EnterExitState.Visible) EnterExitState.PostExit else EnterExitState.Visible
+    }
+    return remember(sourceTransition) {
+        object : AnimatedVisibilityScope {
+            override val transition = sourceTransition
+        }
+    }
+}
 
 /** A retained outgoing scene can still be composed after navigation has already moved on. */
 @Composable
