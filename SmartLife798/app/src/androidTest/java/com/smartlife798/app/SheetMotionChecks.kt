@@ -39,6 +39,7 @@ object SheetMotionChecks {
                             var started = 0L
                             var previous = Float.NaN
                             var frames = 0
+                            val showPositions = mutableListOf<Pair<Long, Float>>()
                             val intervals = mutableListOf<Long>()
                             var lastFrame = 0L
                             while (true) {
@@ -47,6 +48,7 @@ object SheetMotionChecks {
                                 if (previous.isFinite() && offset != previous && started == 0L) started = frame
                                 if (started != 0L) {
                                     frames++
+                                    showPositions += (frame - started) to offset
                                     if (lastFrame != 0L) intervals += frame - lastFrame
                                     lastFrame = frame
                                 }
@@ -57,12 +59,13 @@ object SheetMotionChecks {
                             repeat(12) { withFrameNanos { it } }
                             val hideStart = SystemClock.elapsedRealtimeNanos()
                             val hideIntervals = mutableListOf<Long>()
-                            val hideOffsets = mutableListOf<Float>()
+                            val hidePositions = mutableListOf<Pair<Long, Float>>()
                             var hideLastFrame = withFrameNanos { it }
+                            val hideFirstFrame = hideLastFrame
                             val hide = launch { sheet.hide() }
                             while (hide.isActive) {
                                 val frame = withFrameNanos { it }
-                                hideOffsets += sheet.requireOffset()
+                                hidePositions += (frame - hideFirstFrame) to sheet.requireOffset()
                                 hideIntervals += frame - hideLastFrame
                                 hideLastFrame = frame
                             }
@@ -72,13 +75,21 @@ object SheetMotionChecks {
                             check(!balanced || (hideMs >= showMs * 0.65 && hideMs <= showMs * 1.5)) {
                                 "asymmetric sheet motion: show=$showMs ms hide=$hideMs ms"
                             }
+                            val hideOffsets = hidePositions.map { it.second }
                             val reverse = hideOffsets.zipWithNext().count { (a, b) -> b < a - 0.5f }
                             val hidden = sheet.requireOffset()
+                            val travel = hidden - previous
+                            val openingMid = (hidden - halfwayOffset(showPositions)) / travel
+                            val closingMid = (halfwayOffset(hidePositions) - previous) / travel
+                            check(!balanced || (openingMid in 0.3f..0.7f && closingMid in 0.3f..0.7f)) {
+                                "sheet travels too early or too late: opening=$openingMid closing=$closingMid"
+                            }
                             check(!balanced || reverse == 0) { "exit reversed direction in $reverse frames" }
                             check(!balanced || hideOffsets.none { it > hidden + 0.5f }) { "exit overshot Hidden" }
                             result = "reverseFrames=$reverse balanced=$balanced show=${showMs}ms hide=${hideMs}ms showFrames=$frames; " +
                                 "largest show frame interval=${(intervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
-                                "hide frames=${hideIntervals.size}, largest hide interval=${(hideIntervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
+                                "midpoint travel show=$openingMid hide=$closingMid; hide frames=${hideIntervals.size}, " +
+                                "largest hide interval=${(hideIntervals.maxOrNull() ?: 0) / 1_000_000}ms; " +
                                 "offset lifetime measurement, not a physical-device frame benchmark"
                         } catch (error: Throwable) {
                             failure = error
@@ -95,5 +106,10 @@ object SheetMotionChecks {
         output.putString("stream", if (completed && failure == null) "PASS: $result\n"
             else "FAIL: completed=$completed error=$failure\n")
         test.finish(if (completed && failure == null) Activity.RESULT_OK else Activity.RESULT_CANCELED, output)
+    }
+
+    private fun halfwayOffset(positions: List<Pair<Long, Float>>): Float {
+        val midpoint = positions.last().first / 2
+        return positions.minBy { (time, _) -> kotlin.math.abs(time - midpoint) }.second
     }
 }

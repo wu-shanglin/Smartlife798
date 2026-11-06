@@ -395,7 +395,13 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                 }
             }
         }
-        AppBottomSheet(onDismissRequest = { if (!closing) detail = null }, sheetState = sheetState, dismissEnabled = !closing, balancedMotion = true) {
+        AppBottomSheet(
+            onDismissRequest = { if (!closing) detail = null },
+            sheetState = sheetState,
+            dismissEnabled = !closing,
+            balancedMotion = true,
+            onBack = { closeDetail() },
+        ) {
             BillDetailSheet(
                 detail = detailValue,
                 enabled = !closing,

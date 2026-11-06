@@ -7,6 +7,8 @@ import android.graphics.Rect
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.setContent
@@ -54,6 +56,8 @@ object BillSheetChecks {
         val details = AtomicInteger()
         val channels = AtomicInteger()
         val measurements = mutableListOf<String>()
+        val predictiveBack = android.os.Build.VERSION.SDK_INT >= 34 &&
+            android.provider.Settings.Secure.getInt(test.targetContext.contentResolver, "navigation_mode", 0) == 2
         var overflowSelections = 0
         val dark = mutableStateOf(false)
         val short = Bill(id = "offline-short", msg = "短账单夹具", status = BillStatus.PAID, payment = 1.0)
@@ -124,34 +128,29 @@ object BillSheetChecks {
                 await { find(test, "账单详情") != null }
                 stage = "settled height $label"
                 val before = stableTitle(test, "账单详情", measurements)
-                if (android.os.Build.VERSION.SDK_INT >= 34 && label == "短账单夹具") {
-                    stage = "predictive back previews and cancels"
-                    val display = test.targetContext.resources.displayMetrics
-                    val down = SystemClock.uptimeMillis()
-                    fun touch(action: Int, x: Float) {
-                        val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(),
-                            action, x, display.heightPixels * 0.6f, 0)
-                        event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-                        check(test.uiAutomation.injectInputEvent(event, true))
-                        event.recycle()
-                    }
-                    touch(android.view.MotionEvent.ACTION_DOWN, 1f)
-                    for (step in 1..20) {
-                        touch(android.view.MotionEvent.ACTION_MOVE, display.widthPixels * 0.4f * step / 20)
-                        Thread.sleep(20)
-                    }
-                    Thread.sleep(200)
+                if (predictiveBack && label == "短账单夹具") {
+                    stage = "predictive back previews downward and cancels"
+                    val cancel = startBackGesture(test)
                     val preview = bounds(find(test, "账单详情") ?: error("preview missing"))
-                    screenshot(test, "bill-back-preview.png")
-                    for (step in 19 downTo 0) {
-                        touch(android.view.MotionEvent.ACTION_MOVE, 1f + display.widthPixels * 0.4f * step / 20)
-                        Thread.sleep(20)
+                    check(preview.top > before.top + 16 && preview.width() == before.width()) {
+                        "expected vertical preview: before=$before preview=$preview"
                     }
-                    touch(android.view.MotionEvent.ACTION_UP, 1f)
-                    Thread.sleep(500)
-                    check(find(test, "账单详情") != null) { "cancel dismissed detail" }
-                    check(preview.width() < before.width()) { "no predictive scaling: before=$before preview=$preview" }
-                    measurements.add("predictive width ${before.width()} -> ${preview.width()}, cancel retained detail")
+                    screenshot(test, "bill-back-preview.png")
+                    cancel(false)
+                    await { find(test, "账单详情")?.let { bounds(it) } == before }
+
+                    stage = "committed back continues below the preview before removing detail"
+                    val commit = startBackGesture(test)
+                    val releaseTop = bounds(find(test, "账单详情") ?: error("preview missing")).top
+                    commit(true)
+                    val exitTop = awaitVisibleExit(test, releaseTop)
+                    await { find(test, "账单详情") == null && find(test, label) != null }
+                    measurements.add("predictive cancel restored bounds; top=${before.top} -> $releaseTop -> $exitTop at commit")
+
+                    stage = "reopen after committed back"
+                    click(test, label)
+                    await { find(test, "账单详情") != null }
+                    stableTitle(test, "账单详情", measurements)
                 }
                 if (label == "长账单夹具") {
                     check(find(test, "去支付") != null)
@@ -187,7 +186,9 @@ object BillSheetChecks {
                     check(channels.get() == 2 && writes.get() == 0)
                 }
                 stage = "Back closes sheet for $label"
+                val backStart = find(test, "账单详情")?.let { bounds(it).top }
                 check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+                if (backStart != null) awaitVisibleExit(test, backStart)
                 await { find(test, "账单详情") == null && find(test, "支付账单") == null && find(test, "短账单夹具") != null }
             }
             stage = "reopen and logout isolation"
@@ -207,7 +208,7 @@ object BillSheetChecks {
                 "input swipe ${display.widthPixels / 2} $startY ${display.widthPixels / 2} ${display.heightPixels - 40} 500"
             )).use { it.readBytes() }
             await { find(test, "账单详情") == null }
-            check(details.get() == 4 && writes.get() == 0)
+            check(details.get() == (if (predictiveBack) 5 else 4) && writes.get() == 0)
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
             check(Store.updatePolicyJson == originalPolicy && Store.originalAppVersion == originalProtocol)
             result.putString("stream", "PASS: immediate summary, late response cannot reopen, short/missing bill fallback, long content, stable detail/payment bounds, fixed header/pay action after scroll, sequential sheet handoff, channel error/retry, Back/reopen, handle drag dismiss; reads=${details.get()}, payments/commands=${writes.get()}, overflowSelections=$overflowSelections; ${measurements.joinToString()}; fully intercepted offline fixtures\n")
@@ -223,6 +224,48 @@ object BillSheetChecks {
 
         }
         test.finish(code, result)
+    }
+
+    private fun startBackGesture(test: Instrumentation): (Boolean) -> Unit {
+        val display = test.targetContext.resources.displayMetrics
+        val down = SystemClock.uptimeMillis()
+        val distance = display.widthPixels * 0.5f
+        fun touch(action: Int, x: Float) {
+            val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, display.heightPixels * 0.6f, 0)
+            event.source = InputDevice.SOURCE_TOUCHSCREEN
+            try {
+                check(test.uiAutomation.injectInputEvent(event, true))
+            } finally {
+                event.recycle()
+            }
+        }
+        touch(MotionEvent.ACTION_DOWN, 1f)
+        for (step in 1..20) {
+            touch(MotionEvent.ACTION_MOVE, 1f + distance * step / 20)
+            Thread.sleep(20)
+        }
+        Thread.sleep(120)
+        return { commit ->
+            if (!commit) {
+                for (step in 19 downTo 0) {
+                    touch(MotionEvent.ACTION_MOVE, 1f + distance * step / 20)
+                    Thread.sleep(20)
+                }
+            }
+            touch(MotionEvent.ACTION_UP, if (commit) 1f + distance else 1f)
+        }
+    }
+
+    private fun awaitVisibleExit(test: Instrumentation, fromTop: Int): Int {
+        val deadline = SystemClock.uptimeMillis() + 750
+        val displayBottom = test.targetContext.resources.displayMetrics.heightPixels
+        while (SystemClock.uptimeMillis() < deadline) {
+            val title = find(test, "账单详情") ?: error("detail disappeared before a visible exit frame")
+            val rect = bounds(title)
+            if (rect.top >= fromTop + 16 && rect.height() > 0 && rect.bottom < displayBottom) return rect.top
+            Thread.sleep(16)
+        }
+        error("no visible downward exit after top=$fromTop")
     }
 
     private fun stableTitle(test: Instrumentation, title: String, measurements: MutableList<String>): Rect {
