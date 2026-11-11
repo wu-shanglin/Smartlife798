@@ -48,7 +48,7 @@
 
 ## 构建与产物
 
-2.2.0 的 release APK 将在正式发布时生成。
+2.2.0 已准备本地 Release APK，正式发布状态以 GitHub Release 为准。
 
 唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
 
@@ -56,7 +56,7 @@
 |---|---|
 | 产物 | [`dist/SmartLife798-2.2.0-release.apk`](dist/SmartLife798-2.2.0-release.apk) |
 
-交付包使用既有 2.x release 签名的非 debuggable release 构建。
+APK 交付默认使用既有 2.x 签名的 Release 构建。日常 Debug 构建的产物留在 Gradle 构建目录。
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 

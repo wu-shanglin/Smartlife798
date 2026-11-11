@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+- 明确 Debug 构建用于日常验证，APK 交付默认使用既有签名的 Release 构建。
+
 
 
 
