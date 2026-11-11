@@ -76,7 +76,7 @@
       "response": "LoginData{al{oid,token,uid},ar}",
       "use": "login",
       "verified": "3.1.10 original offline runtime and independent synthetic vectors; live acceptance of the signed reimplementation unverified",
-      "notes": "Anonymous SMS login. Sign UTF-8 authCode=<sms>&un=<phone> with keyed BLAKE3; key is fixed prefix + last eight digits of the 30-second Unix bucket + middle eight phone digits + acclogin. Use lowercase hex of the first 16 bytes. Pin VersionCode and user-agent to the supported signing protocol; no retries. Original Alipay login may use openCode and is outside this client flow."
+      "notes": "Anonymous SMS login. Sign UTF-8 authCode=<sms>&un=<phone> with keyed BLAKE3; key is Ys3yx=j7 + the zero-padded last eight decimal digits of floor(device Unix milliseconds / 30000) * 30 + eight phone digits starting at floor((length - 8) / 2) + acclogin. Preserve leading zeroes in the SMS code. Use lowercase hex of the first 16 bytes. Pin VersionCode and user-agent to the supported signing protocol; no retries. Original Alipay login may use openCode and is outside this client flow."
     },
     {
       "method": "GET",
