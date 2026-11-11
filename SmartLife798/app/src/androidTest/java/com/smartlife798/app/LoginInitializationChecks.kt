@@ -102,13 +102,18 @@ object LoginInitializationChecks {
             fun clickAction(label: String) {
                 await {
                     val root = test.uiAutomation.rootInActiveWindow
-                    var button = nodes(root).firstOrNull { it.text?.toString() == label }
+                    val visibleNodes = nodes(root)
+                    var button = visibleNodes.firstOrNull { it.text?.toString() == label }
                     while (button != null && !button.isClickable) button = button.parent
                     val bounds = Rect()
                     val screen = Rect()
                     button?.getBoundsInScreen(bounds)
                     root?.getBoundsInScreen(screen)
-                    if (button?.isEnabled == true && screen.contains(bounds.centerX(), bounds.centerY())) {
+                    if (button?.isVisibleToUser != true || !screen.contains(bounds.centerX(), bounds.centerY())) {
+                        visibleNodes.firstOrNull { it.isScrollable }
+                            ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                        false
+                    } else if (button.isEnabled) {
                         android.os.ParcelFileDescriptor.AutoCloseInputStream(test.uiAutomation.executeShellCommand(
                             "input tap ${bounds.centerX()} ${bounds.centerY()}"
                         )).use { it.readBytes() }
@@ -117,26 +122,40 @@ object LoginInitializationChecks {
                 }
             }
             stage = "captcha failure and retry"
-            await { visibleText("图形验证码加载失败") }
+            await { visibleText("重试") }
             check(nodes(test.uiAutomation.rootInActiveWindow).count { it.text?.toString() == "重试" } == 1)
-            check(!visibleText("换一张"))
             clickAction("重试")
-            await { visibleText("换一张") && captchaRequests.get() == 2 }
+            await {
+                captchaRequests.get() == 2 && nodes(test.uiAutomation.rootInActiveWindow).any {
+                    it.contentDescription?.toString() == "图形验证码" && it.isVisibleToUser
+                }
+            }
             stage = "form order"
             val form = nodes(test.uiAutomation.rootInActiveWindow)
             val fields = form.filter { it.isEditable }.map { Rect().apply(it::getBoundsInScreen) }
-            val send = Rect().apply { form.first { it.text?.toString() == "获取短信验证码" }.getBoundsInScreen(this) }
-            check(fields.size == 3 && fields.map { it.width() }.distinct().size == 1)
-            check(fields[0].bottom <= fields[1].top && fields[1].bottom <= send.top && send.bottom <= fields[2].top)
+            val send = Rect().apply { form.first { it.text?.toString() == "获取验证码" }.getBoundsInScreen(this) }
+            val image = Rect().apply {
+                form.first { it.contentDescription?.toString() == "图形验证码" }.getBoundsInScreen(this)
+            }
+            check(fields.size == 3 && fields.none { it.isEmpty })
+            check(fields[0].bottom <= fields[1].top && fields[1].bottom <= fields[2].top)
+            check(fields[1].right <= image.left && fields[1].top < image.bottom && image.top < fields[1].bottom)
+            check(fields[2].right <= send.left && fields[2].top < send.bottom && send.top < fields[2].bottom)
             stage = "fill phone and request SMS through fixture"
             enter(nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[0], "13800000000")
             await { nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.firstOrNull()?.text?.toString() == "13800000000" }
             enter(nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[1], "TEST")
             await { nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[1].text?.toString() == "TEST" }
-            clickAction("获取短信验证码")
+            stage = "tap SMS action"
+            // A clipped row can be reported as visible while its tap target is still at the viewport edge.
+            nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable }
+                ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            test.waitForIdleSync()
+            clickAction("获取验证码")
+            stage = "SMS countdown"
             await {
                 nodes(test.uiAutomation.rootInActiveWindow).any {
-                    it.text?.toString()?.endsWith("秒后重新获取") == true && it.isVisibleToUser
+                    it.text?.toString()?.matches(Regex("[0-9]+s")) == true && it.isVisibleToUser
                 }
             }
             check(smsRequests.get() == 1)
@@ -186,10 +205,10 @@ object LoginInitializationChecks {
             stage = "owned initialization after composition removal"
             await { missions.get() > 0 && nodes(test.uiAutomation.rootInActiveWindow).any { it.text?.toString()?.contains("离线登录用户") == true } }
             check(logins.get() == 4 && smsRequests.get() == 1 && unexpectedWrites.get() == 0)
-            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; full-width form order, captcha retry and SMS countdown; four signed login attempts and one SMS request handled by terminal fixtures, no pay/device writes\n")
+            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; original form rows, captcha retry and SMS countdown; four signed login attempts and one SMS request handled by terminal fixtures, no pay/device writes\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
-            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
+            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},sms=${smsRequests.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
         } finally {
             allowCheckInResponse.countDown()
             test.runOnMainSync { activity?.let { it.viewModelStore.clear(); it.finish() }; session.clear() }
