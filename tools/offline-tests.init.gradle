@@ -4,6 +4,15 @@ gradle.beforeProject { project ->
     project.plugins.withId('com.android.application') {
         project.androidComponents.finalizeDsl { android ->
             android.defaultConfig.applicationId = 'com.smartlife798.app.offline'
+            def callbackScheme = 'smartlife798offlinesign'
+            ['debug', 'performance'].each { name ->
+                def buildType = android.buildTypes.getByName(name)
+                buildType.applicationIdSuffix = null
+                buildType.manifestPlaceholders['alipayCallbackScheme'] = callbackScheme
+                buildType.buildConfigField('String', 'ALIPAY_CALLBACK_SCHEME', '"' + callbackScheme + '"')
+                buildType.buildConfigField('boolean', 'RELEASE_UPDATES_ENABLED', 'true')
+                android.sourceSets.getByName(name).manifest.srcFile(project.file('src/release/AndroidManifest.xml'))
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ package com.smartlife798.app.core
 
 import android.app.Activity
 import com.alipay.sdk.app.PayTask
+import com.smartlife798.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -22,7 +23,7 @@ object AlipaySdk {
                 kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
                     try {
                         com.alipay.sdk.app.OpenAuthTask(activity).execute(
-                            AlipaySign.CALLBACK_SCHEME,
+                            BuildConfig.ALIPAY_CALLBACK_SCHEME,
                             com.alipay.sdk.app.OpenAuthTask.BizType.Deduct,
                             mapOf("sign_params" to AlipaySign.parameters(payload)),
                             { code, _, _ ->

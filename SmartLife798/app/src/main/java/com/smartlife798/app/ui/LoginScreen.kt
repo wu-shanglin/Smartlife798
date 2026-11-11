@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.autofill.ContentType
+import com.smartlife798.app.BuildConfig
 import com.smartlife798.app.R
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.vm.MainViewModel
@@ -262,12 +263,14 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
-                TextButton(
-                    shapes = ButtonDefaults.shapes(),
-                    onClick = { vm.checkAppUpdate(manual = true) },
-                    enabled = !checkingUpdate,
-                    modifier = Modifier.heightIn(min = AppLayout.ActionHeight),
-                ) { Text(if (checkingUpdate) "正在检查更新…" else "检查客户端更新") }
+                if (BuildConfig.RELEASE_UPDATES_ENABLED) {
+                    TextButton(
+                        shapes = ButtonDefaults.shapes(),
+                        onClick = { vm.checkAppUpdate(manual = true) },
+                        enabled = !checkingUpdate,
+                        modifier = Modifier.heightIn(min = AppLayout.ActionHeight),
+                    ) { Text(if (checkingUpdate) "正在检查更新…" else "检查客户端更新") }
+                }
             }
         }
     }

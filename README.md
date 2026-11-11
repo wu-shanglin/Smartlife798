@@ -4,7 +4,8 @@
 
 | | |
 |---|---|
-| 新客户端包名 | `com.smartlife798.app` |
+| 正式版包名 | `com.smartlife798.app` |
+| 测试版包名 | `com.smartlife798.app.debug` |
 | 当前版本 | `2.2.1`（`versionCode 81`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
@@ -48,7 +49,7 @@
 
 ## 构建与产物
 
-2.2.1 为本地候选版本，正式发布状态以 GitHub Release 为准。
+2.2.1 为开发候选版本，日常试装使用独立 Debug 包。
 
 唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
 
@@ -56,7 +57,7 @@
 |---|---|
 | 产物 | [`dist/SmartLife798-2.2.1-release.apk`](dist/SmartLife798-2.2.1-release.apk) |
 
-APK 交付默认使用既有 2.x 签名的 Release 构建。日常 Debug 构建的产物留在 Gradle 构建目录。
+日常试装使用 `SmartLife798/app/build/outputs/apk/debug/app-debug.apk`。桌面的「慧生活 798 测试版」可与正式版并存，分别保存应用数据。上表是正式发布时的产物路径，只有明确授权打包 Release 并发布后才生成。
 
 原 APK、静态分析缓存、`evidence/` 及 APK 不入库。原样本、签名、本机配置、当前交付和独有证据须保留；清理规则见 [文档与目录维护](docs/06-工程规范与路线图.md#4-文档与目录维护)。
 

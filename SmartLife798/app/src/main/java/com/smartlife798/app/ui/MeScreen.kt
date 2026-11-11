@@ -342,47 +342,51 @@ fun MeScreen(
                             onClick = onOpenDeveloperTools,
                         ) { Text("开发者工具") }
                     }
-                    val preferredSource by vm.updateSource.collectAsStateWithLifecycle()
-                    Text("优先更新源", style = MaterialTheme.typography.titleSmall)
-                    var sourceMenuExpanded by remember { mutableStateOf(false) }
-                    PageInactiveEffect { sourceMenuExpanded = false }
-                    androidx.compose.material3.ExposedDropdownMenuBox(
-                        expanded = sceneActive && sourceMenuExpanded, onExpandedChange = { sourceMenuExpanded = it },
-                    ) {
-                        OutlinedTextField(
-                            value = preferredSource.label, onValueChange = {}, readOnly = true,
-                            modifier = Modifier.fillMaxWidth().menuAnchor(),
-                            trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded) },
-                        )
-                        ExposedDropdownMenu(expanded = sceneActive && sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
-                            com.smartlife798.app.core.UpdateSource.entries.forEach { source ->
-                                androidx.compose.material3.DropdownMenuItem(text = { Text(source.label) }, onClick = {
-                                    vm.setUpdateSource(source)
-                                    sourceMenuExpanded = false
-                                })
+                    if (BuildConfig.RELEASE_UPDATES_ENABLED) {
+                        val preferredSource by vm.updateSource.collectAsStateWithLifecycle()
+                        Text("优先更新源", style = MaterialTheme.typography.titleSmall)
+                        var sourceMenuExpanded by remember { mutableStateOf(false) }
+                        PageInactiveEffect { sourceMenuExpanded = false }
+                        androidx.compose.material3.ExposedDropdownMenuBox(
+                            expanded = sceneActive && sourceMenuExpanded, onExpandedChange = { sourceMenuExpanded = it },
+                        ) {
+                            OutlinedTextField(
+                                value = preferredSource.label, onValueChange = {}, readOnly = true,
+                                modifier = Modifier.fillMaxWidth().menuAnchor(),
+                                trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded) },
+                            )
+                            ExposedDropdownMenu(expanded = sceneActive && sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
+                                com.smartlife798.app.core.UpdateSource.entries.forEach { source ->
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text(source.label) }, onClick = {
+                                        vm.setUpdateSource(source)
+                                        sourceMenuExpanded = false
+                                    })
+                                }
                             }
                         }
-                    }
-                    Text("连接失败时依次尝试其他来源，临时切换需经你确认。", style = MaterialTheme.typography.bodySmall)
-                    androidx.compose.material3.FilledTonalButton(
-                        shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
-                        colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                            contentColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        onClick = { vm.checkAppUpdate(manual = true) },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        enabled = !checkingUpdate,
-                    ) {
-                        if (checkingUpdate) {
-                            androidx.compose.material3.CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text("连接失败时依次尝试其他来源，临时切换需经你确认。", style = MaterialTheme.typography.bodySmall)
+                        androidx.compose.material3.FilledTonalButton(
+                            shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
+                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                contentColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            onClick = { vm.checkAppUpdate(manual = true) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            enabled = !checkingUpdate,
+                        ) {
+                            if (checkingUpdate) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (checkingUpdate) "正在检查更新…" else "检查更新")
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (checkingUpdate) "正在检查更新…" else "检查更新")
+                    } else {
+                        Text("测试版通过安装新版 Debug APK 更新。", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
                         "本应用是「慧生活798」服务端的独立重制客户端：登录、扫码、设备状态、启用/停用设备、" +

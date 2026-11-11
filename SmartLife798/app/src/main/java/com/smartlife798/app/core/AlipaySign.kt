@@ -9,7 +9,6 @@ package com.smartlife798.app.core
  */
 object AlipaySign {
     const val APP_ID = "2019061465519660"
-    const val CALLBACK_SCHEME = "smartlife798sign"
 
     /** The server encodes sign_params once; preserve literal '+' in raw params. */
     fun parameters(sign: String): String = if ('&' !in sign && sign.contains("%3D", ignoreCase = true)) {

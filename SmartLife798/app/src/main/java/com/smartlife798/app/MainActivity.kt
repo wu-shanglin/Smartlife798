@@ -199,11 +199,11 @@ private fun AppRoot(
     val updatePollingScope = rememberCoroutineScope()
     LifecycleResumeEffect(Unit) {
         vm.setAppResumed(true, allowAutoCheckIn = true)
-        val polling = updatePollingScope.launch {
-            com.smartlife798.app.core.AppUpdate.poll { vm.checkAppUpdate() }
-        }
+        val polling = if (BuildConfig.RELEASE_UPDATES_ENABLED) {
+            updatePollingScope.launch { com.smartlife798.app.core.AppUpdate.poll { vm.checkAppUpdate() } }
+        } else null
         if (loggedIn) vm.bumpRefresh()
-        onPauseOrDispose { polling.cancel(); vm.setAppResumed(false) }
+        onPauseOrDispose { polling?.cancel(); vm.setAppResumed(false) }
     }
 
 
