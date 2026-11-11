@@ -425,7 +425,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private val _updatePolicy = MutableStateFlow(com.smartlife798.app.core.UpdatePolicy.cached(Store.updatePolicyJson))
+    private val _updatePolicy = MutableStateFlow(
+        if (BuildConfig.RELEASE_UPDATES_ENABLED) com.smartlife798.app.core.UpdatePolicy.cached(Store.updatePolicyJson) else null,
+    )
     val updatePolicy = _updatePolicy.asStateFlow()
     private val _checkingUpdate = MutableStateFlow(false)
     val checkingUpdate = _checkingUpdate.asStateFlow()
@@ -551,6 +553,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun checkAppUpdate(manual: Boolean = false) {
+        if (!BuildConfig.RELEASE_UPDATES_ENABLED) return
 
         refreshProtocolVersion(manual)
         if (updateJob?.isActive == true || downloadJob?.isActive == true || _sourceFallback.value != null) return

@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.NFC" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-feature
         android:name="android.hardware.nfc"
@@ -50,18 +49,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="i.ilife798.com" android:path="/nfc.html" />
-                <data android:host="i.hnkzy.com" android:path="/nfc.html" />
-                <data android:host="act.hnkzy.com" android:path="/nfc.html" />
-                <data android:host="act2.hnkzy.com" android:path="/nfc.html" />
-                <data android:host="prerelease.ilife798.com" android:path="/nfc.html" />
-            </intent-filter>
         </activity>
 
         <provider
@@ -79,7 +66,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="smartlife798sign" />
+                <data android:scheme="${alipayCallbackScheme}" />
             </intent-filter>
         </activity>
 

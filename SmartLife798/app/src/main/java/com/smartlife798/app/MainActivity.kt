@@ -27,6 +27,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -198,11 +199,11 @@ private fun AppRoot(
     val updatePollingScope = rememberCoroutineScope()
     LifecycleResumeEffect(Unit) {
         vm.setAppResumed(true, allowAutoCheckIn = true)
-        val polling = updatePollingScope.launch {
-            com.smartlife798.app.core.AppUpdate.poll { vm.checkAppUpdate() }
-        }
+        val polling = if (BuildConfig.RELEASE_UPDATES_ENABLED) {
+            updatePollingScope.launch { com.smartlife798.app.core.AppUpdate.poll { vm.checkAppUpdate() } }
+        } else null
         if (loggedIn) vm.bumpRefresh()
-        onPauseOrDispose { polling.cancel(); vm.setAppResumed(false) }
+        onPauseOrDispose { polling?.cancel(); vm.setAppResumed(false) }
     }
 
 
@@ -247,7 +248,7 @@ private fun AppRoot(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
         ) { padding ->
-            LoginScreen(vm = vm, modifier = Modifier.padding(padding))
+            LoginScreen(vm = vm, modifier = Modifier.padding(padding).consumeWindowInsets(padding))
         }
         return
     }

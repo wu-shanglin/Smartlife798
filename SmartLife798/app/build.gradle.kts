@@ -43,6 +43,9 @@ if (hasReleaseSigning) {
     check(fingerprint == releaseCertificateSha256) { "Release signing certificate does not match the approved 2.x identity" }
 }
 
+val releaseAlipayCallback = "smartlife798sign"
+val debugAlipayCallback = "smartlife798debugsign"
+
 android {
     namespace = "com.smartlife798.app"
     compileSdk = 36
@@ -51,10 +54,13 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 80
-        versionName = "2.2.0"
+        versionCode = 81
+        versionName = "2.2.1"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
+        manifestPlaceholders["alipayCallbackScheme"] = releaseAlipayCallback
+        buildConfigField("String", "ALIPAY_CALLBACK_SCHEME", "\"$releaseAlipayCallback\"")
+        buildConfigField("boolean", "RELEASE_UPDATES_ENABLED", "true")
     }
 
     signingConfigs {
@@ -70,6 +76,10 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["alipayCallbackScheme"] = debugAlipayCallback
+            buildConfigField("String", "ALIPAY_CALLBACK_SCHEME", "\"$debugAlipayCallback\"")
+            buildConfigField("boolean", "RELEASE_UPDATES_ENABLED", "false")
             isMinifyEnabled = false
         }
         release {
