@@ -148,7 +148,11 @@ object VisualAlignmentChecks {
             await { find(test, "扫码即刻使用") != null }
             stage = "login"
             test.runOnMainSync { vm.logout() }
-            await { find(test, "手机号登录") != null && find(test, "换一张") != null }
+            await {
+                find(test, "手机号登录") != null && nodes(test.uiAutomation.rootInActiveWindow).any {
+                    it.contentDescription?.toString() == "图形验证码" && it.isVisibleToUser
+                }
+            }
             capture("login")
             test.runOnMainSync { Appearance.setMode(ThemeMode.DARK) }
             capture("login-dark")
