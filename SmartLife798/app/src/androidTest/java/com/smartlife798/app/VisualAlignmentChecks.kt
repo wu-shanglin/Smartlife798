@@ -148,8 +148,10 @@ object VisualAlignmentChecks {
             await { find(test, "扫码即刻使用") != null }
             stage = "login"
             test.runOnMainSync { vm.logout() }
-            await { find(test, "手机号登录") != null }
+            await { find(test, "手机号登录") != null && find(test, "换一张") != null }
             capture("login")
+            test.runOnMainSync { Appearance.setMode(ThemeMode.DARK) }
+            capture("login-dark")
             result.putString("stream", "PASS: real AppRoot screenshots ${captures.joinToString()}; terminal transport, no writes or NFC capture\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {

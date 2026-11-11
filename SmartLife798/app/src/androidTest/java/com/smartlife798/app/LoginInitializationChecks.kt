@@ -3,16 +3,11 @@ package com.smartlife798.app
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import com.smartlife798.app.core.*
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -203,19 +198,6 @@ object LoginInitializationChecks {
         }
         test.finish(code, result)
     }
-    private fun captchaImage(): ByteArray {
-        val bitmap = Bitmap.createBitmap(144, 48, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(Color.WHITE)
-        Canvas(bitmap).drawText("TEST", 20f, 35f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            textSize = 30f
-        })
-        val bytes = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes)
-        bitmap.recycle()
-        return bytes.toByteArray()
-    }
-
     private fun nodes(node: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> =
         if (node == null) emptyList() else listOf(node) + (0 until node.childCount).flatMap { nodes(node.getChild(it)) }
     private fun await(predicate: () -> Boolean) {
