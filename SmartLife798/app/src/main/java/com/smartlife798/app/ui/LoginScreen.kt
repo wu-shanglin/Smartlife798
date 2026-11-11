@@ -2,12 +2,12 @@
 
 package com.smartlife798.app.ui
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,11 +26,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -53,7 +52,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
@@ -80,12 +78,13 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var captchaInput by remember { mutableStateOf("") }
     var smsInput by remember { mutableStateOf("") }
     var seed by remember { mutableStateOf(newSeed()) }
-    var captchaBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var captchaBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var captchaLoading by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
     var countdown by remember { mutableStateOf(0) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var smsError by remember { mutableStateOf<String?>(null) }
+    var loginError by remember { mutableStateOf<String?>(null) }
 
     suspend fun loadCaptcha() {
         if (captchaLoading) return
@@ -134,7 +133,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
                         "手机号登录",
@@ -151,108 +150,59 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.PhoneNumber },
                     )
-                    LoginActionRow(
-                        field = { fieldModifier ->
-                            LoginField(
-                                value = captchaInput,
-                                onValueChange = { captchaInput = it.take(6) },
-                                label = "图形码",
-                                modifier = fieldModifier,
-                            )
-                        },
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.width(LoginActionWidth),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 4.dp, end = 2.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(width = 88.dp, height = 48.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    val bitmap = captchaBitmap
-                                    when {
-                                        captchaLoading -> LoadingIndicator(Modifier.size(22.dp))
-                                        bitmap != null -> Image(
-                                            bitmap = bitmap.asImageBitmap(),
-                                            contentDescription = "图形验证码",
-                                            modifier = Modifier
-                                                .size(width = 84.dp, height = 38.dp)
-                                                .clip(RoundedCornerShape(10.dp)),
-                                        )
-                                        else -> TextButton(
-                                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                                            onClick = { scope.launch { loadCaptcha() } },
-                                        ) { Text("重试") }
-                                    }
-                                }
-                                IconButton(
-                                    shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-                                    enabled = !captchaLoading,
-                                    onClick = { scope.launch { loadCaptcha() } },
-                                ) {
-                                    Icon(Icons.Filled.Refresh, contentDescription = "换一张")
-                                }
-                            }
-                        }
-                    }
-                    LoginActionRow(
-                        field = { fieldModifier ->
-                            LoginField(
-                                value = smsInput,
-                                onValueChange = { smsInput = it.filter(Char::isDigit).take(8) },
-                                label = "短信码",
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = fieldModifier.semantics { contentType = ContentType.SmsOtpCode },
-                            )
-                        },
-                    ) {
-                        FilledTonalButton(
-                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                            modifier = Modifier.widthIn(min = LoginActionWidth).heightIn(min = AppLayout.ActionHeight),
-                            enabled = countdown == 0 && !sending && !captchaLoading &&
-                                phone.length == 11 && captchaInput.isNotBlank(),
-                            onClick = {
-                                if (sending || captchaLoading || countdown > 0) return@FilledTonalButton
-                                sending = true
-                                scope.launch {
-                                    try {
-                                        error = null
-                                        when (val res = vm.sendSmsCode(phone, captchaInput, seed)) {
-                                            is Res.Ok -> countdown = 60
-                                            is Res.Fail -> {
-                                                error = res.msg
-                                                // The captcha is single-use on the server side;
-                                                // refresh it so the retry is not guaranteed to fail.
-                                                captchaInput = ""
-                                                loadCaptcha()
-                                            }
+                    CaptchaPreview(
+                        bitmap = captchaBitmap,
+                        loading = captchaLoading,
+                        onRefresh = { scope.launch { loadCaptcha() } },
+                    )
+                    LoginField(
+                        value = captchaInput,
+                        onValueChange = { captchaInput = it.take(6) },
+                        label = "图形验证码",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    smsError?.let { LoginError(it) }
+                    FilledTonalButton(
+                        shapes = ButtonDefaults.shapes(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = countdown == 0 && !sending && !captchaLoading &&
+                            phone.length == 11 && captchaInput.isNotBlank(),
+                        onClick = {
+                            if (sending || captchaLoading || countdown > 0) return@FilledTonalButton
+                            sending = true
+                            scope.launch {
+                                try {
+                                    smsError = null
+                                    when (val res = vm.sendSmsCode(phone, captchaInput, seed)) {
+                                        is Res.Ok -> countdown = 60
+                                        is Res.Fail -> {
+                                            smsError = res.msg
+                                            // The captcha is single-use on the server side;
+                                            // refresh it so the retry is not guaranteed to fail.
+                                            captchaInput = ""
+                                            loadCaptcha()
                                         }
-                                    } finally { sending = false }
-                                }
+                                    }
+                                } finally { sending = false }
+                            }
+                        },
+                    ) {
+                        Text(
+                            when {
+                                countdown > 0 -> "$countdown 秒后重新获取"
+                                sending -> "正在发送短信…"
+                                else -> "获取短信验证码"
                             },
-                        ) {
-                            Text(if (countdown > 0) "${countdown}s" else if (sending) "发送中" else "获取验证码")
-                        }
+                        )
                     }
-                    error?.let { message ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
-                        ) {
-                            Text(
-                                message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            )
-                        }
-                    }
+                    LoginField(
+                        value = smsInput,
+                        onValueChange = { smsInput = it.filter(Char::isDigit).take(8) },
+                        label = "短信验证码",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.SmsOtpCode },
+                    )
+                    loginError?.let { LoginError(it) }
                     Button(
                         enabled = phone.length == 11 && smsInput.isNotBlank() && !submitting,
                         onClick = {
@@ -260,14 +210,16 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             submitting = true
                             scope.launch {
                                 try {
-                                    error = null
+                                    smsError = null
+                                    loginError = null
                                     // On success MainViewModel flips `loggedIn`, which swaps
                                     // the root composable over to the main UI.
                                     when (val res = vm.login(phone, smsInput)) {
                                         is Res.Ok -> Unit
                                         is Res.Fail -> {
-                                            error = res.msg.ifBlank { "登录失败，请稍后重试" }
-                                            vm.notify(error.orEmpty())
+                                            val message = res.msg.ifBlank { "登录失败，请稍后重试" }
+                                            loginError = message
+                                            vm.notify(message)
                                         }
                                     }
                                 } finally { submitting = false }
@@ -277,7 +229,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             .fillMaxWidth()
                             .padding(top = 4.dp)
                             .heightIn(min = 56.dp),
-                        shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                        shapes = ButtonDefaults.shapes(),
                     ) {
                         if (submitting) {
                             LoadingIndicator(
@@ -311,7 +263,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 TextButton(
-                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                    shapes = ButtonDefaults.shapes(),
                     onClick = { vm.checkAppUpdate(manual = true) },
                     enabled = !checkingUpdate,
                     modifier = Modifier.heightIn(min = AppLayout.ActionHeight),
@@ -338,48 +290,79 @@ private fun LoginBrand() {
                 }
                 drawCircle(accent.copy(alpha = 0.07f), 48.dp.toPx(), center)
             }
-            Column(
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            Row(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_launcher_artwork),
                     contentDescription = null,
-                    modifier = Modifier.size(38.dp).clip(RoundedCornerShape(14.dp)),
+                    modifier = Modifier.size(38.dp),
                 )
-                Text("慧生活 798", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                Text("直饮水 · 热水淋浴 · 智能洗衣", style = MaterialTheme.typography.bodyMedium)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("慧生活 798", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("直饮水 · 热水淋浴 · 智能洗衣", style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }
 }
 
-private val LoginActionWidth = 144.dp
-
 @Composable
-private fun LoginActionRow(
-    field: @Composable (Modifier) -> Unit,
-    action: @Composable () -> Unit,
-) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val minimumInlineWidth = 96.dp * LocalDensity.current.fontScale
-        if (maxWidth < minimumInlineWidth + LoginActionWidth + 8.dp) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                field(Modifier.fillMaxWidth())
-                action()
+private fun CaptchaPreview(bitmap: Bitmap?, loading: Boolean, onRefresh: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp).heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                when {
+                    loading -> Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        LoadingIndicator(Modifier.size(20.dp))
+                        Text("正在加载图形验证码…", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    bitmap != null -> Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "图形验证码图片",
+                        modifier = Modifier.size(width = 108.dp, height = 40.dp).clip(RoundedCornerShape(8.dp)),
+                    )
+                    else -> Text("图形验证码加载失败", style = MaterialTheme.typography.bodyMedium)
+                }
             }
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                field(Modifier.weight(1f))
-                action()
+            if (!loading) {
+                TextButton(
+                    shapes = ButtonDefaults.shapes(),
+                    onClick = onRefresh,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text(if (bitmap == null) "重试" else "换一张") }
             }
         }
+    }
+}
+
+@Composable
+private fun LoginError(message: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
+    ) {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+        )
     }
 }
 

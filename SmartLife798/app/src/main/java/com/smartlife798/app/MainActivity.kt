@@ -27,6 +27,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -247,7 +248,7 @@ private fun AppRoot(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
         ) { padding ->
-            LoginScreen(vm = vm, modifier = Modifier.padding(padding))
+            LoginScreen(vm = vm, modifier = Modifier.padding(padding).consumeWindowInsets(padding))
         }
         return
     }
