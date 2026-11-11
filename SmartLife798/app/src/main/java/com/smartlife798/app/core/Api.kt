@@ -210,12 +210,30 @@ object Api {
         }
 
     /** POST /api/v1/acc/login/code  body {un, authCode, s} */
-    suspend fun sendSms(phone: String, captcha: String, seed: Double): Res<Unit> =
-        request("POST", "/api/v1/acc/login/code", body = mapOf("un" to phone, "authCode" to captcha, "s" to seed), dataType = dataType<Unit>())
+    suspend fun sendSms(phone: String, captcha: String, seed: Double): Res<Unit> {
+        val version = session.versionHeader()
+        if (version != LoginSign.PROTOCOL) return unsupportedLoginProtocol()
+        return request(
+            "POST", "/api/v1/acc/login/code",
+            body = mapOf("un" to phone, "authCode" to captcha, "s" to seed),
+            accountToken = null, protocolVersion = version, dataType = dataType<Unit>(),
+        )
+    }
 
-    /** POST /api/v1/acc/login  body {un, authCode} */
-    suspend fun login(phone: String, smsCode: String): Res<LoginData> =
-        request("POST", "/api/v1/acc/login", body = mapOf("un" to phone, "authCode" to smsCode), dataType = dataType<LoginData>())
+    /** POST /api/v1/acc/login?sign=…  body {un, authCode} */
+    suspend fun login(phone: String, smsCode: String): Res<LoginData> {
+        val version = session.versionHeader()
+        if (version != LoginSign.PROTOCOL) return unsupportedLoginProtocol()
+        if (!LoginSign.validCredentials(phone, smsCode)) return Res.Fail(-1, "请输入有效的手机号和短信验证码")
+        val sign = LoginSign.sign(phone, smsCode, System.currentTimeMillis())
+        return request(
+            "POST", LoginSign.ENDPOINT, mapOf("sign" to sign),
+            body = mapOf("un" to phone, "authCode" to smsCode),
+            accountToken = null, protocolVersion = version, dataType = dataType<LoginData>(),
+        )
+    }
+
+    private fun unsupportedLoginProtocol() = Res.Fail(-1, "当前官方登录协议尚未适配，请检查客户端更新")
 
     /** GET /api/v1/acc/logout */
     suspend fun logout(accountToken: String? = session.token): Res<Unit> =
