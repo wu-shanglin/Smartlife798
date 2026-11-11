@@ -386,7 +386,7 @@ fun MeScreen(
                             Text(if (checkingUpdate) "正在检查更新…" else "检查更新")
                         }
                     } else {
-                        Text("测试版通过安装新版 Debug APK 更新。", style = MaterialTheme.typography.bodySmall)
+                        Text("Beta 版通过安装新版 Debug APK 更新。", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
                         "本应用是「慧生活798」服务端的独立重制客户端：登录、扫码、设备状态、启用/停用设备、" +
