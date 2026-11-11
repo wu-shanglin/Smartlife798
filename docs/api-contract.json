@@ -1,7 +1,7 @@
 {
   "name": "慧生活798 (ilife798) client contract",
   "baseUrl": "https://i.ilife798.com",
-  "source": "v3.1.5 static path baseline and REA account/check-in/avatar methods; LLVM arm64 check-in digest observations; v3.1.7 command/update signatures; recovered v3.1.9 DEX account/signing chain and isolated libwatermelon loader-memory observations + scoped historical live probes (see docs/01, docs/04 and docs/05); recovered v3.1.10 OctUtil and isolated liboct loader-memory/LLVM signing observations",
+  "source": "v3.1.5 static path baseline and REA account/check-in/avatar methods; LLVM arm64 check-in digest observations; v3.1.7 command/update signatures; recovered v3.1.9 DEX account/signing chain and isolated libwatermelon loader-memory observations + scoped historical live probes (see docs/01, docs/04 and docs/05); recovered v3.1.10 OctUtil and isolated liboct loader-memory/LLVM signing observations plus a controlled offline v3.1.10 original SMS login trace",
   "headers": {
     "ApplicationType": "1,1",
     "VersionCode": "3.1.10",
@@ -60,19 +60,23 @@
       ],
       "response": "BaseReq",
       "use": "login-sms",
-      "verified": "live-error-path"
+      "verified": "live-error-path",
+      "notes": "Anonymous. The client checks for the supported 3.1.10 login protocol before requesting SMS."
     },
     {
       "method": "POST",
       "path": "/api/v1/acc/login",
+      "query": [
+        "sign"
+      ],
       "body": [
         "un",
-        "authCode",
-        "openCode?"
+        "authCode"
       ],
       "response": "LoginData{al{oid,token,uid},ar}",
       "use": "login",
-      "verified": "live (user account)"
+      "verified": "3.1.10 original offline runtime and independent synthetic vectors; live acceptance of the signed reimplementation unverified",
+      "notes": "Anonymous SMS login. Sign UTF-8 authCode=<sms>&un=<phone> with keyed BLAKE3; key is fixed prefix + last eight digits of the 30-second Unix bucket + middle eight phone digits + acclogin. Use lowercase hex of the first 16 bytes. Pin VersionCode and user-agent to the supported signing protocol; no retries. Original Alipay login may use openCode and is outside this client flow."
     },
     {
       "method": "GET",

@@ -151,7 +151,7 @@ class CheckInTest {
             4096 to "befc660aea2f1718884cd8deb9902811d332f4fc4a38cf7c7300d597a081bfc0",
         )
         for ((length, expected) in vectors) {
-            val actual = CheckInBlake3.keyedHash(key, ByteArray(length) { (it % 251).toByte() })
+            val actual = KeyedBlake3.keyedHash(key, ByteArray(length) { (it % 251).toByte() })
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals("input length $length", expected, actual)
         }

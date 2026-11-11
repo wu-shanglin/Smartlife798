@@ -10,6 +10,7 @@ import com.smartlife798.app.core.*
 import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
 
 /** Click the real login button: its composition disappears before account initialization completes. */
 object LoginInitializationChecks {
@@ -33,6 +34,15 @@ object LoginInitializationChecks {
                 val req = chain.request()
                 val data = when (req.url.encodedPath) {
                     "/api/v1/acc/login" -> {
+                        val now = System.currentTimeMillis()
+                        val body = Buffer().also { checkNotNull(req.body).writeTo(it) }.readUtf8()
+                        val sign = req.url.queryParameter("sign")
+                        check(req.method == "POST" && req.header("Authorization") == null)
+                        check(req.header("VersionCode") == "3.1.10" && req.header("user-agent") == "Android_ilife798_3.1.10")
+                        check(body == """{"un":"13800000000","authCode":"000000"}""")
+                        check(req.url.queryParameterNames == setOf("sign"))
+                        check(sign == LoginSign.sign("13800000000", "000000", now) ||
+                            sign == LoginSign.sign("13800000000", "000000", now - 30_000))
                         Thread.sleep(700)
                         when (logins.incrementAndGet()) {
                             1 -> return@addInterceptor Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(200).message("offline")
@@ -128,7 +138,7 @@ object LoginInitializationChecks {
             stage = "owned initialization after composition removal"
             await { missions.get() > 0 && nodes(test.uiAutomation.rootInActiveWindow).any { it.text?.toString()?.contains("离线登录用户") == true } }
             check(logins.get() == 4 && unexpectedWrites.get() == 0)
-            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; four login attempts, zero SMS/pay/device writes; terminal fixtures\n")
+            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; four signed login attempts, zero SMS/pay/device writes; terminal fixtures\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
