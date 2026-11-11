@@ -21,7 +21,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
         mode = arguments?.getString("mode").orEmpty()
         collectProfile = arguments?.getString("collectProfile") == "true"
         check(targetContext.packageName.endsWith(".offline")) { "Use the isolated offline test package" }
-        OfflineTransport.install(originalVersionLive = mode == "original-live")
+        OfflineTransport.install(originalVersionLive = mode == "original-live", showLoginCaptcha = mode == "visual")
         start()
     }
 
