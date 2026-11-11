@@ -51,8 +51,8 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 79
-        versionName = "2.1.11"
+        versionCode = 80
+        versionName = "2.2.0"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
     }
