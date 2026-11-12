@@ -49,7 +49,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -277,6 +281,8 @@ fun HomeScreen(
 @Composable
 private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
+    val cardHeight = 192.dp
+    val verticalInset = 18.dp
     Card(
         onClick = onScan,
         modifier = modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
@@ -286,20 +292,61 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 201.dp)
-                .padding(horizontal = 20.dp, vertical = AppLayout.Card),
+                .heightIn(min = cardHeight)
+                .drawWithCache {
+                    val background = Brush.linearGradient(
+                        0f to lerp(palette.container, palette.content, 0.13f),
+                        0.78f to palette.container,
+                        start = Offset(size.width, 0f),
+                        end = Offset(0f, size.height),
+                    )
+                    onDrawBehind { drawRect(background) }
+                }
+                .padding(horizontal = 20.dp, vertical = verticalInset),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "扫码使用",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                FlowRow {
-                    Text("可以扫码，", style = MaterialTheme.typography.bodyMedium)
-                    Text("也可以碰一碰", style = MaterialTheme.typography.bodyMedium)
+            Column(
+                modifier = Modifier.weight(1f).heightIn(min = cardHeight - verticalInset * 2),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "扫码使用",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("扫描设备二维码", style = MaterialTheme.typography.bodySmall)
+                        FlowRow {
+                            Text("开启 NFC，", style = MaterialTheme.typography.bodySmall)
+                            Text("碰一碰慧生活卡片", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                Surface(
+                    modifier = Modifier.padding(top = 8.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = palette.content.copy(alpha = 0.16f),
+                    contentColor = palette.content,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            "打开相机",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             Box(
@@ -309,7 +356,7 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
                     .background(palette.content.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
-                QrGlyph(palette.content, Modifier.size(44.dp))
+                QrGlyph(palette.content, Modifier.size(46.dp))
             }
         }
     }

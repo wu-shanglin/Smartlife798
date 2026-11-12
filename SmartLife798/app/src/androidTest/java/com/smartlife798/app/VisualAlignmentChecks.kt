@@ -59,7 +59,8 @@ object VisualAlignmentChecks {
                 if (theme != ThemeMode.LIGHT) open("首页")
                 stage = "home content $theme"
                 await { find(test, "扫码使用") != null }
-                check(find(test, "可以扫码，") != null && find(test, "也可以碰一碰") != null)
+                check(find(test, "扫描设备二维码") != null)
+                check(find(test, "开启 NFC，") != null && find(test, "碰一碰慧生活卡片") != null)
                 if (theme == ThemeMode.LIGHT) {
                     stage = "pinned home card retains its height"
                     await { vm.favorites.value.size >= 2 }
@@ -70,7 +71,12 @@ object VisualAlignmentChecks {
                     val height = test.targetContext.resources.displayMetrics.heightPixels
                     val density = test.targetContext.resources.displayMetrics.density
                     val scanCard = cardBounds(test, "扫码使用")
-                    val scanHeight = (201 * density).roundToInt()
+                    val action = checkNotNull(find(test, "打开相机"))
+                    val actionBounds = Rect().also(action::getBoundsInScreen)
+                    check(actionBounds.top > scanCard.centerY() && cardBounds(test, "打开相机") == scanCard) {
+                        "Camera action must be in the lower part of the single scan entry: $actionBounds, scan=$scanCard"
+                    }
+                    val scanHeight = (192 * density).roundToInt()
                     val fontScale = test.targetContext.resources.configuration.fontScale
                     check(scanCard.height() >= scanHeight && (fontScale > 1f || scanCard.height() == scanHeight)) {
                         "Unexpected scan card height: $scanCard"
