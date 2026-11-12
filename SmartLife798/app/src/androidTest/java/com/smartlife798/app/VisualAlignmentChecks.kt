@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.*
 import com.smartlife798.app.vm.MainViewModel
+import kotlin.math.roundToInt
 
 /** Capture the real navigation in light/dark themes, using only the runner's terminal fixtures. */
 object VisualAlignmentChecks {
@@ -58,6 +59,7 @@ object VisualAlignmentChecks {
                 if (theme != ThemeMode.LIGHT) open("首页")
                 stage = "home content $theme"
                 await { find(test, "扫码使用") != null }
+                check(find(test, "可以扫码，") != null && find(test, "也可以碰一碰") != null)
                 if (theme == ThemeMode.LIGHT) {
                     stage = "pinned home card retains its height"
                     await { vm.favorites.value.size >= 2 }
@@ -68,7 +70,11 @@ object VisualAlignmentChecks {
                     val height = test.targetContext.resources.displayMetrics.heightPixels
                     val density = test.targetContext.resources.displayMetrics.density
                     val scanCard = cardBounds(test, "扫码使用")
-                    check(scanCard.height() >= (144 * density).toInt()) { "Scan entry is too short: $scanCard" }
+                    val scanHeight = (201 * density).roundToInt()
+                    val fontScale = test.targetContext.resources.configuration.fontScale
+                    check(scanCard.height() >= scanHeight && (fontScale > 1f || scanCard.height() == scanHeight)) {
+                        "Unexpected scan card height: $scanCard"
+                    }
                     shell(test, "input swipe ${width / 2} ${height * 3 / 4} ${width / 2} ${height / 2} 250")
                     SystemClock.sleep(300)
                     val before = cardBounds(test, first.name)
@@ -76,7 +82,6 @@ object VisualAlignmentChecks {
                     check(before.left == scanCard.left && before.width() >= (174 * density).toInt()) {
                         "Favorite card is too narrow or misaligned: $before, scan=$scanCard"
                     }
-                    val fontScale = test.targetContext.resources.configuration.fontScale
                     if (fontScale <= 1f && scanCard.width() >= (288 * density).toInt()) {
                         check(scanCard.right - before.right >= (96 * density).toInt()) {
                             "Favorite card leaves too little room for the next device: $before, scan=$scanCard"
