@@ -27,6 +27,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Badge
 import com.smartlife798.app.ui.components.AppBottomSheet
 import com.smartlife798.app.ui.components.ChoiceButtonGroup
 import androidx.compose.material3.Button
@@ -190,11 +191,19 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "订单与记录",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "订单与记录",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (unpaidBadge > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                Text("已发现 $unpaidBadge 笔待付")
+                            }
+                        }
+                    }
                     ChoiceButtonGroup(
                         labels = listOf("使用中", if (unpaidBadge > 0) "消费记录 · $unpaidBadge 待付" else "消费记录"),
                         selectedIndex = tab,
@@ -211,6 +220,11 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                             "在设备详情页点击「立即使用」后，这里会显示正在使用的设备与实时用时。",
                         )
                     }
+                    item {
+                        HintBanner(
+                            "只有服务端确认设备已离开待机后，本客户端才会记录「进行中」；状态与计费仍以服务端为准。",
+                        )
+                    }
                 } else {
                     item {
                         Card(
@@ -218,7 +232,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                             shape = MaterialTheme.shapes.large,
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                         ) {
-                            Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     StatusPill(usagePillState(liveForActive))
                                     Spacer(Modifier.width(10.dp))
@@ -423,16 +437,17 @@ private fun BillRow(bill: Bill, onClick: () -> Unit, onPay: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(AppLayout.Card),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppLayout.Card),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(
                     Fmt.dateTime(bill.ctime),
                     style = MaterialTheme.typography.bodySmall,
@@ -447,16 +462,11 @@ private fun BillRow(bill: Bill, onClick: () -> Unit, onPay: () -> Unit) {
                     )
                 }
             }
-            Column(
-                modifier = Modifier.weight(0.56f),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     Fmt.money(bill.payment ?: 0.0),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )
                 Text(
                     bill.statusLabel,

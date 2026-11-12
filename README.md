@@ -6,7 +6,7 @@
 |---|---|
 | 正式版包名 | `com.smartlife798.app` |
 | Beta 版包名 | `com.smartlife798.app.debug` |
-| 当前版本 | `2.3.0`（`versionCode 93`） |
+| 当前版本 | `2.2.12`（`versionCode 92`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 正式发布 | [最新 Release](https://github.com/wu-shanglin/Smartlife798/releases/latest) |
@@ -15,7 +15,7 @@
 
 ## 当前版本
 
-**2.3.0 / 93**（开发候选）：统一设备、订单、钱包、我的、扫码与开发者工具的界面层级，保留既有入口与业务流程。
+**2.2.12 / 92**（开发候选）：首页扫码卡重新组织标题和相机操作，补充扫码与 NFC 碰一碰的用法。
 
 **2.1.11 / 79** 适配原版 3.1.10 短信登录签名，补齐登录请求的 `sign` 参数。签名通过原版合成向量及离线登录验证，真实账号验收待完成。详见 [登录签名](docs/01-逆向分析报告.md#51-登录与账号)。
 
@@ -49,13 +49,13 @@
 
 ## 构建与产物
 
-2.3.0 为开发候选版本，日常试装使用独立 Debug 包。
+2.2.12 为开发候选版本，日常试装使用独立 Debug 包。
 
 唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-2.3.0-release.apk`](dist/SmartLife798-2.3.0-release.apk) |
+| 产物 | [`dist/SmartLife798-2.2.12-release.apk`](dist/SmartLife798-2.2.12-release.apk) |
 
 日常试装使用 `SmartLife798/app/build/outputs/apk/debug/app-debug.apk`。桌面的「慧生活 798 Beta 版」可与正式版并存，分别保存应用数据。上表是正式发布时的产物路径，只有明确授权打包 Release 并发布后才生成。
 
@@ -65,7 +65,7 @@
 
 ## 截图
 
-本次重构的页面截图来自 2.3.0 / 93 在 API 28 模拟器上的独立离线构建。页面使用真实 Compose 界面与终止式传输夹具。各截图的版本和范围见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
+浅色和深色首页截图来自 2.2.12 / 92 的 API 28 离线构建，设备详情截图来自 2.2.9 / 89；其他主要截图来自 2.1.1 / 69 候选的独立 `.offline` 夹具，使用真实 Compose 页面与终止式传输采集；此前默认字号与窄屏大字完成操作回归，不代表真机帧率、签到、充值或支付验收。提示条保留历史夹具来源。来源与限制见 [截图清单](docs/02-功能设计与UI方案.md#7-界面截图)。
 
 | 首页 | 设备 | 订单 |
 |---|---|---|

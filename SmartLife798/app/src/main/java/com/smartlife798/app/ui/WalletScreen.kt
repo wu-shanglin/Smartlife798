@@ -2,6 +2,7 @@
 
 package com.smartlife798.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,13 +15,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -110,30 +111,38 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge,
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
-                    Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("钱包余额", style = MaterialTheme.typography.titleSmall)
+                    Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            "钱包余额",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        )
                         Text(
                             wallet?.let { Fmt.money(it.total) } ?: "—",
                             modifier = Modifier.sharedCardPageElement(CardPart.AMOUNT),
-                            style = MaterialTheme.typography.headlineLarge,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
-                        wallet?.ep?.name?.takeIf { it.isNotBlank() }?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall)
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(Modifier.weight(1f)) {
-                                Text("现金", style = MaterialTheme.typography.labelMedium)
-                                Text(wallet?.let { Fmt.money(it.ofCash) } ?: "—", style = MaterialTheme.typography.titleMedium)
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text("赠送", style = MaterialTheme.typography.labelMedium)
-                                Text(wallet?.let { Fmt.money(it.ofGift) } ?: "—", style = MaterialTheme.typography.titleMedium)
-                            }
+                        Text(
+                            wallet?.ep?.name?.takeIf { it.isNotBlank() } ?: "—",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            Text(
+                                "现金 " + Fmt.money(wallet?.ofCash ?: 0.0),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                            )
+                            Text(
+                                "赠送 " + Fmt.money(wallet?.ofGift ?: 0.0),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                            )
                         }
                     }
                 }
@@ -144,7 +153,7 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             when {
                 error != null -> item { ErrorState(error!!) { scope.launch { reload() } } }
                 products == null -> item { LoadingBlock("正在获取充值商品…") }
-                products!!.isEmpty() -> item { EmptyState("暂无可充值商品", "暂时没有可选的充值金额。") }
+                products!!.isEmpty() -> item { EmptyState("暂无可充值商品", "服务端没有返回 type=1 的充值商品。") }
                 else -> items(products!!, key = { it.id }) { product ->
                     Card(
                         onClick = {
@@ -169,10 +178,9 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                                 }
                             }
                         },
-                        enabled = !creating && payTarget == null,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     ) {
                         Row(
                             modifier = Modifier
@@ -181,10 +189,10 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(product.name, style = MaterialTheme.typography.titleMedium)
+                                Text(product.name, style = MaterialTheme.typography.titleSmall)
                                 Text(
                                     "到账 " + Fmt.money(product.curPrice),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }

@@ -110,30 +110,12 @@ object VisualAlignmentChecks {
                 check(find(test, "订单") == null) { "Device detail exposes the orders shortcut" }
                 capture("detail-${theme.name.lowercase()}")
                 back()
-                stage = "orders navigation $theme"
                 open("订单")
                 await { find(test, "订单与记录") != null }
-                stage = "consumption history $theme"
-                await { find(test, "淋浴用水 37L") != null }
                 capture("orders-${theme.name.lowercase()}")
-                stage = "unpaid filter $theme"
-                open("待付款 1")
-                await { find(test, "直饮水 12L") != null && find(test, "淋浴用水 37L") == null }
-                capture("bills-${theme.name.lowercase()}")
-                open("全部 3")
-                stage = "profile navigation $theme"
                 open("我的")
                 await { find(test, "修改昵称") != null }
                 capture("me-${theme.name.lowercase()}")
-                stage = "appearance settings $theme"
-                await {
-                    if (find(test, "外观") == null) {
-                        nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable && it.isVisibleToUser }
-                            ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                        false
-                    } else true
-                }
-                capture("appearance-${theme.name.lowercase()}")
                 stage = "update button $theme"
                 await {
                     val button = find(test, "检查更新")
@@ -158,7 +140,7 @@ object VisualAlignmentChecks {
             test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT); vm.setDeveloperToolsEnabled(true) }
             stage = "developer tools and NFC"
             open("开发者工具")
-            await { find(test, "NFC 采集") != null }
+            await { find(test, "探索与调试") != null }
             capture("developer-tools")
             open("NFC 采集")
             await { find(test, "开始采集") != null }
