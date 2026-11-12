@@ -81,7 +81,7 @@ object DeviceAccessChecks {
                 val entry = ++render
                 scroll = LazyListState()
                 screen.setContent { SmartLifeTheme { key(entry) {
-                    DeviceDetailScreen(vm, "access-fixture", onBack = {}, onOpenOrders = {}, autoStart = auto,
+                    DeviceDetailScreen(vm, "access-fixture", onBack = {}, autoStart = auto,
                         listState = scroll)
                 } } }
             }

@@ -144,8 +144,7 @@ object DetailRenderingChecks {
                                                 // Match a Navigation destination: reads may render at
                                                 // STARTED, but device polling waits for RESUMED.
                                                 CompositionLocalProvider(LocalLifecycleOwner provides entryOwner) {
-                                                    DeviceDetailScreen(vm, sample.id, onBack = { expanded = false },
-                                                        onOpenOrders = {})
+                                                    DeviceDetailScreen(vm, sample.id, onBack = { expanded = false })
                                                 }
                                             }
                                         } else {

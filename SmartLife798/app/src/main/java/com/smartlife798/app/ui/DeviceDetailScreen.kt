@@ -91,7 +91,6 @@ fun DeviceDetailScreen(
     vm: MainViewModel,
     deviceId: String,
     onBack: () -> Unit,
-    onOpenOrders: () -> Unit,
     autoStart: Boolean = false,
     nfcTicket: String = "",
     onNeedPayment: () -> Unit = {},
@@ -462,7 +461,6 @@ fun DeviceDetailScreen(
                             }
                         },
                         onPin = { vm.togglePinned(deviceId) },
-                        onOpenOrders = onOpenOrders,
                     )
                 }
 
@@ -610,7 +608,6 @@ private fun HeroCard(
     onAction: () -> Unit,
     onFavorite: () -> Unit,
     onPin: () -> Unit,
-    onOpenOrders: () -> Unit,
 ) {
     val state = if (access?.notice != null) com.smartlife798.app.core.DeviceState(
         DeviceStateKind.RUNNING, access.label ?: "状态待确认",
@@ -741,14 +738,6 @@ private fun HeroCard(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(if (pinned) "已置顶" else "置顶", style = MaterialTheme.typography.labelMedium, maxLines = 2)
-                }
-                OutlinedButton(
-                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                    onClick = onOpenOrders,
-                    modifier = Modifier.weight(1f).heightIn(min = AppLayout.ActionHeight),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 10.dp),
-                ) {
-                    Text("订单", style = MaterialTheme.typography.labelMedium, maxLines = 2)
                 }
             }
             Text(
