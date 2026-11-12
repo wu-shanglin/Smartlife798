@@ -66,10 +66,14 @@ object VisualAlignmentChecks {
                     SystemClock.sleep(300)
                     val width = test.targetContext.resources.displayMetrics.widthPixels
                     val height = test.targetContext.resources.displayMetrics.heightPixels
+                    val scanCard = cardBounds(test, "扫码使用")
                     shell(test, "input swipe ${width / 2} ${height * 3 / 4} ${width / 2} ${height / 2} 250")
                     SystemClock.sleep(300)
                     val before = cardBounds(test, first.name)
                     check(before.top > 40 && before.bottom < height - 120) { "Pin card not fully visible: $before, screen=$height" }
+                    check(before.left == scanCard.left && before.width() >= scanCard.width() * 3 / 4) {
+                        "Favorite card is too narrow or misaligned: $before, scan=$scanCard"
+                    }
                     test.runOnMainSync { vm.togglePinned(first.id) }
                     await { first.id in vm.pinned.value && find(test, "置顶") != null }
                     val after = cardBounds(test, first.name)

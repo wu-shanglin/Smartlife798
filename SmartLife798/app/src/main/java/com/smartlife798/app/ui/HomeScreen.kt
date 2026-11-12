@@ -2,6 +2,7 @@
 
 package com.smartlife798.app.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +48,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +60,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smartlife798.app.QrGlyph
+import com.smartlife798.app.R
 import com.smartlife798.app.core.ActiveUsage
 import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceState
@@ -155,12 +160,26 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             item(key = "title") {
-                Text(
-                    "慧生活 798",
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppLayout.Gap),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_launcher_artwork),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(colorResource(R.color.launcher_background))
+                            .scale(1.35f),
+                    )
+                    Text(
+                        "慧生活 798",
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
             if (cardActive != null) {
                 item(key = "active") {
@@ -190,10 +209,11 @@ fun HomeScreen(
                         favorites.isEmpty() -> HomeEmptyState("在设备详情中收藏，常用设备就会显示在这里。")
                         else -> BoxWithConstraints(Modifier.fillMaxWidth()) {
                             val gap = AppLayout.Gap
-                            val pairWidth = (maxWidth - gap) / 2
-                            val readableWidth = 132.dp * LocalDensity.current.fontScale
-                            val tileWidth = if (pairWidth >= readableWidth) {
-                                pairWidth.coerceAtMost(220.dp)
+                            val peekWidth = 40.dp
+                            val widthWithPeek = maxWidth - gap - peekWidth
+                            val readableWidth = 192.dp * LocalDensity.current.fontScale
+                            val tileWidth = if (ordered.size > 1 && widthWithPeek >= readableWidth) {
+                                widthWithPeek
                             } else {
                                 maxWidth
                             }
@@ -449,7 +469,7 @@ private fun FavoriteTile(
             containerColor = if (pinned) colors.surfaceContainer else colors.surfaceContainerLow,
         ),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -467,19 +487,31 @@ private fun FavoriteTile(
             }
             Text(
                 device.name.ifBlank { type },
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 deviceSubtitle(device, includeType = false),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            StatusPill(device.stateLabel())
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                StatusPill(device.stateLabel())
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = colors.onSurfaceVariant,
+                )
+            }
         }
     }
 }
