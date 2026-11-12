@@ -286,7 +286,7 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 144.dp)
+                .heightIn(min = 201.dp)
                 .padding(horizontal = 20.dp, vertical = AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -297,7 +297,10 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text("扫描设备二维码", style = MaterialTheme.typography.bodyMedium)
+                FlowRow {
+                    Text("可以扫码，", style = MaterialTheme.typography.bodyMedium)
+                    Text("也可以碰一碰", style = MaterialTheme.typography.bodyMedium)
+                }
             }
             Box(
                 modifier = Modifier
