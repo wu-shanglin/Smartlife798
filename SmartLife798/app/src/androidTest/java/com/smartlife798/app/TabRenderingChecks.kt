@@ -92,7 +92,7 @@ object TabRenderingChecks {
             listener = draw
             test.runOnMainSync { view.viewTreeObserver.addOnDrawListener(draw) }
             repeat(4) {
-                for ((tab, title) in listOf("设备" to "我的设备", "订单" to "订单与记录", "我的" to "钱包", "首页" to "扫码即刻使用")) {
+                for ((tab, title) in listOf("设备" to "我的设备", "订单" to "订单与记录", "我的" to "钱包", "首页" to "扫码使用")) {
                     stage = "tap $tab then await $title"
                     tap(tab)
                     await { find(test, title) != null }

@@ -57,7 +57,7 @@ object VisualAlignmentChecks {
                 stage = "home navigation $theme"
                 if (theme != ThemeMode.LIGHT) open("首页")
                 stage = "home content $theme"
-                await { find(test, "扫码即刻使用") != null }
+                await { find(test, "扫码使用") != null }
                 if (theme == ThemeMode.LIGHT) {
                     stage = "pinned home card retains its height"
                     await { vm.favorites.value.size >= 2 }
@@ -134,9 +134,9 @@ object VisualAlignmentChecks {
             await { vm.guideDeck.value == null }
             stage = "scanner and manual input"
             open("首页")
-            await { find(test, "打开相机扫码") != null }
+            await { find(test, "扫码使用") != null }
             SystemClock.sleep(500)
-            open("打开相机扫码")
+            open("扫码使用")
             await { find(test, "手动输入") != null }
             capture("scan")
             open("手动输入")
@@ -145,7 +145,7 @@ object VisualAlignmentChecks {
             back()
             await { find(test, "手动输入") != null }
             back()
-            await { find(test, "扫码即刻使用") != null }
+            await { find(test, "扫码使用") != null }
             stage = "login"
             test.runOnMainSync { vm.logout() }
             await {

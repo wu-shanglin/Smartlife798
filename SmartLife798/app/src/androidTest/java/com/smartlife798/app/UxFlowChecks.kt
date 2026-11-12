@@ -44,7 +44,7 @@ object UxFlowChecks {
                 activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                     .putExtra("offlineFixture", true)) as MainActivity
-                await(test, if (page == StartupPage.HOME) "扫码即刻使用" else "我的设备")
+                await(test, if (page == StartupPage.HOME) "扫码使用" else "我的设备")
                 check(!text(test).contains("演示模式"))
                 stage = "open settings and retain the wallet metric"
                 click(test, "我的")

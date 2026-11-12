@@ -312,10 +312,13 @@ fun HintBanner(text: String, modifier: Modifier = Modifier) {
 
 fun Device.shortId(): String = if (id.length <= 8) id else id.take(4) + "…" + id.takeLast(4)
 
-fun deviceSubtitle(device: Device): String {
+fun deviceSubtitle(device: Device, includeType: Boolean = true): String {
+    val place = device.ep?.name?.takeIf { it.isNotBlank() }
+        ?: device.addr?.display()?.takeIf { it.isNotBlank() }
+        ?: device.shortId()
+    if (!includeType) return place
     val type = DeviceType.nameOrNull(device.dtype) ?: "设备"
-    val place = device.ep?.name?.takeIf { it.isNotBlank() } ?: device.addr?.display()?.takeIf { it.isNotBlank() }
-    return if (place != null) "$type · $place" else "$type · ${device.shortId()}"
+    return "$type · $place"
 }
 
 /**

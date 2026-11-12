@@ -156,12 +156,12 @@ object CheckInUiChecks {
             test.runOnMainSync { vm = ViewModelProvider(screen)[MainViewModel::class.java] }
             check(!screen.intent.getBooleanExtra("preview", false))
             check(autoPost.entered.await(8, TimeUnit.SECONDS))
-            await { find(test, "扫码即刻使用") != null }
+            await { find(test, "扫码使用") != null }
             autoPost.release.countDown()
             stage = "automatic success Snackbar is visible on Home"
             await { find(test, "自动签到成功") != null && !vm.checkingIn.value }
             check(posts.get() == 1 && vm.checkInStatus.value == "今日已自动签到")
-            check(find(test, "扫码即刻使用") != null)
+            check(find(test, "扫码使用") != null)
             await { find(test, "我的") != null }
             val noticeBounds = android.graphics.Rect().also { find(test, "自动签到成功")!!.getBoundsInScreen(it) }
             val navBounds = android.graphics.Rect().also { actionNode(test, "我的").getBoundsInScreen(it) }
