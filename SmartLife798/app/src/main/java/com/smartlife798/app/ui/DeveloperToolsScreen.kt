@@ -19,16 +19,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
@@ -51,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
@@ -94,25 +94,18 @@ fun DeveloperToolsScreen(
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(AppLayout.PagePadding),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Surface(shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Row(Modifier.fillMaxWidth().padding(AppLayout.Card), horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Settings, null, Modifier.size(40.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("探索与调试", style = MaterialTheme.typography.headlineSmall)
-                        Text("查看本机诊断，调试引导体验。", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-            Text("界面与引导", style = MaterialTheme.typography.titleMedium)
-            DeveloperToolCard(Icons.Filled.Refresh, "重置引导卡片", "清除已读进度，重新体验基础与新增功能卡片。",
-                enabled = enabled, onClick = { if (enabled) confirmReset = true })
-            Text("账号诊断", style = MaterialTheme.typography.titleMedium)
-            DeveloperToolCard(Icons.Filled.Info, "导出登录令牌", "点击复制当前登录令牌，请妥善保管。",
-                enabled = enabled, onClick = onCopyToken)
-            Text("设备诊断", style = MaterialTheme.typography.titleMedium)
-            DeveloperToolCard(Icons.Filled.Info, "NFC 采集", "读取卡片原始 NDEF 内容，查看或导出本机记录。",
-                enabled = enabled, onClick = onOpenNfc)
+            DeveloperToolCard(
+                Icons.Filled.Info, "NFC 采集", "读取卡片原始 NDEF 内容，查看或导出本机记录。",
+                enabled = enabled, onClick = onOpenNfc,
+            )
+            DeveloperToolCard(
+                Icons.Filled.Person, "导出登录令牌", "将当前登录令牌复制到剪贴板，请妥善保管。",
+                enabled = enabled, onClick = onCopyToken,
+            )
+            DeveloperToolCard(
+                Icons.Filled.Refresh, "重置引导卡片", "清除已读进度并重新打开使用指南。",
+                enabled = enabled, onClick = { if (enabled) confirmReset = true },
+            )
             OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
                 enabled = enabled, onClick = { if (enabled) { onDisable(); onBack() } }) { Text("关闭开发者工具") }
         }
@@ -122,10 +115,10 @@ fun DeveloperToolsScreen(
 @Composable
 private fun DeveloperToolCard(icon: ImageVector, title: String, description: String, enabled: Boolean, onClick: () -> Unit) {
     Card(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
                 Icon(icon, null, Modifier.padding(10.dp).size(24.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -200,20 +193,39 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(AppLayout.PagePadding),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("点击开始后保持本页前台再碰卡。离开本页或锁屏会停止采集；返回后需重新开始。")
-            Text("原始 NDEF 内容只保存在本机，不自动打开链接或启停设备。导出文件包含卡片原始链接与参数。")
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(AppLayout.Gap)) {
                     Text("采集状态", style = MaterialTheme.typography.labelLarge)
-                    Text(if (!enabled) "开发者工具已关闭" else status, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (!enabled) "开发者工具已关闭" else status,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        "开始后保持本页在前台，再碰卡。离开页面或锁屏会停止采集。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (active) {
+                        Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
+                            onClick = ::stop) { Text("停止采集") }
+                    } else {
+                        Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
+                            enabled = enabled && reader != null,
+                            onClick = { status = reader?.start().orEmpty(); active = reader?.isActive() == true }) {
+                            Text("开始采集")
+                        }
+                    }
                 }
             }
-            Button(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight), enabled = enabled && reader != null && !active,
-                onClick = { status = reader?.start().orEmpty(); active = reader?.isActive() == true }) {
-                Text("开始采集")
-            }
-            OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight), enabled = active, onClick = ::stop) { Text("停止采集") }
+            Text("采集记录", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "原始 NDEF 记录保存在本机。导出文件包含卡片原始链接与参数。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             OutlinedButton(shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight), enabled = enabled && records.isNotBlank() && !busy,
                 onClick = {
                     stop()
@@ -238,12 +250,21 @@ fun NfcCaptureScreen(enabled: Boolean, onBack: () -> Unit) {
                     catch (_: Exception) { status = "暂时无法清空记录" }
                 }
             }) { Text("清空采集记录") }
-            Text("采集记录", style = MaterialTheme.typography.titleMedium)
             if (records.length > 16_384) {
                 Text("本页显示记录末尾；导出可查看完整内容。", style = MaterialTheme.typography.bodySmall)
             }
-            Text(records.takeLast(16_384).ifBlank { "暂无记录" }, modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodySmall)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+            ) {
+                Text(
+                    records.takeLast(16_384).ifBlank { "暂无记录" },
+                    modifier = Modifier.padding(AppLayout.Card),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = if (records.isNotBlank()) FontFamily.Monospace else null,
+                )
+            }
         }
     }
 }

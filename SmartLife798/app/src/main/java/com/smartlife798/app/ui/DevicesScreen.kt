@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
@@ -19,7 +19,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.smartlife798.app.core.Device
@@ -116,7 +120,17 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("我的设备", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "我的设备",
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    ChoiceButtonGroup(
+                        labels = DevicesShelf.entries.map { it.label },
+                        selectedIndex = shelf.ordinal,
+                        onSelect = { shelf = DevicesShelf.entries[it] },
+                    )
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -130,13 +144,8 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                             }
                         },
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    ChoiceButtonGroup(
-                        labels = DevicesShelf.entries.map { it.label },
-                        selectedIndex = shelf.ordinal,
-                        onSelect = { shelf = DevicesShelf.entries[it] },
                     )
                     if (types.isNotEmpty()) {
                         ChoiceButtonGroup(
@@ -161,12 +170,27 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
             if (list.isEmpty() && !(baseList.isEmpty() && (loading || error != null))) {
                 item {
                     if (query.isNotBlank() || typeFilter != null) {
-                        EmptyState(
-                            "没有匹配的设备",
-                            "试试其他名称、编号或类型，也可以清除筛选查看全部设备。",
-                            actionLabel = "清除筛选",
-                            onAction = { query = ""; typeFilter = null },
-                        )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(AppLayout.Card),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text("没有匹配的设备", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "试试其他名称、编号或类型。",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TextButton(
+                                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
+                                    onClick = { query = ""; typeFilter = null },
+                                ) { Text("清除筛选") }
+                            }
+                        }
                     } else when (shelf) {
                         DevicesShelf.FAVORITE -> EmptyState(
                             "收藏列表为空",
@@ -198,7 +222,7 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
             if (recents.isNotEmpty()) {
                 item {
                     Text(
-                        "收藏与使用记录来自服务端；「最近」仅为设备索引，名称与状态始终以服务端返回为准。",
+                        "收藏随账号同步，最近使用保存在本机。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

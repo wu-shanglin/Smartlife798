@@ -615,12 +615,14 @@ private fun HeroCard(
     val action = access?.action
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(AppLayout.Gap)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Column(Modifier.weight(1f)) {
                     // A partial `dev/status` snapshot has no `bm`: never let the
                     // known type/name collapse to 「智能设备」.
@@ -653,13 +655,14 @@ private fun HeroCard(
 
             // Keep the same text/layout slots before and after the response. Building
             // the entire controls/metadata block mid-flight causes a cold composition spike.
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column {
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
                     Text(if (confirmed) "当前模式" else "模式信息", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(if (confirmed) modeLabel(device) else "等待服务端", style = MaterialTheme.typography.titleMedium)
                 }
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text("更新时间", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(if (confirmed) Fmt.clock(lastUpdate) else "更新中…", style = MaterialTheme.typography.titleMedium)
                 }
@@ -768,8 +771,8 @@ private fun ModeSection(
     val options = if (!knownParts && loading) placeholders else parts
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(if (loading) "正在获取设备信息…" else "选择模式", style = MaterialTheme.typography.titleSmall)
@@ -800,8 +803,8 @@ private fun PaySection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("支付方式", style = MaterialTheme.typography.titleSmall)
@@ -847,11 +850,11 @@ private fun InfoCard(detail: DeviceDetail) {
     val device = detail.device ?: return
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("设备信息", style = MaterialTheme.typography.titleSmall)
+            Text("设备信息", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             InfoRow("设备名称", device.name.ifBlank { "-" })
             InfoRow("设备编号", device.id, mono = true)
