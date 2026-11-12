@@ -54,8 +54,8 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 88
-        versionName = "2.2.8"
+        versionCode = 89
+        versionName = "2.2.9"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
         manifestPlaceholders["alipayCallbackScheme"] = releaseAlipayCallback

@@ -88,7 +88,7 @@ object EndFlowChecks {
                     vm = ViewModelProvider(screen)[MainViewModel::class.java]
                     screen.setContent {
                         SmartLifeTheme {
-                            DeviceDetailScreen(vm, "end-fixture", onBack = {}, onOpenOrders = {})
+                            DeviceDetailScreen(vm, "end-fixture", onBack = {})
                         }
                     }
                 }

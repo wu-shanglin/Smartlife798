@@ -537,10 +537,6 @@ private fun AppRoot(
                                     autoStart = autoStart,
                                     nfcTicket = entry.arguments?.getString("nfcTicket").orEmpty(),
                                     onBack = { if (navController.currentBackStackEntry?.id == entry.id) navController.popBackStack() },
-                                    onOpenOrders = {
-                                        navController.popBackStack()
-                                        navigateTab(navController, "orders")
-                                    },
                                     onNeedPayment = {
                                         navigateTab(navController, "orders")
                                     },

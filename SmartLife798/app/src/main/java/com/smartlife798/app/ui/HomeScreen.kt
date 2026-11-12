@@ -196,7 +196,9 @@ fun HomeScreen(
                     )
                 }
             }
-            item(key = "scan") { ScanHeroCard(onScan) }
+            item(key = "scan") {
+                ScanHeroCard(onScan, modifier = Modifier.padding(vertical = 4.dp))
+            }
             item(key = "favorites") {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     SectionHeader(
@@ -273,18 +275,18 @@ fun HomeScreen(
 }
 
 @Composable
-private fun ScanHeroCard(onScan: () -> Unit) {
+private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
     Card(
         onClick = onScan,
-        modifier = Modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
+        modifier = modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = palette.container, contentColor = palette.content),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 112.dp)
+                .heightIn(min = 144.dp)
                 .padding(horizontal = 20.dp, vertical = AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),

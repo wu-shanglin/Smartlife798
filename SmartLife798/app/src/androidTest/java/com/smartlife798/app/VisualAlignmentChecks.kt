@@ -68,7 +68,7 @@ object VisualAlignmentChecks {
                     val height = test.targetContext.resources.displayMetrics.heightPixels
                     val density = test.targetContext.resources.displayMetrics.density
                     val scanCard = cardBounds(test, "扫码使用")
-                    check(scanCard.height() >= (112 * density).toInt()) { "Scan entry is too short: $scanCard" }
+                    check(scanCard.height() >= (144 * density).toInt()) { "Scan entry is too short: $scanCard" }
                     shell(test, "input swipe ${width / 2} ${height * 3 / 4} ${width / 2} ${height / 2} 250")
                     SystemClock.sleep(300)
                     val before = cardBounds(test, first.name)
@@ -95,6 +95,8 @@ object VisualAlignmentChecks {
                 capture("devices-${theme.name.lowercase()}")
                 open("3 栋 2 层淋浴机 02")
                 await { find(test, "当前模式") != null }
+                await { find(test, "已收藏") != null && find(test, "已置顶") != null }
+                check(find(test, "订单") == null) { "Device detail exposes the orders shortcut" }
                 capture("detail-${theme.name.lowercase()}")
                 back()
                 open("订单")
@@ -144,17 +146,30 @@ object VisualAlignmentChecks {
             repeat(cards - 1) { open("下一步"); SystemClock.sleep(400) }
             open("开始使用")
             await { vm.guideDeck.value == null }
-            stage = "scanner and manual input"
+            stage = "scanner upper edge and manual input"
             open("首页")
             await { find(test, "扫码使用") != null }
             SystemClock.sleep(500)
-            open("扫码使用")
+            val density = test.targetContext.resources.displayMetrics.density
+            val edgeInset = (8 * density).toInt()
+            val scanCard = cardBounds(test, "扫码使用")
+            shell(test, "input tap ${scanCard.centerX()} ${scanCard.top + edgeInset}")
             await { find(test, "手动输入") != null }
             capture("scan")
             open("手动输入")
             await { find(test, "查询设备") != null }
             capture("manual-input")
             back()
+            await { find(test, "手动输入") != null }
+            back()
+            await { find(test, "扫码使用") != null }
+            stage = "scanner lower edge and surrounding gap"
+            SystemClock.sleep(500)
+            val returnedScanCard = cardBounds(test, "扫码使用")
+            shell(test, "input tap ${returnedScanCard.centerX()} ${returnedScanCard.bottom + edgeInset}")
+            SystemClock.sleep(300)
+            check(find(test, "扫码使用") != null && find(test, "手动输入") == null)
+            shell(test, "input tap ${returnedScanCard.centerX()} ${returnedScanCard.bottom - edgeInset}")
             await { find(test, "手动输入") != null }
             back()
             await { find(test, "扫码使用") != null }
