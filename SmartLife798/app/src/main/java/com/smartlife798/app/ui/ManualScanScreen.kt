@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -23,7 +23,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -39,6 +38,7 @@ import com.smartlife798.app.core.QrParser
 import com.smartlife798.app.core.QrResolution
 import com.smartlife798.app.core.Res
 import com.smartlife798.app.core.resolveQr
+import com.smartlife798.app.ui.components.HintBanner
 import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
@@ -118,51 +118,58 @@ fun ManualScanScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(AppLayout.PagePadding),
+                .padding(horizontal = AppLayout.Page)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Surface(
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "输入设备贴纸上的编号，或二维码链接 /q/1/b?id= 后面的那段字符。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = manualText,
+                onValueChange = { manualText = it.trim().take(120) },
+                label = { Text("设备编号 / 二维码内容") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                enabled = manualText.isNotBlank() && !resolving,
+                onClick = { submit() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = AppLayout.ActionHeight),
+                shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = MaterialTheme.shapes.large),
             ) {
-                Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(AppLayout.Gap)) {
-                    Text("查找设备", style = MaterialTheme.typography.headlineSmall)
-                    Text(
-                        "输入设备贴纸上的编号，或粘贴二维码内容。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    OutlinedTextField(
-                        value = manualText,
-                        onValueChange = { manualText = it.trim().take(120); error = null },
-                        label = { Text("设备编号 / 二维码内容") },
-                        singleLine = true,
-                        isError = error != null,
-                        supportingText = error?.let { message -> { Text(message) } },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Button(
-                        enabled = manualText.isNotBlank() && !resolving,
-                        onClick = ::submit,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
-                        shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = MaterialTheme.shapes.large),
-                    ) {
-                        if (resolving) {
-                            LinearWavyProgressIndicator(modifier = Modifier.width(44.dp))
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Text(if (resolving) "查询中…" else "查询设备")
-                    }
-                    status?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    }
+                if (resolving) {
+                    LinearWavyProgressIndicator(modifier = Modifier.width(60.dp))
+                    Spacer(Modifier.width(10.dp))
                 }
+                Text(if (resolving) "查询中…" else "查询设备")
             }
+            if (status != null) {
+                Text(
+                    status!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (error != null) {
+                Text(
+                    error!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            HintBanner(
+                "编号会通过服务端 /api/v1/qr/use 解析，只有服务端确认是设备码才会进入设备页；" +
+                    "手动输入不会在本地伪造设备信息。查询成功后本页和扫一扫都会关闭。",
+            )
+            Spacer(Modifier.height(20.dp))
         }
     }
 }

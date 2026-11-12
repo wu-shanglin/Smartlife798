@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -210,7 +209,6 @@ fun InfoRow(label: String, value: String, mono: Boolean = false, valueColor: Col
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DeviceCard(
     device: Device,
@@ -236,7 +234,7 @@ fun DeviceCard(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(MaterialTheme.shapes.medium)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
@@ -251,9 +249,9 @@ fun DeviceCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         device.name.ifBlank { DeviceType.nameOrNull(device.dtype) ?: "设备" },
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
@@ -266,31 +264,21 @@ fun DeviceCard(
                     subtitle ?: ((DeviceType.nameOrNull(device.dtype) ?: "设备") + " · " + device.id.takeLast(6)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically,
-                ) {
-                    StatusPill(state)
-                    if (favorite) {
-                        Text(
-                            "已收藏",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
             }
             Spacer(Modifier.width(8.dp))
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                StatusPill(state)
+                if (favorite) {
+                    Text(
+                        "已收藏",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
     }
 }

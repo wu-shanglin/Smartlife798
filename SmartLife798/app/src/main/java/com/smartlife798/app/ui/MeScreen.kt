@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -39,8 +38,6 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -72,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartlife798.app.BuildConfig
+import com.smartlife798.app.core.Api
 import com.smartlife798.app.core.Appearance
 import com.smartlife798.app.core.ThemeMode
 import com.smartlife798.app.core.StartupPage
@@ -137,12 +135,9 @@ fun MeScreen(
                 .padding(AppLayout.PagePadding),
             verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 NetworkAvatar(bitmap = avatarContent, name = profile?.name.orEmpty(), modifier = Modifier.size(56.dp))
+                Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         profile?.name?.takeIf { it.isNotBlank() } ?: "未设置昵称",
@@ -167,27 +162,21 @@ fun MeScreen(
                         )
                     }
                 }
-                IconButton(
-                    shapes = IconButtonDefaults.shapes(),
+                TextButton(
+                    shapes = androidx.compose.material3.ButtonDefaults.shapes(),
                     enabled = profile != null && !savingProfile,
                     onClick = {
                         nickname = profile?.name.orEmpty()
                         nicknameError = null
                         editNickname = true
                     },
-                ) {
-                    Icon(
-                        Icons.Filled.Edit,
-                        contentDescription = "修改昵称",
-                        tint = androidx.compose.material3.LocalContentColor.current,
-                    )
-                }
+                ) { Text("修改昵称") }
             }
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Row(
                     modifier = Modifier
@@ -197,7 +186,7 @@ fun MeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(
-                        modifier = Modifier.weight(1f).clickable(onClick = onOpenWallet).sharedCard(CardOrigin.WALLET).heightIn(min = 48.dp).padding(vertical = 4.dp),
+                        modifier = Modifier.weight(1f).clickable(onClick = onOpenWallet).sharedCard(CardOrigin.WALLET).padding(vertical = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
@@ -205,12 +194,12 @@ fun MeScreen(
                             "钱包",
                             modifier = Modifier.sharedCardElement(CardOrigin.WALLET),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         MetricValue(
                             wallet?.let { Fmt.money(it.total) } ?: "—",
                             modifier = Modifier.sharedCardElement(CardOrigin.WALLET, part = CardPart.AMOUNT),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                     Column(
@@ -218,7 +207,7 @@ fun MeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("积分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         MetricValue(availableScore ?: "—")
                     }
                     Column(
@@ -226,7 +215,7 @@ fun MeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Text("收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         MetricValue("${favorites.size}")
                     }
                 }
@@ -234,7 +223,7 @@ fun MeScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -270,7 +259,7 @@ fun MeScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -281,7 +270,15 @@ fun MeScreen(
                         onSelect = { vm.setStartupPage(StartupPage.entries[it]) },
                         icons = listOf(Icons.Filled.Home, Icons.AutoMirrored.Filled.List),
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SettingsHeading(Icons.Filled.Settings, "外观", "选择适合你的显示方式")
                     SettingsChoiceButtonGroup(labels = listOf("跟随系统", "浅色", "深色"),
                         selectedIndex = ThemeMode.entries.indexOf(themeMode),
@@ -317,11 +314,11 @@ fun MeScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("关于本客户端", style = MaterialTheme.typography.titleMedium)
+                    Text("关于本客户端", style = MaterialTheme.typography.titleSmall)
                     Text(
                         "客户端版本 ${BuildConfig.VERSION_NAME}",
                         modifier = Modifier.fillMaxWidth().clickable {
@@ -355,7 +352,7 @@ fun MeScreen(
                         ) {
                             OutlinedTextField(
                                 value = preferredSource.label, onValueChange = {}, readOnly = true,
-                                modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                                modifier = Modifier.fillMaxWidth().menuAnchor(),
                                 trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded) },
                             )
                             ExposedDropdownMenu(expanded = sceneActive && sourceMenuExpanded, onDismissRequest = { sourceMenuExpanded = false }) {
@@ -392,7 +389,8 @@ fun MeScreen(
                         Text("Beta 版通过安装新版 Debug APK 更新。", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(
-                        "独立重制的慧生活 798 客户端，设备状态、计费和账单以服务端为准。",
+                        "本应用是「慧生活798」服务端的独立重制客户端：登录、扫码、设备状态、启用/停用设备、" +
+                            "计费与账单全部调用官方接口，界面与交互完全重新设计。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -415,6 +413,12 @@ fun MeScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("退出登录")
             }
+
+            Text(
+                "版本 ${BuildConfig.VERSION_NAME} · 数据来源 ${Api.BASE_URL}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 

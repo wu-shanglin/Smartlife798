@@ -15,20 +15,21 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
@@ -50,12 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -113,7 +109,7 @@ fun ScanScreen(
         granted = ok
         if (!ok) {
             deniedOnce = true
-            error = "未授予相机权限，可手动输入编号或在系统设置中开启。"
+            error = "未授予相机权限，可点右上角「手动输入」或到系统设置中开启"
         }
     }
     LaunchedEffect(Unit) { if (!granted) launcher.launch(Manifest.permission.CAMERA) }
@@ -171,141 +167,116 @@ fun ScanScreen(
         }
     }
 
-    val overlay = Color.Black.copy(alpha = 0.76f)
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    ) {
         if (granted) {
-            CameraPreview(
-                onQr = ::handle,
-                enabled = !resolving,
-                onError = { error = "相机初始化失败，请重新进入扫码页或手动输入" },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().background(overlay).padding(horizontal = AppLayout.Page),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                IconButton(
-                    shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-                    onClick = onClose,
+            CameraPreview(onQr = { raw -> handle(raw) }, enabled = !resolving, onError = { error = "相机初始化失败，请重新进入扫码页或手动输入" }, modifier = Modifier.fillMaxSize())
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
-                }
-                Text(
-                    "扫一扫",
-                    modifier = Modifier.weight(1f),
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Surface(
-                    color = Color.White.copy(alpha = 0.16f),
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.sharedCard(CardOrigin.SCAN_MANUAL),
-                ) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = Color.White)
+                    Text("需要相机权限才能扫码", color = Color.White)
+                    Button(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("授予权限") }
+                    if (deniedOnce) {
+                        TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = { openAppSettings() }) {
+                            Text("去系统设置开启相机权限", color = Color.White)
+                        }
+                    }
                     TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onManualInput) {
-                        Text("手动输入", color = Color.White)
+                        Text("改为手动输入编号", color = Color.White)
                     }
-                }
-            }
-
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (granted) {
-                    ScanFrame(Modifier.fillMaxSize())
-                } else {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState()).padding(AppLayout.Page),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
-                    ) {
-                        Icon(Icons.Filled.Warning, contentDescription = null, tint = Color.White)
-                        Text("需要相机权限才能扫码", color = Color.White)
-                        Button(
-                            shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                            onClick = { launcher.launch(Manifest.permission.CAMERA) },
-                        ) { Text("授予权限") }
-                        if (deniedOnce) {
-                            TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = ::openAppSettings) {
-                                Text("去系统设置开启相机权限", color = Color.White)
-                            }
-                        }
-                        TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onManualInput) {
-                            Text("改为手动输入编号", color = Color.White)
-                        }
-                    }
-                }
-            }
-            Column(
-                modifier = Modifier.fillMaxWidth().background(overlay).padding(AppLayout.Page),
-                verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
-            ) {
-                if (granted) {
-                    Surface(
-                        color = Color.White.copy(alpha = 0.12f),
-                        contentColor = Color.White,
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                "将设备二维码放入框内",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                status ?: "识别后进入设备详情。也可手动输入贴纸上的编号。",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            if (resolving) {
-                                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            }
-                        }
-                    }
-                }
-                ErrorBanner(error) {
-                    error = null
-                    // Dismissing the banner is an explicit "try this code again".
-                    failedRaw = null
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun ScanFrame(modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val side = minOf(260.dp.toPx(), size.width - 2 * AppLayout.Page.toPx(), size.height - 24.dp.toPx())
-        if (side <= 0f) return@Canvas
-        val left = (size.width - side) / 2
-        val top = (size.height - side) / 2
-        val right = left + side
-        val bottom = top + side
-        val mask = Path().apply {
-            fillType = PathFillType.EvenOdd
-            addRect(Rect(0f, 0f, size.width, size.height))
-            addRect(Rect(left, top, right, bottom))
+        // Viewfinder frame
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                color = Color.Transparent,
+                shape = MaterialTheme.shapes.extraLarge,
+                border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.72f)),
+                modifier = Modifier.size(260.dp),
+            ) {}
         }
-        drawPath(mask, Color.Black.copy(alpha = 0.64f))
 
-        val length = minOf(28.dp.toPx(), side / 3)
-        val width = 3.dp.toPx()
-        for (x in listOf(left, right)) {
-            for (y in listOf(top, bottom)) {
-                val corner = Offset(x, y)
-                val endX = if (x == left) x + length else x - length
-                val endY = if (y == top) y + length else y - length
-                val horizontal = Offset(endX, y)
-                val vertical = Offset(x, endY)
-                val outline = width + 2.dp.toPx()
-                drawLine(Color.Black, corner, horizontal, outline, StrokeCap.Round)
-                drawLine(Color.Black, corner, vertical, outline, StrokeCap.Round)
-                drawLine(Color.White, corner, horizontal, width, StrokeCap.Round)
-                drawLine(Color.White, corner, vertical, width, StrokeCap.Round)
+        // A single, secondary action in the top-right. The old "扫码 / 输入编号"
+        // segmented control competed with the camera; manual input is now its
+        // own page reached from here.
+        Surface(
+            color = Color.Black.copy(alpha = 0.42f),
+            shape = RoundedCornerShape(50),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 8.dp, end = AppLayout.Page)
+                .sharedCard(CardOrigin.SCAN_MANUAL),
+        ) {
+            TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onManualInput) {
+                Text("手动输入", color = Color.White, style = MaterialTheme.typography.labelLarge)
             }
+        }
+
+        IconButton(
+
+            shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
+            onClick = onClose,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(top = 8.dp, start = 4.dp),
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Color.White)
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(AppLayout.Page)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.55f),
+                shape = MaterialTheme.shapes.large,
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "将设备二维码放入框内",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        status ?: "识别成功后自动进入设备详情并开始使用；编号贴纸可点右上角手动输入",
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (resolving) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LinearWavyProgressIndicator(modifier = Modifier.width(56.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("处理中…", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+            ErrorBanner(error) {
+                error = null
+                // Dismissing the banner is an explicit "try this code again".
+                failedRaw = null
+            }
+            Spacer(Modifier.height(6.dp))
         }
     }
 }
