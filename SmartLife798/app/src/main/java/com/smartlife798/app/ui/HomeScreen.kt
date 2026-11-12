@@ -49,7 +49,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -289,6 +293,15 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = cardHeight)
+                .drawWithCache {
+                    val background = Brush.linearGradient(
+                        0f to lerp(palette.container, palette.content, 0.13f),
+                        0.78f to palette.container,
+                        start = Offset(size.width, 0f),
+                        end = Offset(0f, size.height),
+                    )
+                    onDrawBehind { drawRect(background) }
+                }
                 .padding(horizontal = 20.dp, vertical = verticalInset),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
