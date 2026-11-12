@@ -70,6 +70,11 @@ object VisualAlignmentChecks {
                     val height = test.targetContext.resources.displayMetrics.heightPixels
                     val density = test.targetContext.resources.displayMetrics.density
                     val scanCard = cardBounds(test, "扫码使用")
+                    val action = checkNotNull(find(test, "打开相机"))
+                    val actionBounds = Rect().also(action::getBoundsInScreen)
+                    check(actionBounds.top > scanCard.centerY() && cardBounds(test, "打开相机") == scanCard) {
+                        "Camera action must be in the lower part of the single scan entry: $actionBounds, scan=$scanCard"
+                    }
                     val scanHeight = (201 * density).roundToInt()
                     val fontScale = test.targetContext.resources.configuration.fontScale
                     check(scanCard.height() >= scanHeight && (fontScale > 1f || scanCard.height() == scanHeight)) {
@@ -181,7 +186,7 @@ object VisualAlignmentChecks {
             stage = "scanner QR icon tap"
             SystemClock.sleep(500)
             val iconCard = cardBounds(test, "扫码使用")
-            val iconX = iconCard.right - (62 * density).toInt()
+            val iconX = iconCard.right - (72 * density).toInt()
             shell(test, "input tap $iconX ${iconCard.centerY()}")
             await { find(test, "手动输入") != null }
             back()

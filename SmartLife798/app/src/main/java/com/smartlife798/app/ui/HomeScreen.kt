@@ -277,6 +277,8 @@ fun HomeScreen(
 @Composable
 private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
+    val cardHeight = 201.dp
+    val inset = 24.dp
     Card(
         onClick = onScan,
         modifier = modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
@@ -286,30 +288,59 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 201.dp)
-                .padding(horizontal = 20.dp, vertical = AppLayout.Card),
+                .heightIn(min = cardHeight)
+                .padding(inset),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "扫码使用",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                FlowRow {
-                    Text("可以扫码，", style = MaterialTheme.typography.bodyMedium)
-                    Text("也可以碰一碰", style = MaterialTheme.typography.bodyMedium)
+            Column(
+                modifier = Modifier.weight(1f).heightIn(min = cardHeight - inset * 2),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "扫码使用",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    FlowRow {
+                        Text("可以扫码，", style = MaterialTheme.typography.bodyMedium)
+                        Text("也可以碰一碰", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Surface(
+                    modifier = Modifier.padding(top = 12.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = palette.content.copy(alpha = 0.16f),
+                    contentColor = palette.content,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            "打开相机",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             Box(
                 modifier = Modifier
-                    .size(84.dp)
+                    .size(96.dp)
                     .clip(MaterialTheme.shapes.large)
                     .background(palette.content.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
-                QrGlyph(palette.content, Modifier.size(44.dp))
+                QrGlyph(palette.content, Modifier.size(52.dp))
             }
         }
     }
