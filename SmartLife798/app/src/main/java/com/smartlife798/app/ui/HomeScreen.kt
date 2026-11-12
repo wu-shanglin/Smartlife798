@@ -277,8 +277,8 @@ fun HomeScreen(
 @Composable
 private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
-    val cardHeight = 201.dp
-    val inset = 24.dp
+    val cardHeight = 192.dp
+    val verticalInset = 18.dp
     Card(
         onClick = onScan,
         modifier = modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
@@ -289,12 +289,12 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = cardHeight)
-                .padding(inset),
+                .padding(horizontal = 20.dp, vertical = verticalInset),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(
-                modifier = Modifier.weight(1f).heightIn(min = cardHeight - inset * 2),
+                modifier = Modifier.weight(1f).heightIn(min = cardHeight - verticalInset * 2),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -303,13 +303,16 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    FlowRow {
-                        Text("可以扫码，", style = MaterialTheme.typography.bodyMedium)
-                        Text("也可以碰一碰", style = MaterialTheme.typography.bodyMedium)
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("扫描设备二维码", style = MaterialTheme.typography.bodySmall)
+                        FlowRow {
+                            Text("开启 NFC，", style = MaterialTheme.typography.bodySmall)
+                            Text("碰一碰慧生活卡片", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
                 Surface(
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                     shape = MaterialTheme.shapes.extraLarge,
                     color = palette.content.copy(alpha = 0.16f),
                     contentColor = palette.content,
@@ -335,12 +338,12 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
             }
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(84.dp)
                     .clip(MaterialTheme.shapes.large)
                     .background(palette.content.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
-                QrGlyph(palette.content, Modifier.size(52.dp))
+                QrGlyph(palette.content, Modifier.size(46.dp))
             }
         }
     }

@@ -59,7 +59,8 @@ object VisualAlignmentChecks {
                 if (theme != ThemeMode.LIGHT) open("首页")
                 stage = "home content $theme"
                 await { find(test, "扫码使用") != null }
-                check(find(test, "可以扫码，") != null && find(test, "也可以碰一碰") != null)
+                check(find(test, "扫描设备二维码") != null)
+                check(find(test, "开启 NFC，") != null && find(test, "碰一碰慧生活卡片") != null)
                 if (theme == ThemeMode.LIGHT) {
                     stage = "pinned home card retains its height"
                     await { vm.favorites.value.size >= 2 }
@@ -75,7 +76,7 @@ object VisualAlignmentChecks {
                     check(actionBounds.top > scanCard.centerY() && cardBounds(test, "打开相机") == scanCard) {
                         "Camera action must be in the lower part of the single scan entry: $actionBounds, scan=$scanCard"
                     }
-                    val scanHeight = (201 * density).roundToInt()
+                    val scanHeight = (192 * density).roundToInt()
                     val fontScale = test.targetContext.resources.configuration.fontScale
                     check(scanCard.height() >= scanHeight && (fontScale > 1f || scanCard.height() == scanHeight)) {
                         "Unexpected scan card height: $scanCard"
@@ -186,7 +187,7 @@ object VisualAlignmentChecks {
             stage = "scanner QR icon tap"
             SystemClock.sleep(500)
             val iconCard = cardBounds(test, "扫码使用")
-            val iconX = iconCard.right - (72 * density).toInt()
+            val iconX = iconCard.right - (62 * density).toInt()
             shell(test, "input tap $iconX ${iconCard.centerY()}")
             await { find(test, "手动输入") != null }
             back()
