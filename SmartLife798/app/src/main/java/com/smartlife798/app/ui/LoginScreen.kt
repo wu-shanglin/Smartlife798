@@ -25,12 +25,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProvideTextStyle
@@ -49,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -300,28 +298,17 @@ private fun CaptchaAction(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(enabled = !loading, role = Role.Button, onClickLabel = "更换图形验证码", onClick = onRefresh)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .clickable(enabled = !loading, role = Role.Button, onClickLabel = "更换图形验证码", onClick = onRefresh),
         contentAlignment = Alignment.Center,
     ) {
         when {
             loading -> LoadingIndicator(modifier = Modifier.size(18.dp))
-            bitmap != null -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "图形验证码",
-                    modifier = Modifier.weight(1f).height(44.dp),
-                )
-                Icon(
-                    Icons.Filled.Refresh,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
+            bitmap != null -> Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "图形验证码",
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.FillBounds,
+            )
             else -> Text(
                 "重试",
                 style = MaterialTheme.typography.bodyMedium,
