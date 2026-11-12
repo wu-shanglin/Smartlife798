@@ -66,13 +66,21 @@ object VisualAlignmentChecks {
                     SystemClock.sleep(300)
                     val width = test.targetContext.resources.displayMetrics.widthPixels
                     val height = test.targetContext.resources.displayMetrics.heightPixels
+                    val density = test.targetContext.resources.displayMetrics.density
                     val scanCard = cardBounds(test, "扫码使用")
+                    check(scanCard.height() >= (112 * density).toInt()) { "Scan entry is too short: $scanCard" }
                     shell(test, "input swipe ${width / 2} ${height * 3 / 4} ${width / 2} ${height / 2} 250")
                     SystemClock.sleep(300)
                     val before = cardBounds(test, first.name)
                     check(before.top > 40 && before.bottom < height - 120) { "Pin card not fully visible: $before, screen=$height" }
-                    check(before.left == scanCard.left && before.width() >= scanCard.width() * 3 / 4) {
+                    check(before.left == scanCard.left && before.width() >= (174 * density).toInt()) {
                         "Favorite card is too narrow or misaligned: $before, scan=$scanCard"
+                    }
+                    val fontScale = test.targetContext.resources.configuration.fontScale
+                    if (fontScale <= 1f && scanCard.width() >= (288 * density).toInt()) {
+                        check(scanCard.right - before.right >= (96 * density).toInt()) {
+                            "Favorite card leaves too little room for the next device: $before, scan=$scanCard"
+                        }
                     }
                     test.runOnMainSync { vm.togglePinned(first.id) }
                     await { first.id in vm.pinned.value && find(test, "置顶") != null }

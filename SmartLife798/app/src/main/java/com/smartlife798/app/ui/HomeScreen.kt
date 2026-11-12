@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -156,8 +157,8 @@ fun HomeScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = AppLayout.PagePadding,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            contentPadding = PaddingValues(horizontal = AppLayout.Page, vertical = AppLayout.Gap),
+            verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
         ) {
             item(key = "title") {
                 Row(
@@ -168,7 +169,7 @@ fun HomeScreen(
                         painter = painterResource(R.drawable.ic_launcher_artwork),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .clip(MaterialTheme.shapes.medium)
                             .background(colorResource(R.color.launcher_background))
                             .scale(1.35f),
@@ -197,7 +198,7 @@ fun HomeScreen(
             }
             item(key = "scan") { ScanHeroCard(onScan) }
             item(key = "favorites") {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     SectionHeader(
                         title = "常用设备",
                         action = if (favorites.isNotEmpty()) "全部收藏" else null,
@@ -208,14 +209,13 @@ fun HomeScreen(
                         error != null && favorites.isEmpty() -> ErrorState(error) { vm.refreshMaster() }
                         favorites.isEmpty() -> HomeEmptyState("在设备详情中收藏，常用设备就会显示在这里。")
                         else -> BoxWithConstraints(Modifier.fillMaxWidth()) {
-                            val gap = AppLayout.Gap
-                            val peekWidth = 40.dp
-                            val widthWithPeek = maxWidth - gap - peekWidth
-                            val readableWidth = 192.dp * LocalDensity.current.fontScale
-                            val tileWidth = if (ordered.size > 1 && widthWithPeek >= readableWidth) {
-                                widthWithPeek
-                            } else {
-                                maxWidth
+                            val gap = 10.dp
+                            val pairWidth = (maxWidth - gap) / 2
+                            val readableWidth = 174.dp * LocalDensity.current.fontScale
+                            val tileWidth = when {
+                                ordered.size == 1 -> maxWidth
+                                pairWidth >= readableWidth -> pairWidth
+                                else -> maxOf(184.dp, readableWidth).coerceAtMost(maxWidth)
                             }
                             val rowState = rememberLazyListState()
                             LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -236,7 +236,7 @@ fun HomeScreen(
                 }
             }
             item(key = "recents") {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     SectionHeader(
                         title = "最近使用",
                         action = if (recents.isNotEmpty()) "更多记录" else null,
@@ -254,7 +254,7 @@ fun HomeScreen(
                                     key(recent.id) {
                                         if (index > 0) {
                                             HorizontalDivider(
-                                                Modifier.padding(horizontal = AppLayout.Card),
+                                                Modifier.padding(horizontal = 12.dp),
                                                 color = MaterialTheme.colorScheme.outlineVariant,
                                             )
                                         }
@@ -282,7 +282,10 @@ private fun ScanHeroCard(onScan: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = palette.container, contentColor = palette.content),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 22.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 112.dp)
+                .padding(horizontal = 20.dp, vertical = AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -318,13 +321,14 @@ private fun RecentDeviceRow(recent: RecentDevice, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .sharedCard(CardOrigin.HOME_RECENT, recent.id)
             .background(colors.surfaceContainerLow)
-            .padding(horizontal = AppLayout.Card, vertical = 12.dp),
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(34.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(colors.secondaryContainer),
             contentAlignment = Alignment.Center,
@@ -469,7 +473,7 @@ private fun FavoriteTile(
             containerColor = if (pinned) colors.surfaceContainer else colors.surfaceContainerLow,
         ),
     ) {
-        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -494,24 +498,12 @@ private fun FavoriteTile(
             )
             Text(
                 deviceSubtitle(device, includeType = false),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                StatusPill(device.stateLabel())
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = colors.onSurfaceVariant,
-                )
-            }
+            StatusPill(device.stateLabel())
         }
     }
 }
