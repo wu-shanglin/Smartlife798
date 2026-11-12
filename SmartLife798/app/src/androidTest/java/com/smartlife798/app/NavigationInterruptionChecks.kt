@@ -82,7 +82,7 @@ object NavigationInterruptionChecks {
             Thread.sleep(500)
             capture(test, "preview_bills.png")
             check(click(test, "首页"))
-            await { find(test, "扫码即刻使用") != null }
+            await { find(test, "扫码使用") != null }
             Thread.sleep(1000)
             capture(test, "home.png")
             test.runOnMainSync { com.smartlife798.app.core.Appearance.setMode(com.smartlife798.app.core.ThemeMode.DARK) }

@@ -15,6 +15,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.smartlife798.app.core.Appearance
+import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.ThemeMode
 import kotlin.math.abs
@@ -32,11 +33,13 @@ object FavoriteReturnChecks {
         test.runOnMainSync { ServiceLocator.init(test.targetContext) }
         val previousTheme = Store.themeModeName()
         val previousDynamic = Store.dynamicColor()
+        val previousStartup = Store.startupPage()
         try {
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null)
             test.runOnMainSync {
                 Appearance.setMode(ThemeMode.LIGHT)
                 Appearance.setDynamicColor(false)
+                Store.saveStartupPage(StartupPage.HOME)
             }
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -127,6 +130,7 @@ object FavoriteReturnChecks {
                 activity?.finish()
                 Appearance.setMode(ThemeMode.fromName(previousTheme))
                 Appearance.setDynamicColor(previousDynamic)
+                Store.saveStartupPage(previousStartup)
             }
         }
         test.finish(code, result)

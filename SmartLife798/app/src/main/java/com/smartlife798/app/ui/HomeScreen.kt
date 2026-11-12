@@ -2,40 +2,44 @@
 
 package com.smartlife798.app.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import com.smartlife798.app.ui.components.ExpressiveRefreshBox
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,31 +47,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.smartlife798.app.QrGlyph
 import com.smartlife798.app.core.ActiveUsage
+import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceState
 import com.smartlife798.app.core.DeviceStateKind
-import com.smartlife798.app.core.Api
-import com.smartlife798.app.core.Device
 import com.smartlife798.app.core.DeviceType
 import com.smartlife798.app.core.DevicesShelf
+import com.smartlife798.app.core.RecentDevice
 import com.smartlife798.app.core.Res
-import com.smartlife798.app.core.stateLabel
 import com.smartlife798.app.core.mergeStatus
+import com.smartlife798.app.core.stateLabel
 import com.smartlife798.app.core.statusOnly
 import com.smartlife798.app.ui.components.ErrorState
+import com.smartlife798.app.ui.components.ExpressiveRefreshBox
 import com.smartlife798.app.ui.components.LoadingBlock
+import com.smartlife798.app.ui.components.PinBadge
 import com.smartlife798.app.ui.components.SectionHeader
-import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.StatusPill
+import com.smartlife798.app.ui.components.UsageDuration
 import com.smartlife798.app.ui.components.deviceSubtitle
 import com.smartlife798.app.ui.components.usagePillState
-import com.smartlife798.app.vm.MainViewModel
 import com.smartlife798.app.ui.theme.scanCardColors
+import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,7 +89,6 @@ fun HomeScreen(
     onOpenDevices: (DevicesShelf) -> Unit,
     onOpenOrders: () -> Unit,
 ) {
-    val profile by vm.profile.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val recents by vm.recents.collectAsStateWithLifecycle()
     val pinned by vm.pinned.collectAsStateWithLifecycle()
@@ -88,7 +97,7 @@ fun HomeScreen(
     val live by vm.liveStatus.collectAsStateWithLifecycle()
     val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
     val loading by vm.loadingMaster.collectAsStateWithLifecycle()
-    val error by vm.masterError.collectAsStateWithLifecycle()
+    val error = vm.masterError.collectAsStateWithLifecycle().value
     val scope = rememberCoroutineScope()
     var ending by remember { mutableStateOf(false) }
 
@@ -119,7 +128,6 @@ fun HomeScreen(
     LaunchedEffect(active, pending) { (active ?: pending)?.let { lastActive = it } }
     val cardActive = active ?: pending ?: lastActive?.takeIf { ending }
 
-    val syncedAt by vm.historySyncedAt.collectAsStateWithLifecycle()
     // Full refresh (not just master): the 「进行中」 card is reconciled with
     // `dev/status` here, so a pull-to-refresh can never leave a stale session.
     PageRefreshEffect(vm) { vm.refreshAll() }
@@ -138,229 +146,200 @@ fun HomeScreen(
     val liveForActive = live?.takeIf { it.id == cardActive?.deviceId }
 
     ExpressiveRefreshBox(
-        onRefresh = {
-            vm.refreshAll()
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        onRefresh = { vm.refreshAll() },
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = AppLayout.PagePadding,
-        verticalArrangement = Arrangement.spacedBy(AppLayout.Gap),
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column {
-                    Text(
-                        Fmt.greeting() + "，" + (profile?.name?.takeIf { it.isNotBlank() } ?: "同学"),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "慧生活 798 · 数据自动同步" + if (syncedAt > 0) " · " + Fmt.clock(syncedAt).take(5) else "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = AppLayout.PagePadding,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item(key = "title") {
+                Text(
+                    "慧生活 798",
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (cardActive != null) {
+                item(key = "active") {
+                    ActiveUsageCard(
+                        active = cardActive,
+                        pending = active == null && pending != null,
+                        live = liveForActive,
+                        liveAt = if (liveForActive != null) liveAt else 0L,
+                        ending = ending,
+                        onOpenDevice = { id -> onOpenDevice(id, CardOrigin.HOME_ACTIVE) },
+                        onOpenOrders = onOpenOrders,
+                        onEnd = { endUsage() },
                     )
                 }
             }
-        }
-
-        if (cardActive != null) {
-            item {
-                ActiveUsageCard(
-                    active = cardActive,
-                    pending = active == null && pending != null,
-                    live = liveForActive,
-                    liveAt = if (liveForActive != null) liveAt else 0L,
-                    ending = ending,
-                    onOpenDevice = { id -> onOpenDevice(id, CardOrigin.HOME_ACTIVE) },
-                    onOpenOrders = onOpenOrders,
-                    onEnd = { endUsage() },
-                )
-            }
-        }
-
-        item { ScanHeroCard(onScan) }
-
-        item {
-            SectionHeader(
-                title = "常用设备",
-                action = if (favorites.isNotEmpty()) "全部" else null,
-                onAction = { onOpenDevices(DevicesShelf.FAVORITE) },
-            )
-        }
-        when {
-            loading && favorites.isEmpty() -> item { LoadingBlock("正在同步收藏设备…") }
-            error != null && favorites.isEmpty() -> item {
-                ErrorState(error!!) { vm.refreshMaster() }
-            }
-            favorites.isEmpty() -> item {
-                EmptyStateCard(
-                    "还没有常用设备",
-                    "扫码使用设备后，可在设备详情页点击收藏；收藏会同步到你的账号。",
-                )
-            }
-            else -> item {
-                val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(ordered, key = { it.id }) { device ->
-                        // A tile may come from a cached favourites list; prefer the
-                        // fresh server snapshot for the same device.
-                        val shown = live?.takeIf { it.id == device.id }
-                            ?.let { device.mergeStatus(it.statusOnly()) } ?: device
-                        FavoriteTile(
-                            device = shown,
-                            pinned = pinned.contains(device.id),
-                            isScrolling = { rowState.isScrollInProgress },
-                            onClick = { onOpenDevice(device.id, CardOrigin.HOME_FAVORITE) },
-                        )
+            item(key = "scan") { ScanHeroCard(onScan) }
+            item(key = "favorites") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SectionHeader(
+                        title = "常用设备",
+                        action = if (favorites.isNotEmpty()) "全部收藏" else null,
+                        onAction = { onOpenDevices(DevicesShelf.FAVORITE) },
+                    )
+                    when {
+                        loading && favorites.isEmpty() -> LoadingBlock("正在同步收藏设备…")
+                        error != null && favorites.isEmpty() -> ErrorState(error) { vm.refreshMaster() }
+                        favorites.isEmpty() -> HomeEmptyState("在设备详情中收藏，常用设备就会显示在这里。")
+                        else -> BoxWithConstraints(Modifier.fillMaxWidth()) {
+                            val gap = AppLayout.Gap
+                            val pairWidth = (maxWidth - gap) / 2
+                            val readableWidth = 132.dp * LocalDensity.current.fontScale
+                            val tileWidth = if (pairWidth >= readableWidth) {
+                                pairWidth.coerceAtMost(220.dp)
+                            } else {
+                                maxWidth
+                            }
+                            val rowState = rememberLazyListState()
+                            LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(gap)) {
+                                items(ordered, key = { it.id }) { device ->
+                                    val shown = live?.takeIf { it.id == device.id }
+                                        ?.let { device.mergeStatus(it.statusOnly()) } ?: device
+                                    FavoriteTile(
+                                        device = shown,
+                                        pinned = pinned.contains(device.id),
+                                        width = tileWidth,
+                                        isScrolling = { rowState.isScrollInProgress },
+                                        onClick = { onOpenDevice(device.id, CardOrigin.HOME_FAVORITE) },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-
-        item {
-            SectionHeader(
-                title = "最近使用",
-                action = if (recents.isNotEmpty()) "更多" else null,
-                onAction = { onOpenDevices(DevicesShelf.RECENT) },
-            )
-        }
-        if (recents.isEmpty()) {
-            item {
-                EmptyStateCard(
-                    "暂无使用记录",
-                    "扫描设备二维码后，最近使用的设备会出现在这里，方便你快速再次使用。",
-                )
-            }
-        } else {
-            items(recents.take(4), key = { it.id }) { recent ->
-                Card(
-                    modifier = Modifier.clickable { onOpenDevice(recent.id, CardOrigin.HOME_RECENT) }.sharedCard(CardOrigin.HOME_RECENT, recent.id).fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(AppLayout.Card),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.secondaryContainer),
-                            contentAlignment = Alignment.Center,
+            item(key = "recents") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SectionHeader(
+                        title = "最近使用",
+                        action = if (recents.isNotEmpty()) "更多记录" else null,
+                        onAction = { onOpenDevices(DevicesShelf.RECENT) },
+                    )
+                    if (recents.isEmpty()) {
+                        HomeEmptyState("暂无使用记录")
+                    } else {
+                        Surface(
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
                         ) {
-                            Text(
-                                (DeviceType.nameOrNull(recent.dtype) ?: "设备").take(1),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                recent.name,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                (DeviceType.nameOrNull(recent.dtype)?.plus(" · ") ?: "") +
-                                    Fmt.shortDate(recent.lastUsedAt) + " " +
-                                    Fmt.clock(recent.lastUsedAt).take(5),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (recent.uses > 0) {
-                            Text(
-                                "使用 ${recent.uses} 次",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                            Column {
+                                recents.take(4).forEachIndexed { index, recent ->
+                                    key(recent.id) {
+                                        if (index > 0) {
+                                            HorizontalDivider(
+                                                Modifier.padding(horizontal = AppLayout.Card),
+                                                color = MaterialTheme.colorScheme.outlineVariant,
+                                            )
+                                        }
+                                        RecentDeviceRow(recent) {
+                                            onOpenDevice(recent.id, CardOrigin.HOME_RECENT)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-
-        item {
-            Text(
-                "数据来源：${Api.BASE_URL}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-    }
     }
 }
 
 @Composable
 private fun ScanHeroCard(onScan: () -> Unit) {
-    // Colours come from the scheme, not a fixed brand constant, so the dynamic
-    // (Material You) palette actually applies to this card.
     val palette = MaterialTheme.colorScheme.scanCardColors()
-    val container = palette.container
-    val onContainer = palette.content
     Card(
         onClick = onScan,
         modifier = Modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = container),
+        colors = CardDefaults.cardColors(containerColor = palette.container, contentColor = palette.content),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .drawBehind {
-                    // Quiet ripples echo the water-drop identity without a perpetual animation.
-                    val center = Offset(size.width, 0f)
-                    drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.64f, center)
-                    drawCircle(onContainer.copy(alpha = 0.07f), size.width * 0.40f, center)
-                }
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(palette.content.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                QrGlyph(palette.content, Modifier.size(26.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "扫码使用",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text("扫描设备二维码", style = MaterialTheme.typography.bodyMedium)
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun RecentDeviceRow(recent: RecentDevice, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val type = DeviceType.nameOrNull(recent.dtype)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .sharedCard(CardOrigin.HOME_RECENT, recent.id)
+            .background(colors.surfaceContainerLow)
+            .padding(horizontal = AppLayout.Card, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(colors.secondaryContainer),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
-                "扫码即刻使用",
-                style = MaterialTheme.typography.titleLarge,
-                color = onContainer,
-                fontWeight = FontWeight.Bold,
+                (type ?: "设备").take(1),
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.onSecondaryContainer,
+            )
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                recent.name.ifBlank { type ?: "设备" },
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "扫描设备上的二维码，自动识别水控、淋浴、洗衣等设备并进入使用页",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Normal,
-                color = onContainer,
+                buildString {
+                    if (type != null) append("$type · ")
+                    append(Fmt.shortDate(recent.lastUsedAt))
+                    append(" ")
+                    append(Fmt.hhmm(recent.lastUsedAt))
+                    if (recent.uses > 0) append(" · 使用 ${recent.uses} 次")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
             )
-            Spacer(Modifier.height(6.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                shape = RoundedCornerShape(50),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "打开相机扫码",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("→", color = MaterialTheme.colorScheme.primary)
-                }
-            }
         }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = colors.onSurfaceVariant,
+        )
     }
 }
 
@@ -375,115 +354,100 @@ private fun ActiveUsageCard(
     onOpenOrders: () -> Unit,
     onEnd: () -> Unit,
 ) {
+    val colors = MaterialTheme.colorScheme
     Card(
-        modifier = Modifier.clickable { onOpenDevice(active.deviceId) }.sharedCard(CardOrigin.HOME_ACTIVE, active.deviceId).fillMaxWidth(),
+        modifier = Modifier
+            .clickable { onOpenDevice(active.deviceId) }
+            .sharedCard(CardOrigin.HOME_ACTIVE, active.deviceId)
+            .fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        colors = CardDefaults.cardColors(
+            containerColor = colors.tertiaryContainer,
+            contentColor = colors.onTertiaryContainer,
+        ),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusPill(if (pending) DeviceState(
-                    DeviceStateKind.ONLINE, "启动待确认",
-                ) else usagePillState(live))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    active.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    Icons.Filled.Favorite,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.5f),
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            if (!pending) Row(verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusPill(
+                if (pending) DeviceState(DeviceStateKind.STARTING, "启动待确认") else usagePillState(live),
+            )
+            Text(
+                active.name.ifBlank { DeviceType.nameOrNull(active.dtype) ?: "设备" },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!pending) {
                 UsageDuration(
                     startedAt = active.startedAt,
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    fontWeight = FontWeight.Bold,
+                    color = colors.onTertiaryContainer,
+                    fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(Modifier.width(10.dp))
                 Text(
-                    if (liveAt > 0) "服务端 " + Fmt.clock(liveAt) else "本机计时",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(bottom = 6.dp),
+                    if (liveAt > 0) "状态更新于 " + Fmt.clock(liveAt) + " · 本机计时" else "本机计时",
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    onClick = { onOpenDevice(active.deviceId) },
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    shape = RoundedCornerShape(50),
-                ) {
-                    Text(
-                        "查看设备",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                    )
-                }
-                Surface(
-                    onClick = onOpenOrders,
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(50),
-                ) {
-                    Text(
-                        "使用记录",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (pending || live == null) "正在向服务端确认状态，尚未确认「使用中」"
-                    else if (DeviceType.isWaterLike(active.dtype)) {
-                        "已授权取水 · 请在设备上按「启动」键；用完按「结算」或下方结束"
-                    } else "每 2 秒同步服务端状态 · 计费以服务端为准",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.65f),
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            Text(
+                when {
+                    pending || live == null -> "正在向服务端确认设备状态"
+                    DeviceType.isWaterLike(active.dtype) ->
+                        "请在设备上按「启动」取水，用完按「结算」或在下方结束。"
+                    else -> "计费以服务端结算为准"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
             Button(
                 onClick = onEnd,
                 enabled = !ending,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp),
-                shapes = androidx.compose.material3.ButtonDefaults.shapes(shape = RoundedCornerShape(50)),
+                modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
+                shapes = ButtonDefaults.shapes(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    containerColor = colors.onTertiaryContainer,
+                    contentColor = colors.tertiaryContainer,
                 ),
             ) {
                 if (ending) {
                     LoadingIndicator(
                         modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        color = colors.onSurfaceVariant,
                     )
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(if (ending) "正在结束…" else "结束使用")
+            }
+            val linkColors = ButtonDefaults.textButtonColors(contentColor = colors.onTertiaryContainer)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { onOpenDevice(active.deviceId) }, colors = linkColors) {
+                    Text("查看设备")
+                }
+                TextButton(onClick = onOpenOrders, colors = linkColors) { Text("使用记录") }
             }
         }
     }
 }
 
 @Composable
-private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boolean, onClick: () -> Unit) {
+private fun FavoriteTile(
+    device: Device,
+    pinned: Boolean,
+    width: Dp,
+    isScrolling: () -> Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val type = DeviceType.nameOrNull(device.dtype) ?: "设备"
     Card(
-        modifier = Modifier.tapDuringFling(isScrolling, onClick).clickable(onClick = onClick).sharedCard(CardOrigin.HOME_FAVORITE, device.id).width(176.dp),
+        modifier = Modifier
+            .width(width)
+            .tapDuringFling(isScrolling, onClick)
+            .clickable(onClick = onClick)
+            .sharedCard(CardOrigin.HOME_FAVORITE, device.id),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (pinned) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (pinned) colors.surfaceContainer else colors.surfaceContainerLow,
+        ),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
@@ -492,24 +456,24 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    DeviceType.nameOrNull(device.dtype) ?: "设备",
+                    type,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                com.smartlife798.app.ui.components.PinBadge(visible = pinned)
+                PinBadge(visible = pinned)
             }
             Text(
-                device.name.ifBlank { DeviceType.nameOrNull(device.dtype) ?: "设备" },
+                device.name.ifBlank { type },
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                deviceSubtitle(device),
+                deviceSubtitle(device, includeType = false),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -521,19 +485,11 @@ private fun FavoriteTile(device: Device, pinned: Boolean, isScrolling: () -> Boo
 }
 
 @Composable
-private fun EmptyStateCard(title: String, description: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+private fun HomeEmptyState(message: String) {
+    Text(
+        message,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
