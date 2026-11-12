@@ -289,26 +289,25 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
                 .heightIn(min = 144.dp)
                 .padding(horizontal = 20.dp, vertical = AppLayout.Card),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(palette.content.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                QrGlyph(palette.content, Modifier.size(26.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     "扫码使用",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text("扫描设备二维码", style = MaterialTheme.typography.bodyMedium)
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            Box(
+                modifier = Modifier
+                    .size(84.dp)
+                    .clip(MaterialTheme.shapes.large)
+                    .background(palette.content.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                QrGlyph(palette.content, Modifier.size(44.dp))
+            }
         }
     }
 }

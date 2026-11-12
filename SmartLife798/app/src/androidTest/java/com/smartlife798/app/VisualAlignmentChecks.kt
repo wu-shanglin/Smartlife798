@@ -173,6 +173,14 @@ object VisualAlignmentChecks {
             await { find(test, "手动输入") != null }
             back()
             await { find(test, "扫码使用") != null }
+            stage = "scanner QR icon tap"
+            SystemClock.sleep(500)
+            val iconCard = cardBounds(test, "扫码使用")
+            val iconX = iconCard.right - (62 * density).toInt()
+            shell(test, "input tap $iconX ${iconCard.centerY()}")
+            await { find(test, "手动输入") != null }
+            back()
+            await { find(test, "扫码使用") != null }
             stage = "login"
             test.runOnMainSync { vm.logout() }
             await {
