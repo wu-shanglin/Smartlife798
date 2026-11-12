@@ -99,11 +99,14 @@ object LoginInitializationChecks {
             fun visibleText(value: String) = nodes(test.uiAutomation.rootInActiveWindow).any {
                 it.text?.toString() == value && it.isVisibleToUser
             }
-            fun clickAction(label: String) {
+            fun clickAction(label: String, byDescription: Boolean = false) {
                 await {
                     val root = test.uiAutomation.rootInActiveWindow
                     val visibleNodes = nodes(root)
-                    var button = visibleNodes.firstOrNull { it.text?.toString() == label }
+                    var button = visibleNodes.firstOrNull {
+                        val name = if (byDescription) it.contentDescription else it.text
+                        name?.toString() == label
+                    }
                     while (button != null && !button.isClickable) button = button.parent
                     val bounds = Rect()
                     val screen = Rect()
@@ -130,6 +133,13 @@ object LoginInitializationChecks {
                     it.contentDescription?.toString() == "图形验证码" && it.isVisibleToUser
                 }
             }
+            stage = "tap captcha to refresh"
+            clickAction("图形验证码", byDescription = true)
+            await {
+                captchaRequests.get() == 3 && nodes(test.uiAutomation.rootInActiveWindow).any {
+                    it.contentDescription?.toString() == "图形验证码" && it.isVisibleToUser
+                }
+            }
             stage = "form order"
             val form = nodes(test.uiAutomation.rootInActiveWindow)
             val fields = form.filter { it.isEditable }.map { Rect().apply(it::getBoundsInScreen) }
@@ -138,6 +148,7 @@ object LoginInitializationChecks {
                 form.first { it.contentDescription?.toString() == "图形验证码" }.getBoundsInScreen(this)
             }
             check(fields.size == 3 && fields.none { it.isEmpty })
+            check(fields.map { it.left }.distinct().size == 1 && fields[1].right == fields[2].right)
             check(fields[0].bottom <= fields[1].top && fields[1].bottom <= fields[2].top)
             check(fields[1].right <= image.left && fields[1].top < image.bottom && image.top < fields[1].bottom)
             check(fields[2].right <= send.left && fields[2].top < send.bottom && send.top < fields[2].bottom)
@@ -147,10 +158,6 @@ object LoginInitializationChecks {
             enter(nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[1], "TEST")
             await { nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[1].text?.toString() == "TEST" }
             stage = "tap SMS action"
-            // A clipped row can be reported as visible while its tap target is still at the viewport edge.
-            nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable }
-                ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-            test.waitForIdleSync()
             clickAction("获取验证码")
             stage = "SMS countdown"
             await {
@@ -172,21 +179,16 @@ object LoginInitializationChecks {
                 }
             }
             await { nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.getOrNull(2)?.text?.toString() == "000000" }
-            stage = "login button"
-            // Compose can report an off-screen node as visible; scroll to its actual bounds.
-            repeat(3) {
-                nodes(test.uiAutomation.rootInActiveWindow).firstOrNull { it.isScrollable }
-                    ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                SystemClock.sleep(250)
-            }
-            stage = "rejection feedback and non-overlapping update entry"
+            stage = "non-overlapping update entry"
             val all = nodes(test.uiAutomation.rootInActiveWindow)
             val loginBounds = android.graphics.Rect()
             val updateBounds = android.graphics.Rect()
             all.first { it.text?.toString() == "登录" }.getBoundsInScreen(loginBounds)
             all.first { it.text?.toString() == "检查客户端更新" }.getBoundsInScreen(updateBounds)
             check(!android.graphics.Rect.intersects(loginBounds, updateBounds))
+            stage = "submit login"
             clickAction("登录")
+            stage = "rejection feedback"
             await { visibleText("登录中…") }
             await { visibleText("短信验证码错误") }
             check(logins.get() == 1 && Store.token.isNullOrBlank())
@@ -205,7 +207,7 @@ object LoginInitializationChecks {
             stage = "owned initialization after composition removal"
             await { missions.get() > 0 && nodes(test.uiAutomation.rootInActiveWindow).any { it.text?.toString()?.contains("离线登录用户") == true } }
             check(logins.get() == 4 && smsRequests.get() == 1 && unexpectedWrites.get() == 0)
-            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; original form rows, captcha retry and SMS countdown; four signed login attempts and one SMS request handled by terminal fixtures, no pay/device writes\n")
+            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; aligned form rows, captcha retry and tap-to-refresh, SMS countdown; four signed login attempts and one SMS request handled by terminal fixtures, no pay/device writes\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},sms=${smsRequests.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
