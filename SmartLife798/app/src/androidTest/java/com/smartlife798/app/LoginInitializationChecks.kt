@@ -145,6 +145,12 @@ object LoginInitializationChecks {
             }
             stage = "form order"
             val form = nodes(test.uiAutomation.rootInActiveWindow)
+            check(form.none { it.text?.toString() == "支付宝授权登录" })
+            val loginScreenshot = checkNotNull(test.uiAutomation.takeScreenshot())
+            test.targetContext.openFileOutput("login-current.png", 0).use {
+                loginScreenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            loginScreenshot.recycle()
             val fields = form.filter { it.isEditable }.map { Rect().apply(it::getBoundsInScreen) }
             val send = Rect().apply { form.first { it.text?.toString() == "获取验证码" }.getBoundsInScreen(this) }
             val image = Rect().apply {

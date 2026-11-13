@@ -45,14 +45,6 @@ if (hasReleaseSigning) {
 
 val releaseAlipayCallback = "smartlife798sign"
 val debugAlipayCallback = "smartlife798debugsign"
-// A pre-signed SDK request issued by the login provider for this client.
-val alipayLoginAuthInfo = providers.gradleProperty("alipayLoginAuthInfoFile").map { path ->
-    val payload = rootProject.file(path).readText(Charsets.UTF_8).trim()
-    check(payload.isNotBlank() && payload.all { it in '!'..'~' }) {
-        "Alipay login authInfo must be a single nonempty ASCII request"
-    }
-    payload.replace("\\", "\\\\").replace("\"", "\\\"")
-}.orElse("")
 
 android {
     namespace = "com.smartlife798.app"
@@ -62,13 +54,12 @@ android {
         applicationId = "com.smartlife798.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 103
-        versionName = "2.4.2"
+        versionCode = 104
+        versionName = "2.4.3"
         testInstrumentationRunner = "com.smartlife798.app.UpdateInstallInstrumentation"
         vectorDrawables { useSupportLibrary = true }
         manifestPlaceholders["alipayCallbackScheme"] = releaseAlipayCallback
         buildConfigField("String", "ALIPAY_CALLBACK_SCHEME", "\"$releaseAlipayCallback\"")
-        buildConfigField("String", "ALIPAY_LOGIN_AUTH_INFO", "\"${alipayLoginAuthInfo.get()}\"")
         buildConfigField("boolean", "RELEASE_UPDATES_ENABLED", "true")
     }
 

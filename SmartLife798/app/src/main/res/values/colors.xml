@@ -3,6 +3,4 @@
     <color name="launcher_background">#2457A7</color>
     <color name="splash_background">#F9F8FE</color>
     <color name="splash_background_dark">#10131B</color>
-    <color name="alipay_login_background">#006DD1</color>
-    <color name="alipay_login_foreground">#FFFFFF</color>
 </resources>
