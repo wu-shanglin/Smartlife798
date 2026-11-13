@@ -36,10 +36,10 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -285,10 +285,10 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     Text(if (submitting) "登录中…" else "登录")
                 }
                 if (vm.alipayLoginAvailable && activity != null) {
-                    OutlinedButton(
+                    Button(
                         enabled = loginMethod == null && !sending,
                         onClick = {
-                            if (loginMethod != null || sending) return@OutlinedButton
+                            if (loginMethod != null || sending) return@Button
                             focusManager.clearFocus()
                             scope.launch {
                                 error = null
@@ -301,11 +301,21 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         },
                         modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
                         shapes = ButtonDefaults.shapes(shape = fieldShape),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colorResource(R.color.alipay_login_background),
+                            contentColor = colorResource(R.color.alipay_login_foreground),
+                        ),
                     ) {
                         if (authorizing) {
                             LoadingIndicator(Modifier.size(18.dp))
-                            Spacer(Modifier.width(10.dp))
+                        } else {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_alipay),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                            )
                         }
+                        Spacer(Modifier.width(8.dp))
                         Text(if (authorizing) "支付宝登录处理中…" else "支付宝授权登录")
                     }
                 }
