@@ -26,7 +26,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun callActivityOnCreate(activity: Activity, state: Bundle?) {
-        val appRoot = mode in setOf("visual", "detail-stress", "detail-input", "detail-reopen", "favorite-return", "tabs", "interrupt", "ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
+        val appRoot = mode in setOf("visual", "detail-stress", "detail-input", "detail-reopen", "favorite-return", "tabs", "interrupt", "ux", "settings", "login-init", "alipay-login", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
         if (appRoot && activity.intent?.getBooleanExtra("offlineFixture", false) == true) {
             ServiceLocator.init(activity)
             com.smartlife798.app.core.Store.saveAutoCheckIn(false)
@@ -71,6 +71,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
         if (mode == "fling") { FlingTapChecks.run(this); return }
         if (mode == "interrupt") { NavigationInterruptionChecks.run(this); return }
         if (mode == "login-init") { LoginInitializationChecks.run(this); return }
+        if (mode == "alipay-login") { AlipayLoginChecks.run(this); return }
         if (mode == "transactions") { TransactionChecks.run(this); return }
         if (mode == "recovery") { RecoveryChecks.run(this); return }
 

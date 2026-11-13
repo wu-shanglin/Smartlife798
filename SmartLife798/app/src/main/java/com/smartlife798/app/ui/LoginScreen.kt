@@ -6,6 +6,7 @@
 package com.smartlife798.app.ui
 
 import android.graphics.BitmapFactory
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +82,9 @@ import kotlin.random.Random
 @Composable
 fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
+    val loginMethod by vm.loginMethod.collectAsStateWithLifecycle()
+    val activity = LocalActivity.current
+    val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val phone = remember { TextFieldState() }
     val captchaInput = remember { TextFieldState() }
@@ -87,7 +93,6 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var captchaBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var captchaLoading by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
-    var submitting by remember { mutableStateOf(false) }
     var countdown by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -115,6 +120,8 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     }
 
     val fieldShape = MaterialTheme.shapes.medium
+    val submitting = loginMethod == MainViewModel.LoginMethod.SMS
+    val authorizing = loginMethod == MainViewModel.LoginMethod.ALIPAY
     val fieldLabelPosition = TextFieldLabelPosition.Attached(alwaysMinimize = true)
     val sideAction = Modifier.width(112.dp).heightIn(min = AppLayout.ActionHeight)
     Box(
@@ -204,12 +211,12 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         shapes = ButtonDefaults.shapes(shape = fieldShape),
                         modifier = sideAction,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        enabled = countdown == 0 && !sending && !captchaLoading && captchaBitmap != null &&
+                        enabled = countdown == 0 && !sending && loginMethod == null && !captchaLoading && captchaBitmap != null &&
                             phone.text.length == 11 && captchaInput.text.isNotBlank(),
                         onClick = {
                             val number = phone.text.toString()
                             val code = captchaInput.text.toString()
-                            if (sending || captchaLoading || captchaBitmap == null ||
+                            if (sending || loginMethod != null || captchaLoading || captchaBitmap == null ||
                                 countdown > 0 || number.length != 11 || code.isBlank()) {
                                 return@TextButton
                             }
@@ -246,25 +253,20 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     )
                 }
                 Button(
-                    enabled = phone.text.length == 11 && smsInput.text.isNotBlank() && !submitting,
+                    enabled = phone.text.length == 11 && smsInput.text.isNotBlank() && loginMethod == null && !sending,
                     onClick = {
                         val number = phone.text.toString()
                         val code = smsInput.text.toString()
-                        if (submitting || number.length != 11 || code.isBlank()) return@Button
-                        submitting = true
+                        if (loginMethod != null || sending || number.length != 11 || code.isBlank()) return@Button
                         scope.launch {
-                            try {
-                                error = null
-                                // On success MainViewModel flips `loggedIn`, which swaps
-                                // the root composable over to the main UI.
-                                when (val res = vm.login(number, code)) {
-                                    is Res.Ok -> Unit
-                                    is Res.Fail -> {
-                                        error = res.msg.ifBlank { "登录失败，请稍后重试" }
-                                        vm.notify(error.orEmpty())
-                                    }
+                            error = null
+                            when (val res = vm.login(number, code)) {
+                                is Res.Ok -> Unit
+                                is Res.Fail -> {
+                                    error = res.msg.ifBlank { "登录失败，请稍后重试" }
+                                    vm.notify(error.orEmpty())
                                 }
-                            } finally { submitting = false }
+                            }
                         }
                     },
                     modifier = Modifier
@@ -281,6 +283,31 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         Spacer(Modifier.width(10.dp))
                     }
                     Text(if (submitting) "登录中…" else "登录")
+                }
+                if (vm.alipayLoginAvailable && activity != null) {
+                    OutlinedButton(
+                        enabled = loginMethod == null && !sending,
+                        onClick = {
+                            if (loginMethod != null || sending) return@OutlinedButton
+                            focusManager.clearFocus()
+                            scope.launch {
+                                error = null
+                                val result = vm.loginWithAlipay(activity)
+                                if (result is Res.Fail) {
+                                    error = result.msg
+                                    vm.notify(result.msg)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
+                        shapes = ButtonDefaults.shapes(shape = fieldShape),
+                    ) {
+                        if (authorizing) {
+                            LoadingIndicator(Modifier.size(18.dp))
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        Text(if (authorizing) "支付宝登录处理中…" else "支付宝授权登录")
+                    }
                 }
             }
 

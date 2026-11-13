@@ -988,6 +988,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ auth
 
+    enum class LoginMethod { SMS, ALIPAY }
+
+    private val loginAttempt = Mutex()
+    private val _loginMethod = MutableStateFlow<LoginMethod?>(null)
+    val loginMethod = _loginMethod.asStateFlow()
+    val alipayLoginAvailable: Boolean get() = com.smartlife798.app.core.AlipayLogin.isConfigured
+
     suspend fun requestCaptcha(seed: String, ts: String): ByteArray? = withContext(Dispatchers.IO) {
         Api.captcha(seed, ts)
     }
@@ -995,43 +1002,71 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun sendSmsCode(phone: String, captcha: String, seed: Double): Res<Unit> =
         withContext(Dispatchers.IO) { Api.sendSms(phone, captcha, seed) }
 
-    suspend fun login(phone: String, sms: String): Res<LoginData> {
-        val loginGeneration = accountGeneration
-        return withContext(Dispatchers.IO) {
-            val res = Api.login(phone, sms)
-            if (res is Res.Ok) {
-                val info = res.data?.al
-                    ?: return@withContext Res.Fail(-1, "登录响应缺少账号信息，请重试")
-                info.let {
-                    if (info.token.isNullOrBlank()) {
-                        return@withContext Res.Fail(-1, "登录响应缺少令牌")
-                    }
-                    withContext(Dispatchers.Main.immediate) {
-                        if (accountGeneration != loginGeneration) {
-                            throw CancellationException("Login session changed")
-                        }
-                        // Invalidate old-account jobs before publishing a replacement
-                        // session; saveLogin clears caches unless their uid matches.
-                        resetAccountState()
-                        session.saveLogin(info, phone)
-                        val generation = accountGeneration
-                        accountRestoreJob = viewModelScope.launch {
-                            val cache = withContext(Dispatchers.IO) { readAccountCache() }
-                            if (generation == accountGeneration) publishAccountCache(cache)
-                        }
-                        viewModelScope.launch {
-                            accountRestoreJob?.join()
-                            if (generation != accountGeneration) return@launch
-                            refreshAll()
-                            requestAutoCheckIn()
-                        }
-                        // Start account-owned initialization before removing the login composition.
-                        notify("登录成功")
-                        _loggedIn.value = true
+    suspend fun login(phone: String, sms: String): Res<LoginData> =
+        runLogin(LoginMethod.SMS, phone) { Api.login(phone, sms) }
+
+    suspend fun loginWithAlipay(activity: android.app.Activity): Res<LoginData> =
+        loginWithAlipay { com.smartlife798.app.core.AlipayLogin.authorize(activity) }
+
+    internal suspend fun loginWithAlipay(authorize: suspend () -> Res<String>): Res<LoginData> =
+        runLogin(LoginMethod.ALIPAY, phone = null) { loginGeneration ->
+            if (session.versionHeader() != com.smartlife798.app.core.LoginSign.PROTOCOL) {
+                return@runLogin Api.unsupportedLoginProtocol()
+            }
+            when (val authorization = authorize()) {
+                is Res.Fail -> authorization
+                is Res.Ok -> {
+                    val code = authorization.data ?: return@runLogin Res.Fail(-1, "支付宝授权未返回授权码")
+                    if (loginGeneration != accountGeneration) throw CancellationException("Login session changed")
+                    when (val result = Api.loginWithAlipay(code)) {
+                        is Res.Ok -> result
+                        is Res.Fail -> Res.Fail(result.code, when (result.code) {
+                            -98 -> "此账号需要手机验证，请使用手机号登录"
+                            ErrorCodes.NETWORK -> "网络不可用，请检查网络后重新授权"
+                            else -> "支付宝登录未完成，请重新授权或使用手机号登录"
+                        })
                     }
                 }
             }
+        }
+
+    private suspend fun runLogin(
+        method: LoginMethod,
+        phone: String?,
+        request: suspend (Long) -> Res<LoginData>,
+    ): Res<LoginData> = withContext(Dispatchers.Main.immediate) {
+        if (!loginAttempt.tryLock()) return@withContext Res.Fail(-1, "登录处理中，请稍候")
+        val loginGeneration = accountGeneration
+        _loginMethod.value = method
+        try {
+            val res = request(loginGeneration)
+            if (accountGeneration != loginGeneration) throw CancellationException("Login session changed")
+            if (res is Res.Ok) {
+                val info = res.data?.al
+                    ?: return@withContext Res.Fail(-1, "登录响应缺少账号信息，请重试")
+                if (info.token.isNullOrBlank()) return@withContext Res.Fail(-1, "登录响应缺少令牌")
+                // Invalidate old-account jobs before publishing a replacement session.
+                resetAccountState()
+                session.saveLogin(info, phone)
+                val generation = accountGeneration
+                accountRestoreJob = viewModelScope.launch {
+                    val cache = withContext(Dispatchers.IO) { readAccountCache() }
+                    if (generation == accountGeneration) publishAccountCache(cache)
+                }
+                viewModelScope.launch {
+                    accountRestoreJob?.join()
+                    if (generation != accountGeneration) return@launch
+                    refreshAll()
+                    requestAutoCheckIn()
+                }
+                // Start account-owned initialization before removing the login composition.
+                notify("登录成功")
+                _loggedIn.value = true
+            }
             res
+        } finally {
+            _loginMethod.value = null
+            loginAttempt.unlock()
         }
     }
 

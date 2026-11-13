@@ -338,7 +338,7 @@ object session {
         phone = Store.phone
     }
 
-    fun saveLogin(info: LoginInfo, phone: String) {
+    fun saveLogin(info: LoginInfo, phone: String?) {
         val storedUid = Store.uid
         if (storedUid.isNullOrBlank() || info.uid.isNullOrBlank() || storedUid != info.uid) {
             // Only a proven same-account login may inherit those account keys.
