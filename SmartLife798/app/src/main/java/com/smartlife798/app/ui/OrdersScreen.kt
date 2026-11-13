@@ -239,7 +239,8 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                     Text(
                                         active.name,
                                         style = MaterialTheme.typography.titleMedium,
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.weight(1f, fill = false)
+                                            .sharedCardElement(CardOrigin.ORDERS_ACTIVE, active.deviceId),
                                     )
                                 }
                                 UsageDuration(

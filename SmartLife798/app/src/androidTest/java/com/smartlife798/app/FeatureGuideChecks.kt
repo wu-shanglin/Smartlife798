@@ -80,8 +80,8 @@ object FeatureGuideChecks {
                 check(bounds(test, nfc.title).top == welcomeTitle.top)
                 check(bounds(test, nfc.body).top == welcomeBody.top)
                 check(bounds(test, "下一步").top == welcomeAction.top)
-                check(nfc.body.contains("保持本应用在前台") && nfc.body.contains("暂不支持支付宝碰一碰"))
-                val note = "仅支持慧生活"
+                check(nfc.body.contains("暂不支持支付宝碰一碰"))
+                val note = "仅支持慧生活 NFC，需要保持应用在前台"
                 await(test, note)
                 if (test.targetContext.resources.configuration.fontScale >= 1.6f) {
                     stage = "large text scroll keeps navigation in place"

@@ -7,6 +7,8 @@ import androidx.compose.animation.core.ExperimentalTransitionApi
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.createChildTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -43,6 +45,7 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
+private val DeviceCardFade = spring<Float>(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.01f)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -241,9 +244,14 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         }
     }
     return with(scene.shared) {
+        // Reveal detail content as the bounds expand, including for short source cards
+        // whose width reaches the viewport before the height does.
+        val device = key.origin.destination == CardDestination.DEVICE
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
+            enter = if (device) fadeIn(DeviceCardFade) else fadeIn(),
+            exit = if (device) fadeOut(DeviceCardFade) else fadeOut(),
             boundsTransform = { _, _ -> spring(dampingRatio = 0.9f, stiffness = 650f) },
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 ContentScale.FillWidth,

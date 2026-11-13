@@ -217,6 +217,7 @@ fun DeviceCard(
     subtitle: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    titleModifier: Modifier = Modifier,
 ) {
     val state = device.stateLabel()
     Card(
@@ -253,7 +254,7 @@ fun DeviceCard(
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+                        modifier = Modifier.weight(1f, fill = false).then(titleModifier),
                     )
                     if (pinned) {
                         Spacer(Modifier.width(4.dp))
