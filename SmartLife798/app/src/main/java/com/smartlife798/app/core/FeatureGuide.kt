@@ -26,8 +26,8 @@ object FeatureGuide {
         GuideTopic(
             key = "scan-nfc:2",
             title = "碰一碰使用设备",
-            body = "解锁手机并开启 NFC，保持本应用在前台。将手机感应区贴近圆形感应贴，使用前核对设备与费用。暂不支持支付宝碰一碰。",
-            location = "仅支持慧生活",
+            body = "解锁手机并开启 NFC，将手机感应区贴近圆形感应贴。使用前核对设备与费用。暂不支持支付宝碰一碰。",
+            location = "仅支持慧生活 NFC，需要保持应用在前台",
             icon = GuideIcon.SCAN,
         ),
         GuideTopic(

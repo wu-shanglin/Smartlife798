@@ -396,6 +396,7 @@ private fun RecentDeviceRow(recent: RecentDevice, onClick: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 recent.name.ifBlank { type ?: "设备" },
+                modifier = Modifier.sharedCardElement(CardOrigin.HOME_RECENT, recent.id),
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -450,6 +451,7 @@ private fun ActiveUsageCard(
             )
             Text(
                 active.name.ifBlank { DeviceType.nameOrNull(active.dtype) ?: "设备" },
+                modifier = Modifier.sharedCardElement(CardOrigin.HOME_ACTIVE, active.deviceId),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
@@ -545,6 +547,7 @@ private fun FavoriteTile(
             }
             Text(
                 device.name.ifBlank { type },
+                modifier = Modifier.sharedCardElement(CardOrigin.HOME_FAVORITE, device.id),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,

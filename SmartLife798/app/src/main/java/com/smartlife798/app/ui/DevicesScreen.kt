@@ -190,6 +190,7 @@ fun DevicesScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit)
                         pinned = pinned.contains(device.id),
                         subtitle = deviceSubtitle(device),
                         modifier = Modifier.sharedCard(CardOrigin.DEVICES, device.id),
+                        titleModifier = Modifier.sharedCardElement(CardOrigin.DEVICES, device.id),
                         onClick = { onOpenDevice(device.id, CardOrigin.DEVICES) },
                     )
                 }
