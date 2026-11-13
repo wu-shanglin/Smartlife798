@@ -5,12 +5,14 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.ExperimentalTransitionApi
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.createChildTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -47,6 +49,10 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
+private val DeviceCardFade = spring<Float>(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.01f)
+private val DeviceCardBounds = spring<Rect>(
+    dampingRatio = 1f, stiffness = 650f, visibilityThreshold = Rect.VisibilityThreshold,
+)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -134,21 +140,25 @@ fun Modifier.sharedCard(origin: CardOrigin, itemId: String = ""): Modifier =
     cardBounds(currentCardSource(origin)?.key(itemId), page = false)
 
 @Composable
-fun Modifier.sharedCardPage(source: CardSource?, itemId: String = ""): Modifier =
-    cardBounds(source?.key(itemId), page = true)
-
-@Composable
 fun SharedCardPage(source: CardSource?, itemId: String = "", content: @Composable () -> Unit) {
     val key = source?.key(itemId)
     val scene = LocalCardScene.current
-    val viewport = if (scene != null && key?.origin?.destination == CardDestination.DEVICE) {
-        // Reveal the full-size page through the moving bounds, keeping the content
-        // at its final size even when the source card has a very different aspect ratio.
-        with(scene.shared) { Modifier.skipToLookaheadSize() }
-    } else Modifier
+    val devicePage = key?.origin?.destination == CardDestination.DEVICE
+    val state = if (scene != null && key != null) {
+        with(scene.shared) { rememberSharedContentState(key) }
+    } else null
+    val fade = if (scene != null && devicePage) {
+        scene.visibility.transition.animateFloat(transitionSpec = { DeviceCardFade }, label = "unmatched detail") {
+            if (it == EnterExitState.Visible) 1f else 0f
+        }
+    } else null
     CompositionLocalProvider(LocalPageCardKey provides key) {
         Box(
-            Modifier.cardHandoffOverlay().sharedCardPage(source, itemId).then(viewport).fillMaxSize(),
+            Modifier
+                .cardHandoffOverlay(state, fade)
+                .unmatchedDeviceFade(state, fade)
+                .cardBounds(key, page = true, state = state)
+                .fillMaxSize(),
             propagateMinConstraints = true,
         ) {
             content()
@@ -158,7 +168,10 @@ fun SharedCardPage(source: CardSource?, itemId: String = "", content: @Composabl
 
 /** Bridge the navigation/overlay handoff without restoring the popped page's hit area. */
 @Composable
-private fun Modifier.cardHandoffOverlay(): Modifier {
+private fun Modifier.cardHandoffOverlay(
+    state: SharedTransitionScope.SharedContentState?,
+    fallbackFade: State<Float>?,
+): Modifier {
     val scene = LocalCardScene.current ?: return this
     val transition = scene.visibility.transition
     // Keep the layer node stable. Attaching it only on Back rebuilds the page's
@@ -168,11 +181,19 @@ private fun Modifier.cardHandoffOverlay(): Modifier {
             zIndexInOverlay = 1f,
             renderInOverlay = {
                 !scene.active.value &&
-                    transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible
+                    ((transition.currentState == EnterExitState.Visible && transition.targetState == EnterExitState.Visible) ||
+                        (state?.isMatchFound == false && (fallbackFade?.value ?: 0f) > 0f))
             },
         )
     }
 }
+
+private fun Modifier.unmatchedDeviceFade(
+    state: SharedTransitionScope.SharedContentState?,
+    fade: State<Float>?,
+): Modifier = if (state != null && fade != null) graphicsLayer {
+    alpha = if (state.isMatchFound) 1f else fade.value.coerceIn(0f, 1f)
+} else this
 
 @Composable
 fun Modifier.sharedCardElement(
@@ -210,13 +231,17 @@ private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
 }
 
 @Composable
-private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifier {
+private fun Modifier.cardBounds(
+    key: CardTransitionKey?,
+    page: Boolean,
+    state: SharedTransitionScope.SharedContentState? = null,
+): Modifier {
     val scene = LocalCardScene.current ?: return this
     if (key == null) return this
-    val revealPage = page && key.origin.destination == CardDestination.DEVICE
-    val state = with(scene.shared) { rememberSharedContentState(key) }
+    val device = key.origin.destination == CardDestination.DEVICE
+    val contentState = state ?: with(scene.shared) { rememberSharedContentState(key) }
     // Unmatched cards must not extend a peer-tab transition just to animate a clip.
-    val corner = if (state.isMatchFound) {
+    val corner = if (contentState.isMatchFound) {
         scene.visibility.transition.animateDp(
             transitionSpec = { spring(dampingRatio = 0.9f, stiffness = 650f) }, label = "cardCorner",
         ) { phase ->
@@ -248,17 +273,29 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         }
     }
     return with(scene.shared) {
+        // The device card supplies an opaque surface while the detail fades over it.
+        // This avoids fading both layers away and exposing the list through the card.
         this@cardBounds.sharedBounds(
-            sharedContentState = state,
+            sharedContentState = contentState,
             animatedVisibilityScope = scene.visibility,
-            enter = if (revealPage) EnterTransition.None else fadeIn(),
-            exit = if (revealPage) ExitTransition.None else fadeOut(),
-            boundsTransform = { _, _ -> spring(dampingRatio = 0.9f, stiffness = 650f) },
-            resizeMode = if (revealPage) SharedTransitionScope.ResizeMode.RemeasureToBounds else
-                SharedTransitionScope.ResizeMode.scaleToBounds(
-                    ContentScale.FillWidth,
-                    if (page) Alignment.TopStart else Alignment.Center,
-                ),
+            enter = when {
+                !device -> fadeIn()
+                page -> fadeIn(DeviceCardFade)
+                else -> EnterTransition.None
+            },
+            exit = when {
+                !device -> fadeOut()
+                page -> fadeOut(DeviceCardFade)
+                else -> ExitTransition.None
+            },
+            boundsTransform = { _, _ ->
+                if (device) DeviceCardBounds else spring(dampingRatio = 0.9f, stiffness = 650f)
+            },
+            // Scale proportionally and cover the clip even when the two aspect ratios differ.
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
+                if (device) ContentScale.Crop else ContentScale.FillWidth,
+                if (page) Alignment.TopStart else Alignment.Center,
+            ),
             clipInOverlayDuringTransition = clip,
             zIndexInOverlay = if (page) 1f else 0f,
         )
