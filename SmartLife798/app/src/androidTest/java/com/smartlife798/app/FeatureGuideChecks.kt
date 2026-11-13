@@ -3,7 +3,9 @@ package com.smartlife798.app
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
+import android.graphics.Rect
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
@@ -63,21 +65,45 @@ object FeatureGuideChecks {
             }
             if (!orderOnly) {
                 stage = "first-use visible"
-                await(test, "轻盈体验，从登录开始")
+                await(test, "登录后查找设备")
                 snapshot(test, "guide-first.png")
                 stage = "first-use navigation"
                 click(test, "下一步")
                 stage = "second page visible"
-                await(test, "打开应用，碰一碰直达设备")
-                stage = "back button"
-                test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-                await(test, "轻盈体验，从登录开始")
+                await(test, "碰一碰找设备")
+                snapshot(test, "guide-nfc.png")
+                if (test.targetContext.resources.configuration.fontScale >= 1.6f) {
+                    stage = "large text scroll keeps navigation in place"
+                    val nextBounds = bounds(test, "下一步")
+                    val previousBounds = bounds(test, "上一步")
+                    val note = "仅支持慧生活 NFC 卡片"
+                    val noteBounds = bounds(test, note)
+                    val x = noteBounds.centerX()
+                    val from = (noteBounds.bottom + nextBounds.top) / 2
+                    val to = bounds(test, "碰一碰找设备").centerY()
+                    ParcelFileDescriptor.AutoCloseInputStream(
+                        test.uiAutomation.executeShellCommand("input swipe $x $from $x $to 350"),
+                    ).use { it.readBytes() }
+                    snapshot(test, "guide-nfc-scrolled.png")
+                    check(bounds(test, note).top < noteBounds.top)
+                    check(bounds(test, "下一步") == nextBounds && bounds(test, "上一步") == previousBounds)
+                }
+                stage = "previous step button"
+                click(test, "上一步")
+                await(test, "登录后查找设备")
                 check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:2"))
                 check(find(test, "跳过") == null)
                 click(test, "下一步")
-                await(test, "打开应用，碰一碰直达设备")
+                await(test, "碰一碰找设备")
+                stage = "system back returns to previous step"
+                test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+                await(test, "登录后查找设备")
                 click(test, "下一步")
-                await(test, "从你习惯的页面开始")
+                await(test, "碰一碰找设备")
+                stage = "finish first-use guide"
+                click(test, "下一步")
+                await(test, "选择启动页面")
+                snapshot(test, "guide-startup.png")
                 click(test, "开始使用")
                 check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).isEmpty())
                 await(test, "手机号登录")
@@ -86,14 +112,14 @@ object FeatureGuideChecks {
                 check(Store.guideBasicsDone() && Store.guideSeen().size == FeatureGuide.topics.size)
                 test.runOnMainSync { Appearance.setMode(ThemeMode.DARK); vm!!.replayGuides() }
                 await(test, "使用指南")
-                await(test, "轻盈体验，从登录开始")
+                await(test, "登录后查找设备")
                 snapshot(test, "guide-replay-dark.png")
                 check(find(test, "跳过") == null)
                 click(test, "下一步")
-                await(test, "打开应用，碰一碰直达设备")
+                await(test, "碰一碰找设备")
                 click(test, "下一步")
-                await(test, "从你习惯的页面开始")
-                click(test, "开始使用")
+                await(test, "选择启动页面")
+                click(test, "完成")
                 test.runOnMainSync { Appearance.setMode(ThemeMode.LIGHT) }
                 stage = "developer reset guard"
                 val seenBefore = Store.guideSeen()
@@ -120,18 +146,18 @@ object FeatureGuideChecks {
                 check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
                 check(Store.developerToolsEnabled() && Store.themeModeName() == ThemeMode.LIGHT.name)
                 check(vm!!.guideDeck.value?.topics == FeatureGuide.current())
-                await(test, "轻盈体验，从登录开始")
+                await(test, "登录后查找设备")
                 test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
                 await(test, "重置引导卡片")
                 check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
                 test.runOnMainSync { vm!!.replayGuides() }
-                await(test, "轻盈体验，从登录开始")
+                await(test, "登录后查找设备")
                 check(find(test, "跳过") == null)
                 click(test, "下一步")
-                await(test, "打开应用，碰一碰直达设备")
+                await(test, "碰一碰找设备")
                 click(test, "下一步")
-                await(test, "从你习惯的页面开始")
-                click(test, "开始使用")
+                await(test, "选择启动页面")
+                click(test, "完成")
                 await(test, "重置引导卡片")
             }
             stage = "defer payment preserves the unpaid recharge bill without a command"
@@ -161,7 +187,7 @@ object FeatureGuideChecks {
                 Store.saveStartupPage(StartupPage.DEVICES)
                 Store.initializeGuide()
                 check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).size == FeatureGuide.topics.size)
-                stage = "upgrade uses the same fullscreen cards without basics"
+                stage = "upgrade uses the same fullscreen cards for unread topics"
                 test.runOnMainSync {
                     activity!!.viewModelStore.clear()
                     vm = ViewModelProvider(activity!!)[MainViewModel::class.java]
@@ -173,11 +199,15 @@ object FeatureGuideChecks {
                     } }
                 }
                 await(test, "了解新功能")
-                await(test, "轻盈体验，从登录开始")
+                await(test, "登录后查找设备")
                 snapshot(test, "guide-update.png")
                 click(test, "下一步")
-                await(test, "打开应用，碰一碰直达设备")
+                await(test, "碰一碰找设备")
                 check(Store.guideSeen() == setOf("welcome:2"))
+                click(test, "下一步")
+                await(test, "选择启动页面")
+                click(test, "完成")
+                check(vm!!.guideDeck.value == null && FeatureGuide.pending(Store.guideSeen()).isEmpty())
             }
             result.putString("stream", if (orderOnly) "PASS: defer payment closes detail, preserves unpaid recharge bill and permits reopening; no close/cancel/prepay/confirm commands; terminal fixtures only\n" else "PASS: first-use next/back/no-skip; retained learning; unified dark replay; developer reset guard/confirmation; old-install migration and fullscreen incremental batch; defer payment preserves unpaid recharge bill, reopening succeeds, zero business commands; terminal fixtures only\n")
             code = Activity.RESULT_OK
@@ -218,6 +248,9 @@ object FeatureGuideChecks {
     private fun await(test: Instrumentation, text: String) {
         repeat(80) { if (find(test, text) != null) return; Thread.sleep(100) }; error("missing UI label")
     }
+    private fun bounds(test: Instrumentation, text: String): Rect =
+        Rect().also { checkNotNull(find(test, text)).getBoundsInScreen(it) }
+
     private fun click(test: Instrumentation, text: String) {
         await(test, text)
         var node = find(test, text)
