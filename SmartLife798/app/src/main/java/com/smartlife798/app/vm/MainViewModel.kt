@@ -988,12 +988,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ auth
 
-    enum class LoginMethod { SMS, ALIPAY }
+    enum class LoginMethod { SMS }
 
     private val loginAttempt = Mutex()
     private val _loginMethod = MutableStateFlow<LoginMethod?>(null)
     val loginMethod = _loginMethod.asStateFlow()
-    val alipayLoginAvailable: Boolean get() = com.smartlife798.app.core.AlipayLogin.isConfigured
 
     suspend fun requestCaptcha(seed: String, ts: String): ByteArray? = withContext(Dispatchers.IO) {
         Api.captcha(seed, ts)
@@ -1004,31 +1003,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun login(phone: String, sms: String): Res<LoginData> =
         runLogin(LoginMethod.SMS, phone) { Api.login(phone, sms) }
-
-    suspend fun loginWithAlipay(activity: android.app.Activity): Res<LoginData> =
-        loginWithAlipay { com.smartlife798.app.core.AlipayLogin.authorize(activity) }
-
-    internal suspend fun loginWithAlipay(authorize: suspend () -> Res<String>): Res<LoginData> =
-        runLogin(LoginMethod.ALIPAY, phone = null) { loginGeneration ->
-            if (session.versionHeader() != com.smartlife798.app.core.LoginSign.PROTOCOL) {
-                return@runLogin Api.unsupportedLoginProtocol()
-            }
-            when (val authorization = authorize()) {
-                is Res.Fail -> authorization
-                is Res.Ok -> {
-                    val code = authorization.data ?: return@runLogin Res.Fail(-1, "支付宝授权未返回授权码")
-                    if (loginGeneration != accountGeneration) throw CancellationException("Login session changed")
-                    when (val result = Api.loginWithAlipay(code)) {
-                        is Res.Ok -> result
-                        is Res.Fail -> Res.Fail(result.code, when (result.code) {
-                            -98 -> "此账号需要手机验证，请使用手机号登录"
-                            ErrorCodes.NETWORK -> "网络不可用，请检查网络后重新授权"
-                            else -> "支付宝登录未完成，请重新授权或使用手机号登录"
-                        })
-                    }
-                }
-            }
-        }
 
     private suspend fun runLogin(
         method: LoginMethod,

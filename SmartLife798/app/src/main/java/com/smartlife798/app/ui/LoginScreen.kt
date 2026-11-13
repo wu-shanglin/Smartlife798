@@ -6,7 +6,6 @@
 package com.smartlife798.app.ui
 
 import android.graphics.BitmapFactory
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,7 +35,6 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -58,7 +56,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -83,8 +80,6 @@ import kotlin.random.Random
 fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
     val loginMethod by vm.loginMethod.collectAsStateWithLifecycle()
-    val activity = LocalActivity.current
-    val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val phone = remember { TextFieldState() }
     val captchaInput = remember { TextFieldState() }
@@ -121,7 +116,6 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
     val fieldShape = MaterialTheme.shapes.medium
     val submitting = loginMethod == MainViewModel.LoginMethod.SMS
-    val authorizing = loginMethod == MainViewModel.LoginMethod.ALIPAY
     val fieldLabelPosition = TextFieldLabelPosition.Attached(alwaysMinimize = true)
     val sideAction = Modifier.width(112.dp).heightIn(min = AppLayout.ActionHeight)
     Box(
@@ -284,41 +278,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     }
                     Text(if (submitting) "登录中…" else "登录")
                 }
-                if (vm.alipayLoginAvailable && activity != null) {
-                    Button(
-                        enabled = loginMethod == null && !sending,
-                        onClick = {
-                            if (loginMethod != null || sending) return@Button
-                            focusManager.clearFocus()
-                            scope.launch {
-                                error = null
-                                val result = vm.loginWithAlipay(activity)
-                                if (result is Res.Fail) {
-                                    error = result.msg
-                                    vm.notify(result.msg)
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
-                        shapes = ButtonDefaults.shapes(shape = fieldShape),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(R.color.alipay_login_background),
-                            contentColor = colorResource(R.color.alipay_login_foreground),
-                        ),
-                    ) {
-                        if (authorizing) {
-                            LoadingIndicator(Modifier.size(18.dp))
-                        } else {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_alipay),
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (authorizing) "支付宝登录处理中…" else "支付宝授权登录")
-                    }
-                }
+
             }
 
             if (BuildConfig.RELEASE_UPDATES_ENABLED) {
