@@ -96,3 +96,5 @@
 | 更新引导 | 开发者工具 |
 |---|---|
 | ![更新引导](screenshots/guide-update.png) | ![开发者工具](screenshots/developer-tools.png) |
+
+第二张引导卡见 [NFC 碰一碰引导](screenshots/guide-nfc.png)。
