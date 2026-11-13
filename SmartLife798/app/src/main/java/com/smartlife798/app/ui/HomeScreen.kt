@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
@@ -281,13 +282,15 @@ fun HomeScreen(
 @Composable
 private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
+    val container = lerp(palette.container, Color.White, 0.06f)
+    val highlight = lerp(lerp(palette.container, palette.content, 0.13f), Color.White, 0.06f)
     val cardHeight = 192.dp
     val verticalInset = 18.dp
     Card(
         onClick = onScan,
         modifier = modifier.sharedCard(CardOrigin.HOME_SCAN).fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = palette.container, contentColor = palette.content),
+        colors = CardDefaults.cardColors(containerColor = container, contentColor = palette.content),
     ) {
         Row(
             modifier = Modifier
@@ -295,8 +298,8 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
                 .heightIn(min = cardHeight)
                 .drawWithCache {
                     val background = Brush.linearGradient(
-                        0f to lerp(palette.container, palette.content, 0.13f),
-                        0.78f to palette.container,
+                        0f to highlight,
+                        0.78f to container,
                         start = Offset(size.width, 0f),
                         end = Offset(0f, size.height),
                     )
