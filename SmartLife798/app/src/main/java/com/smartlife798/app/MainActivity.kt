@@ -360,6 +360,7 @@ private fun AppRoot(
                     entry: NavBackStackEntry,
                     source: CardSource?,
                     itemId: String = "",
+                    clipWhenInactive: Boolean = source != null,
                     content: @Composable (onBack: () -> Unit) -> Unit,
                 ) {
                     if (source != null && source.origin != CardOrigin.SCAN_MANUAL) {
@@ -378,7 +379,7 @@ private fun AppRoot(
                     SharedCardScene(
                         sharedScope, this, entry.id,
                         active = currentEntry?.id == entry.id,
-                        clipWhenInactive = source != null,
+                        clipWhenInactive = clipWhenInactive,
                     ) {
                         SharedCardPage(source, itemId) {
                             content {
@@ -536,12 +537,12 @@ private fun AppRoot(
                         popEnterTransition = { EnterTransition.None },
                         popExitTransition = {
                             if (initialState.cardSource(CardDestination.DEVICE) != null) ExitTransition.None
-                            else fadeOut() + scaleOut(targetScale = 0.9f)
+                            else scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
                         val id = entry.arguments?.getString("id").orEmpty()
                         val autoStart = entry.arguments?.getBoolean("autoStart") ?: false
-                        CardPage(entry, entry.cardSource(CardDestination.DEVICE), id) { onBack ->
+                        CardPage(entry, entry.cardSource(CardDestination.DEVICE), id, clipWhenInactive = true) { onBack ->
                             DeviceDetailScreen(
                                 vm = vm,
                                 deviceId = id,
