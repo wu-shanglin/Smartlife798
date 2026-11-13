@@ -27,6 +27,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Badge
 import com.smartlife798.app.ui.components.AppBottomSheet
 import com.smartlife798.app.ui.components.ChoiceButtonGroup
@@ -51,6 +52,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.sync.Mutex
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +79,7 @@ import com.smartlife798.app.ui.components.StatusPill
 import androidx.compose.material3.LinearWavyProgressIndicator
 import com.smartlife798.app.ui.components.usagePillState
 import com.smartlife798.app.vm.MainViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelChildren
 
@@ -113,11 +116,16 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     var endReached by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<BillDetail?>(null) }
     var detailLoading by remember { mutableStateOf(false) }
+    // A detail read can finish while the sheet is still sliding in. Keep the
+    // response here and swap it in after the entrance instead of recomposing
+    // the whole panel body mid-animation.
+    var pendingDetail by remember { mutableStateOf<BillDetail?>(null) }
     var loadingMore by remember { mutableStateOf(false) }
     var payTarget by remember { mutableStateOf<Bill?>(null) }
     PageInactiveEffect {
         detailScope.coroutineContext.cancelChildren()
         detail = null
+        pendingDetail = null
         payTarget = null
     }
 
@@ -310,6 +318,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                 bill = bill,
                                 onClick = openDetail@{
                                     if (!sceneActiveState.value || detailLoading || detail != null || payTarget != null) return@openDetail
+                                    pendingDetail = null
                                     detail = BillDetail(bill = bill)
                                     detailLoading = true
                                     detailScope.launch {
@@ -319,7 +328,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
                                                     // A newer payment request takes precedence over this read.
                                                     if (sceneActiveState.value && payTarget == null && detail?.bill?.id == bill.id) {
                                                         val loaded = res.data
-                                                        detail = if (loaded?.bill != null) loaded
+                                                        pendingDetail = if (loaded?.bill != null) loaded
                                                         else BillDetail(bill = bill, cnt = loaded?.cnt)
                                                     }
                                                 }
@@ -385,6 +394,22 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
     val detailValue = detail
     if (sceneActive && detailValue != null && payTarget == null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var sheetSettled by remember(detailValue.bill?.id) { mutableStateOf(false) }
+        LaunchedEffect(sheetState, detailValue.bill?.id) {
+            snapshotFlow { sheetState.currentValue != SheetValue.Hidden && !sheetState.isAnimationRunning }
+                .collect { sheetSettled = it }
+        }
+        // Apply a read that arrived during the entrance only after it settles, so
+        // the loaded rows never compose inside the slide-up frames.
+        LaunchedEffect(pendingDetail, detailValue.bill?.id) {
+            val next = pendingDetail ?: return@LaunchedEffect
+            snapshotFlow { sheetState.currentValue != SheetValue.Hidden && !sheetState.isAnimationRunning }
+                .first { it }
+            if (detail?.bill?.id == detailValue.bill?.id) {
+                detail = next
+                pendingDetail = null
+            }
+        }
         var closing by remember(detailValue.bill?.id) { mutableStateOf(false) }
         fun closeDetail(next: (() -> Unit)? = null) {
             if (closing) return
@@ -403,7 +428,9 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             BillDetailSheet(
                 detail = detailValue,
                 enabled = !closing,
-                loading = detailLoading,
+                loading = detailLoading || pendingDetail != null,
+                // Keep the endless wave animation off the entrance frames.
+                showProgress = detailLoading && sheetSettled,
                 onDismiss = { closeDetail() },
                 onPay = { bill -> closeDetail { payTarget = bill } },
             )
@@ -420,6 +447,7 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             onPaid = {
                 payTarget = null
                 detail = null
+                pendingDetail = null
                 scope.launch { loadBills(true) }
             },
         )
@@ -496,6 +524,7 @@ private fun BillDetailSheet(
     detail: BillDetail,
     enabled: Boolean,
     loading: Boolean,
+    showProgress: Boolean,
     onDismiss: () -> Unit,
     onPay: (Bill) -> Unit,
 ) {
@@ -514,7 +543,7 @@ private fun BillDetailSheet(
             ) { Icon(Icons.Filled.Close, contentDescription = "关闭账单详情") }
         }
         androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(4.dp)) {
-            if (loading) LinearWavyProgressIndicator(Modifier.fillMaxWidth())
+            if (showProgress) LinearWavyProgressIndicator(Modifier.fillMaxWidth())
         }
         if (bill != null) {
             Surface(

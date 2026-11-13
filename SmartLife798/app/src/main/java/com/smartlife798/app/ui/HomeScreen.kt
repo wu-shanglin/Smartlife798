@@ -202,7 +202,9 @@ fun HomeScreen(
                 }
             }
             item(key = "scan") {
-                ScanHeroCard(onScan, modifier = Modifier.padding(vertical = 4.dp))
+                // The hero card needs more separation from the page title than the
+                // list gap; otherwise the header and the card read as one cramped block.
+                ScanHeroCard(onScan, modifier = Modifier.padding(top = AppLayout.Gap, bottom = 4.dp))
             }
             item(key = "favorites") {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

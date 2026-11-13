@@ -6,6 +6,8 @@
 package com.smartlife798.app.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,7 +39,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +64,8 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -116,7 +122,15 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
     val fieldShape = MaterialTheme.shapes.medium
     val submitting = loginMethod == MainViewModel.LoginMethod.SMS
-    val fieldLabelPosition = TextFieldLabelPosition.Attached(alwaysMinimize = true)
+    val fieldLabelPosition = TextFieldLabelPosition.Attached()
+    // As the label floats, its measured height shrinks and the text field derives
+    // its top padding from that height, so the whole box bounces on focus.
+    // Pin the padding to the expanded label height to keep the box height fixed.
+    val fieldContentPadding = with(LocalDensity.current) {
+        OutlinedTextFieldDefaults.contentPadding(
+            top = (MaterialTheme.typography.bodyLarge.lineHeight.toDp() / 2).coerceAtLeast(16.dp),
+        )
+    }
     val sideAction = Modifier.width(112.dp).heightIn(min = AppLayout.ActionHeight)
     Box(
         modifier = modifier
@@ -156,29 +170,37 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.semantics { heading() },
                 )
-                OutlinedTextField(
-                    state = phone,
-                    inputTransformation = PhoneInput,
-                    label = { Text("手机号") },
-                    labelPosition = fieldLabelPosition,
-                    shape = fieldShape,
-                    lineLimits = TextFieldLineLimits.SingleLine,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.PhoneNumber },
-                )
+                MaterialTheme(motionScheme = SteadyLabelMotion) {
+                    OutlinedTextField(
+                        state = phone,
+                        inputTransformation = PhoneInput,
+                        label = { Text("手机号", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        placeholder = { Text("请输入手机号", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        labelPosition = fieldLabelPosition,
+                        contentPadding = fieldContentPadding,
+                        shape = fieldShape,
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.PhoneNumber },
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(AppLayout.Gap),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    OutlinedTextField(
-                        state = captchaInput,
-                        inputTransformation = CaptchaInput,
-                        label = { Text("图形验证码") },
-                        labelPosition = fieldLabelPosition,
-                        shape = fieldShape,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                        modifier = Modifier.weight(1f),
-                    )
+                    MaterialTheme(motionScheme = SteadyLabelMotion) {
+                        OutlinedTextField(
+                            state = captchaInput,
+                            inputTransformation = CaptchaInput,
+                            label = { Text("图形验证码", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            placeholder = { Text("请输入图形验证码", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            labelPosition = fieldLabelPosition,
+                            contentPadding = fieldContentPadding,
+                            shape = fieldShape,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     CaptchaAction(
                         bitmap = captchaBitmap,
                         loading = captchaLoading,
@@ -191,16 +213,20 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     horizontalArrangement = Arrangement.spacedBy(AppLayout.Gap),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    OutlinedTextField(
-                        state = smsInput,
-                        inputTransformation = SmsInput,
-                        label = { Text("短信验证码") },
-                        labelPosition = fieldLabelPosition,
-                        shape = fieldShape,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f).semantics { contentType = ContentType.SmsOtpCode },
-                    )
+                    MaterialTheme(motionScheme = SteadyLabelMotion) {
+                        OutlinedTextField(
+                            state = smsInput,
+                            inputTransformation = SmsInput,
+                            label = { Text("短信验证码", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            placeholder = { Text("请输入短信验证码", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            labelPosition = fieldLabelPosition,
+                            contentPadding = fieldContentPadding,
+                            shape = fieldShape,
+                            lineLimits = TextFieldLineLimits.SingleLine,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f).semantics { contentType = ContentType.SmsOtpCode },
+                        )
+                    }
                     TextButton(
                         shapes = ButtonDefaults.shapes(shape = fieldShape),
                         modifier = sideAction,
@@ -333,6 +359,29 @@ private fun CaptchaAction(
             )
         }
     }
+}
+
+/**
+ * Expressive motion without the overshoot: the login labels should glide to the
+ * outline instead of bouncing (the expressive fast-spatial spring has a 0.6
+ * damping ratio, which visibly wobbles the label and the outline cutout).
+ */
+private object SteadyLabelMotion : MotionScheme {
+    private val base = MotionScheme.expressive()
+    private val fastSpatial = spring<Float>(dampingRatio = 1f, stiffness = 800f)
+
+    override fun <T> defaultSpatialSpec(): FiniteAnimationSpec<T> = base.defaultSpatialSpec()
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <T> fastSpatialSpec(): FiniteAnimationSpec<T> = fastSpatial as FiniteAnimationSpec<T>
+
+    override fun <T> slowSpatialSpec(): FiniteAnimationSpec<T> = base.slowSpatialSpec()
+
+    override fun <T> defaultEffectsSpec(): FiniteAnimationSpec<T> = base.defaultEffectsSpec()
+
+    override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = base.fastEffectsSpec()
+
+    override fun <T> slowEffectsSpec(): FiniteAnimationSpec<T> = base.slowEffectsSpec()
 }
 
 private fun newSeed(): Double = Random.nextDouble(0.0, 1.0)
