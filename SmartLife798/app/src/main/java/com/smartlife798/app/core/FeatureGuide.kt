@@ -18,16 +18,16 @@ object FeatureGuide {
     val topics = listOf(
         GuideTopic(
             key = "welcome:2",
-            title = "登录后查找设备",
-            body = "用手机号登录，即可查找设备、查看使用记录和账单。设备状态和费用以服务端为准。",
+            title = "登陆后使用",
+            body = "用手机号登录后可使用设备、查看账单和使用记录。设备状态和费用以服务端为准。",
             basic = true,
             icon = GuideIcon.WELCOME,
         ),
         GuideTopic(
             key = "scan-nfc:2",
-            title = "碰一碰找设备",
-            body = "解锁手机，开启 NFC 并打开本应用，再将手机感应区贴近卡片。使用前请核对设备与费用。",
-            location = "仅支持慧生活 NFC 卡片",
+            title = "碰一碰使用设备",
+            body = "解锁手机，开启 NFC 并打开本应用，再将手机感应区贴近圆形感应贴。使用前请核对设备与费用。",
+            location = "仅支持慧生活 NFC，暂不支持支付宝碰一碰。",
             icon = GuideIcon.SCAN,
         ),
         GuideTopic(

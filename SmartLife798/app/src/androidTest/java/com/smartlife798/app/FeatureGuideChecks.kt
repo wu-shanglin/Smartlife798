@@ -65,22 +65,31 @@ object FeatureGuideChecks {
             }
             if (!orderOnly) {
                 stage = "first-use visible"
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 snapshot(test, "guide-first.png")
+                val (welcome, nfc, startup) = FeatureGuide.current()
+                val welcomeTitle = bounds(test, welcome.title)
+                val welcomeBody = bounds(test, welcome.body)
+                val welcomeAction = bounds(test, "下一步")
                 stage = "first-use navigation"
                 click(test, "下一步")
                 stage = "second page visible"
-                await(test, "碰一碰找设备")
+                await(test, "碰一碰使用设备")
                 snapshot(test, "guide-nfc.png")
+                stage = "NFC step matches first step alignment and shows compatibility note"
+                check(bounds(test, nfc.title).top == welcomeTitle.top)
+                check(bounds(test, nfc.body).top == welcomeBody.top)
+                check(bounds(test, "下一步").top == welcomeAction.top)
+                await(test, "仅支持慧生活 NFC，暂不支持支付宝碰一碰。")
                 if (test.targetContext.resources.configuration.fontScale >= 1.6f) {
                     stage = "large text scroll keeps navigation in place"
                     val nextBounds = bounds(test, "下一步")
                     val previousBounds = bounds(test, "上一步")
-                    val note = "仅支持慧生活 NFC 卡片"
+                    val note = "仅支持慧生活 NFC，暂不支持支付宝碰一碰。"
                     val noteBounds = bounds(test, note)
                     val x = noteBounds.centerX()
                     val from = (noteBounds.bottom + nextBounds.top) / 2
-                    val to = bounds(test, "碰一碰找设备").centerY()
+                    val to = bounds(test, "碰一碰使用设备").centerY()
                     ParcelFileDescriptor.AutoCloseInputStream(
                         test.uiAutomation.executeShellCommand("input swipe $x $from $x $to 350"),
                     ).use { it.readBytes() }
@@ -90,20 +99,24 @@ object FeatureGuideChecks {
                 }
                 stage = "previous step button"
                 click(test, "上一步")
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 check(Store.guideBasicsDone() && Store.guideSeen() == setOf("welcome:2"))
                 check(find(test, "跳过") == null)
                 click(test, "下一步")
-                await(test, "碰一碰找设备")
+                await(test, "碰一碰使用设备")
                 stage = "system back returns to previous step"
                 test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 click(test, "下一步")
-                await(test, "碰一碰找设备")
+                await(test, "碰一碰使用设备")
                 stage = "finish first-use guide"
                 click(test, "下一步")
                 await(test, "选择启动页面")
                 snapshot(test, "guide-startup.png")
+                stage = "startup step matches first step alignment"
+                check(bounds(test, startup.title).top == welcomeTitle.top)
+                check(bounds(test, startup.body).top == welcomeBody.top)
+                check(bounds(test, "开始使用").top == welcomeAction.top)
                 click(test, "开始使用")
                 check(Store.guideBasicsDone() && FeatureGuide.pending(Store.guideSeen()).isEmpty())
                 await(test, "手机号登录")
@@ -112,11 +125,11 @@ object FeatureGuideChecks {
                 check(Store.guideBasicsDone() && Store.guideSeen().size == FeatureGuide.topics.size)
                 test.runOnMainSync { Appearance.setMode(ThemeMode.DARK); vm!!.replayGuides() }
                 await(test, "使用指南")
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 snapshot(test, "guide-replay-dark.png")
                 check(find(test, "跳过") == null)
                 click(test, "下一步")
-                await(test, "碰一碰找设备")
+                await(test, "碰一碰使用设备")
                 click(test, "下一步")
                 await(test, "选择启动页面")
                 click(test, "完成")
@@ -146,15 +159,15 @@ object FeatureGuideChecks {
                 check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
                 check(Store.developerToolsEnabled() && Store.themeModeName() == ThemeMode.LIGHT.name)
                 check(vm!!.guideDeck.value?.topics == FeatureGuide.current())
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 test.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
                 await(test, "重置引导卡片")
                 check(Store.guideSeen().isEmpty() && !Store.guideBasicsDone())
                 test.runOnMainSync { vm!!.replayGuides() }
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 check(find(test, "跳过") == null)
                 click(test, "下一步")
-                await(test, "碰一碰找设备")
+                await(test, "碰一碰使用设备")
                 click(test, "下一步")
                 await(test, "选择启动页面")
                 click(test, "完成")
@@ -199,10 +212,10 @@ object FeatureGuideChecks {
                     } }
                 }
                 await(test, "了解新功能")
-                await(test, "登录后查找设备")
+                await(test, "登陆后使用")
                 snapshot(test, "guide-update.png")
                 click(test, "下一步")
-                await(test, "碰一碰找设备")
+                await(test, "碰一碰使用设备")
                 check(Store.guideSeen() == setOf("welcome:2"))
                 click(test, "下一步")
                 await(test, "选择启动页面")

@@ -7,18 +7,19 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,17 +27,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -47,8 +49,13 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.smartlife798.app.R
@@ -57,6 +64,7 @@ import com.smartlife798.app.core.GuideIcon
 import com.smartlife798.app.core.GuideTopic
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.ui.theme.ExpressiveEffects
+import com.smartlife798.app.ui.theme.WaterBlue80
 
 /** Shared by first use, unread updates and explicit replay. */
 @Composable
@@ -95,10 +103,11 @@ fun FeatureGuideScreen(
 
     val entrance = remember(deck.id) { Animatable(0.96f) }
     LaunchedEffect(entrance) { entrance.animateTo(1f, ExpressiveEffects) }
-    Box(
+    BoxWithConstraints(
         Modifier.fillMaxSize().background(colors.background).safeDrawingPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
+        val compact = maxHeight < 560.dp
         Column(
             Modifier.widthIn(max = 480.dp).fillMaxSize().padding(horizontal = 24.dp),
         ) {
@@ -115,23 +124,20 @@ fun FeatureGuideScreen(
                 targetState = page,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 transitionSpec = {
-                    val direction = if (targetState > initialState) 1 else -1
-                    (fadeIn(ExpressiveEffects) + slideInHorizontally { direction * it / 18 })
-                        .togetherWith(fadeOut(ExpressiveEffects))
+                    fadeIn(ExpressiveEffects) togetherWith fadeOut(ExpressiveEffects)
                 },
                 label = "guidePage",
             ) { index ->
                 val visibility = if (index == page) Modifier else Modifier.semantics { hideFromAccessibility() }
                 BoxWithConstraints(Modifier.fillMaxSize().then(visibility)) {
-                    val viewportHeight = maxHeight
-                    val compact = viewportHeight < 400.dp
+                    val copySlots = measureGuideCopy(topics, constraints.maxWidth)
                     Column(
                         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            .heightIn(min = viewportHeight).padding(vertical = if (compact) 12.dp else 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 22.dp, Alignment.CenterVertically),
+                            .padding(top = if (compact) 20.dp else 48.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 22.dp),
                     ) {
-                        GuideCopy(topics[index])
-                        GuideVisual(topics[index].icon, Modifier.heightIn(min = if (compact) 152.dp else 196.dp).graphicsLayer {
+                        GuideCopy(topics[index], copySlots)
+                        GuideVisual(topics[index].icon, Modifier.height(if (compact) 152.dp else 196.dp).graphicsLayer {
                             scaleX = entrance.value
                             scaleY = entrance.value
                         })
@@ -198,19 +204,50 @@ private fun GuideHeader(title: String, page: Int, count: Int) {
     }
 }
 
+private data class GuideCopySlots(val title: Dp, val body: Dp, val detail: Dp)
+
 @Composable
-private fun GuideCopy(topic: GuideTopic) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun measureGuideCopy(topics: List<GuideTopic>, width: Int): GuideCopySlots {
+    // Reserve the tallest copy in each slot for this deck, width and font scale.
+    val type = MaterialTheme.typography
+    val measurer = rememberTextMeasurer(cacheSize = topics.size * 3)
+    val density = LocalDensity.current
+    val constraints = Constraints(maxWidth = width)
+    fun height(text: String, style: TextStyle): Dp = with(density) {
+        measurer.measure(text, style, constraints = constraints).size.height.toDp()
+    }
+    return GuideCopySlots(
+        title = topics.maxOf { height(it.title, type.displaySmall.copy(fontWeight = FontWeight.Bold)) },
+        body = topics.maxOf { height(it.body, type.bodyLarge) },
+        detail = topics.mapNotNull { it.location }.maxOfOrNull { height(it, type.labelLarge) } ?: 0.dp,
+    )
+}
+
+@Composable
+private fun GuideCopy(topic: GuideTopic, slots: GuideCopySlots) {
+    val colors = MaterialTheme.colorScheme
+    Column {
         Text(
             topic.title,
-            modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite },
+            modifier = Modifier.fillMaxWidth().heightIn(min = slots.title)
+                .semantics { heading(); liveRegion = LiveRegionMode.Polite },
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = colors.onBackground,
         )
-        Text(topic.body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        topic.location?.let {
-            Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            topic.body,
+            Modifier.fillMaxWidth().heightIn(min = slots.body),
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onSurfaceVariant,
+        )
+        if (slots.detail > 0.dp) {
+            Box(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = slots.detail)) {
+                topic.location?.let {
+                    Text(it, style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                }
+            }
         }
     }
 }
@@ -224,20 +261,7 @@ private fun GuideVisual(icon: GuideIcon, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         when (icon) {
-            GuideIcon.WELCOME -> {
-                val ring = colors.primary.copy(alpha = 0.19f)
-                Canvas(Modifier.matchParentSize()) {
-                    for (radius in listOf(78.dp, 107.dp, 136.dp)) {
-                        drawCircle(ring, radius.toPx(), style = Stroke(1.dp.toPx()))
-                    }
-                }
-                Image(
-                    painterResource(R.drawable.ic_launcher_artwork),
-                    contentDescription = null,
-                    modifier = Modifier.size(112.dp).clip(MaterialTheme.shapes.extraLarge)
-                        .background(colorResource(R.color.launcher_background)).scale(1.2f),
-                )
-            }
+            GuideIcon.WELCOME -> LoginGuideVisual()
             GuideIcon.SCAN -> NfcGuideVisual()
             GuideIcon.PREFERENCES -> StartupGuideVisual()
         }
@@ -245,37 +269,90 @@ private fun GuideVisual(icon: GuideIcon, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun NfcGuideVisual() {
+private fun LoginGuideVisual() {
     val colors = MaterialTheme.colorScheme
-    Canvas(Modifier.widthIn(max = 276.dp).fillMaxWidth(0.84f).height(136.dp)) {
-        val unit = size.width / 228f
-        val y = center.y - 56 * unit
-        val outline = Stroke(width = 2 * unit, cap = StrokeCap.Round)
-        val phone = Offset(22 * unit, y)
-        val phoneSize = Size(66 * unit, 112 * unit)
-        drawRoundRect(colors.surface, phone, phoneSize, CornerRadius(13 * unit))
-        drawRoundRect(colors.primary, phone, phoneSize, CornerRadius(13 * unit), style = outline)
-        drawLine(colors.primary, phone + Offset(27 * unit, 11 * unit), phone + Offset(39 * unit, 11 * unit),
-            strokeWidth = outline.width, cap = StrokeCap.Round)
-        drawRoundRect(colors.primaryContainer, phone + Offset(14 * unit, 34 * unit),
-            Size(38 * unit, 50 * unit), CornerRadius(8 * unit))
-        for (radius in listOf(14f, 24f, 34f)) {
-            drawArc(
-                color = colors.primary,
-                startAngle = -42f,
-                sweepAngle = 84f,
-                useCenter = false,
-                topLeft = Offset((92 - radius) * unit, center.y - radius * unit),
-                size = Size(2 * radius * unit, 2 * radius * unit),
-                style = outline,
-            )
+    Surface(
+        modifier = Modifier.widthIn(max = 264.dp).fillMaxWidth(0.84f)
+            .clearAndSetSemantics { hideFromAccessibility() },
+        shape = MaterialTheme.shapes.large,
+        color = colors.surface,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Image(
+                    painterResource(R.drawable.ic_launcher_artwork),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp).clip(MaterialTheme.shapes.extraSmall)
+                        .background(colorResource(R.color.launcher_background)),
+                )
+                Text("手机号登录", style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            }
+            Row(
+                Modifier.fillMaxWidth().background(colors.surfaceContainerHigh, MaterialTheme.shapes.small)
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Filled.Phone, null, Modifier.size(16.dp), tint = colors.primary)
+                Text("手机号", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                repeat(6) {
+                    Box(
+                        Modifier.weight(1f).height(25.dp)
+                            .background(colors.primaryContainer, MaterialTheme.shapes.extraSmall),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Spacer(Modifier.size(4.dp).background(colors.onPrimaryContainer, CircleShape))
+                    }
+                }
+            }
         }
-        val card = Offset(142 * unit, center.y - 27 * unit)
-        drawRoundRect(colors.primary, card, Size(78 * unit, 54 * unit), CornerRadius(10 * unit))
-        drawRoundRect(colors.onPrimary.copy(alpha = 0.9f), card + Offset(13 * unit, 14 * unit),
-            Size(15 * unit, 12 * unit), CornerRadius(3 * unit))
-        drawLine(colors.onPrimary.copy(alpha = 0.7f), card + Offset(13 * unit, 40 * unit),
-            card + Offset(46 * unit, 40 * unit), strokeWidth = outline.width, cap = StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun NfcGuideVisual() {
+    val sticker = Color(0xFF20242C) // The physical NFC sticker has a dark face in both app themes.
+    Box(
+        Modifier.size(144.dp).clip(CircleShape).background(sticker)
+            .clearAndSetSemantics { hideFromAccessibility() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.matchParentSize()) {
+            drawCircle(Color.White.copy(alpha = 0.30f), radius = size.minDimension / 2 - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
+            drawCircle(WaterBlue80, radius = size.minDimension / 2 - 8.dp.toPx(), style = Stroke(3.dp.toPx()))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("NFC", color = Color.White, fontSize = 14.sp, letterSpacing = 2.sp)
+            Canvas(Modifier.size(width = 76.dp, height = 36.dp)) {
+                val phoneWidth = 19.dp.toPx()
+                val phoneHeight = 30.dp.toPx()
+                val rim = 2.dp.toPx()
+                val phone = Offset(center.x - phoneWidth / 2, center.y - phoneHeight / 2)
+                drawRoundRect(Color.White, phone, Size(phoneWidth, phoneHeight), CornerRadius(4.dp.toPx()))
+                drawRoundRect(
+                    sticker, phone + Offset(rim * 1.4f, rim * 2),
+                    Size(phoneWidth - rim * 2.8f, phoneHeight - rim * 5), CornerRadius(rim),
+                )
+                drawCircle(sticker, radius = rim * 0.65f, center = Offset(center.x, phone.y + phoneHeight - rim * 1.5f))
+                for (radiusDp in 12..24 step 6) {
+                    val radius = radiusDp.dp.toPx()
+                    for (angle in listOf(-37f, 143f)) {
+                        drawArc(
+                            Color.White, angle, 74f, useCenter = false,
+                            topLeft = center - Offset(radius, radius),
+                            size = Size(radius * 2, radius * 2),
+                            style = Stroke(rim, cap = StrokeCap.Round),
+                        )
+                    }
+                }
+            }
+            Text("碰一下", color = Color.White, fontSize = 12.sp, letterSpacing = 1.sp)
+        }
     }
 }
 
@@ -283,11 +360,11 @@ private fun NfcGuideVisual() {
 private fun StartupGuideVisual() {
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = Modifier.padding(20.dp).widthIn(max = 280.dp).fillMaxWidth().clearAndSetSemantics { hideFromAccessibility() },
+        modifier = Modifier.widthIn(max = 280.dp).fillMaxWidth(0.88f).clearAndSetSemantics { hideFromAccessibility() },
         shape = MaterialTheme.shapes.large,
         color = colors.surface,
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.Settings, null, Modifier.size(18.dp), tint = colors.primary)
                 Text("启动页面", style = MaterialTheme.typography.titleSmall)
