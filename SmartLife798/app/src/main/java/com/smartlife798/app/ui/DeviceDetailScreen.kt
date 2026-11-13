@@ -210,8 +210,10 @@ fun DeviceDetailScreen(
         // A partial status cannot tell whether another account released/acquired
         // the machine. While blocked, refresh the ownership envelope as well.
         if (vm.deviceAccess(current).notice != null) {
-            when (val res = vm.loadDevice(deviceId)) {
-                is Res.Ok -> if (revision == statusRevision && !busy && res.data?.device?.id == deviceId) {
+            val res = vm.loadDevice(deviceId)
+            if (revision != statusRevision || busy || detail !== current) return
+            when (res) {
+                is Res.Ok -> if (res.data?.device?.id == deviceId) {
                     if (res.data != current) detail = res.data
                     lastUpdate = System.currentTimeMillis()
                     statusError = null; pollFailures = 0
@@ -220,9 +222,10 @@ fun DeviceDetailScreen(
             }
             return
         }
-        when (val res = vm.pollDevice(deviceId, device)) {
+        val res = vm.pollDevice(deviceId, device)
+        if (revision != statusRevision || busy || detail !== current) return
+        when (res) {
             is Res.Ok -> {
-                if (revision != statusRevision || busy) return
                 // The VM merged the partial `dev/status` into `device`; this page
                 // never receives a dtype-less object.
                 if (res.data != device) detail = current.copy(device = res.data,
@@ -300,7 +303,7 @@ fun DeviceDetailScreen(
     fun action() {
         // Guard against a second tap that lands before `busy` triggers recomposition:
         // both would otherwise call dev/start (or dev/end) and be billed twice.
-        if (busy || !entryReady) return
+        if (busy || !entryReady || !pageActive.value) return
         val dev = detail?.device ?: return
         val currentAccess = detail?.let(vm::deviceAccess) ?: return
         if (currentAccess.action == null) {

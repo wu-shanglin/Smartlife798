@@ -72,13 +72,42 @@ object NavigationInterruptionChecks {
             await { find(test, "我的设备") != null }
             Thread.sleep(2000)
             check(find(test, "当前模式") == null)
+            stage = "wallet draws intermediate return frames over its source"
+            check(click(test, "我的"))
+            await { find(test, "钱包") != null }
+            Thread.sleep(1200)
+            val profilePixels = screenPixels(test)
+            check(click(test, "钱包"))
+            await { find(test, "钱包余额") != null }
+            Thread.sleep(2000)
+            val walletPixels = screenPixels(test)
+            check(!walletPixels.contentEquals(profilePixels))
+            check(test.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK))
+            val changingPixels = walletPixels.indices.filter { walletPixels[it] != profilePixels[it] }
+            val returnFrames = List(5) {
+                Thread.sleep(100)
+                screenPixels(test)
+            }
+            val profileDifferences = returnFrames.map { frame -> changingPixels.count { frame[it] != profilePixels[it] } }
+            val walletDifferences = returnFrames.map { frame -> changingPixels.count { frame[it] != walletPixels[it] } }
+            stage += " profile=$profileDifferences wallet=$walletDifferences"
+            check(returnFrames.indices.count { profileDifferences[it] > 20 && walletDifferences[it] > 20 } >= 2)
+            check(profileDifferences.first() > profileDifferences.last() + 20)
+            await { find(test, "钱包余额") == null && find(test, "钱包") != null }
+            await { click(test, "钱包") }
+            await { find(test, "钱包余额") != null }
+            check(click(test, "返回"))
+            await { find(test, "钱包余额") == null }
+            check(click(test, "设备"))
+            await { find(test, "我的设备") != null }
+            Thread.sleep(1000)
             stage = "capture light and dark page hierarchy"
             capture(test, "devices.png")
             check(click(test, "订单"))
             await { find(test, "订单与记录") != null }
             Thread.sleep(1000)
             capture(test, "orders.png")
-            check(click(test, "待付款 1"))
+            await { click(test, "待付款 1") }
             Thread.sleep(500)
             capture(test, "preview_bills.png")
             check(click(test, "首页"))
@@ -92,7 +121,7 @@ object NavigationInterruptionChecks {
             await { find(test, "订单与记录") != null }
             Thread.sleep(700)
             capture(test, "orders-dark.png")
-            result.putString("stream", "PASS: five system-Back/real-touch reopen interruptions at 3x; each new detail request starts within 1s; system Back during entry returns to source. Offline only.\n")
+            result.putString("stream", "PASS: five system-Back/real-touch detail reopen interruptions at 3x, Back during entry, and intermediate wallet return frames with reopen and toolbar Back. Offline only.\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             test.uiAutomation.takeScreenshot()?.let { bitmap ->
@@ -122,6 +151,18 @@ object NavigationInterruptionChecks {
             }
             bitmap.recycle()
         } ?: error("screenshot unavailable")
+    }
+
+    private fun screenPixels(test: Instrumentation): IntArray {
+        val bitmap = checkNotNull(test.uiAutomation.takeScreenshot())
+        return try {
+            // Exclude the status and navigation bars and sample the same grid in each frame.
+            IntArray(36 * 44) { index ->
+                bitmap.getPixel(bitmap.width * (2 + index % 36) / 40, bitmap.height * (3 + index / 36) / 50)
+            }
+        } finally {
+            bitmap.recycle()
+        }
     }
 
     private fun nodes(node: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> =

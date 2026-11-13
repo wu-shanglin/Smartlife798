@@ -6,8 +6,11 @@ import android.content.Intent
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.lifecycle.ViewModelProvider
 import com.smartlife798.app.core.*
+import com.smartlife798.app.vm.MainViewModel
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -152,8 +155,33 @@ object LoginInitializationChecks {
             check(fields[0].bottom <= fields[1].top && fields[1].bottom <= fields[2].top)
             check(fields[1].right <= image.left && fields[1].top < image.bottom && image.top < fields[1].bottom)
             check(fields[2].right <= send.left && fields[2].top < send.bottom && send.top < fields[2].bottom)
+            for (index in listOf(0, 1, 2, 0)) {
+                stage = "focus field $index"
+                val fieldNode = nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[index]
+                val target = Rect().apply(fieldNode::getBoundsInScreen)
+                val downTime = SystemClock.uptimeMillis()
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
+                        target.centerX().toFloat(), target.centerY().toFloat(), 0)
+                    try { test.sendPointerSync(event) } finally { event.recycle() }
+                }
+                await {
+                    nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.getOrNull(index)?.isFocused == true
+                }
+                // Measure the field itself. The keyboard can temporarily crop the
+                // bottom field's screen bounds while it animates into the viewport.
+                test.runOnMainSync {
+                    val window = checkNotNull(activity).window
+                    val ime = window.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                    ime.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+                }
+                SystemClock.sleep(350)
+                val focused = nodes(test.uiAutomation.rootInActiveWindow).first { it.isEditable && it.isFocused }
+                val bounds = Rect().apply(focused::getBoundsInScreen)
+                check(bounds.height() == fields[index].height())
+            }
             stage = "fill phone and request SMS through fixture"
-            enter(nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[0], "13800000000")
+            enter(nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[0], "138 0000 0000")
             await { nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.firstOrNull()?.text?.toString() == "13800000000" }
             enter(nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[1], "TEST")
             await { nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }[1].text?.toString() == "TEST" }
@@ -205,12 +233,17 @@ object LoginInitializationChecks {
             await { visibleText("登录成功") }
             allowCheckInResponse.countDown()
             stage = "owned initialization after composition removal"
-            await { missions.get() > 0 && nodes(test.uiAutomation.rootInActiveWindow).any { it.text?.toString()?.contains("离线登录用户") == true } }
+            lateinit var vm: MainViewModel
+            test.runOnMainSync { vm = ViewModelProvider(checkNotNull(activity))[MainViewModel::class.java] }
+            await {
+                missions.get() > 0 && vm.profile.value?.name == "离线登录用户" &&
+                    nodes(test.uiAutomation.rootInActiveWindow).none { it.isEditable }
+            }
             check(logins.get() == 4 && smsRequests.get() == 1 && unexpectedWrites.get() == 0)
-            result.putString("stream", "PASS: actual login removes LoginScreen; account initialization and check-in read complete afterward; separate update/login bounds, pending/rejected/missing-account/missing-token/success feedback; aligned form rows, captcha retry and tap-to-refresh, SMS countdown; four signed login attempts and one SMS request handled by terminal fixtures, no pay/device writes\n")
+            result.putString("stream", "PASS: stable field heights across focus changes, formatted phone paste, captcha retry, SMS countdown, and four signed login attempts; profile initialization and check-in read complete after LoginScreen is removed. Terminal fixtures only.\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
-            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},sms=${smsRequests.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
+            result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName} at ${failure.stackTrace.firstOrNull()}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},sms=${smsRequests.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
         } finally {
             allowCheckInResponse.countDown()
             test.runOnMainSync { activity?.let { it.viewModelStore.clear(); it.finish() }; session.clear() }
