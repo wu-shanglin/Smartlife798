@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package com.smartlife798.app.ui
 
@@ -24,6 +27,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.byValue
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
@@ -33,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldLabelPosition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,9 +80,9 @@ import kotlin.random.Random
 fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var phone by remember { mutableStateOf("") }
-    var captchaInput by remember { mutableStateOf("") }
-    var smsInput by remember { mutableStateOf("") }
+    val phone = remember { TextFieldState() }
+    val captchaInput = remember { TextFieldState() }
+    val smsInput = remember { TextFieldState() }
     var seed by remember { mutableStateOf(newSeed()) }
     var captchaBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var captchaLoading by remember { mutableStateOf(false) }
@@ -85,6 +94,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     suspend fun loadCaptcha() {
         if (captchaLoading) return
         captchaLoading = true
+        captchaInput.clearText()
         try {
             val s = newSeed()
             seed = s
@@ -93,7 +103,6 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             captchaBitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
             }
-            captchaInput = ""
         } finally { captchaLoading = false }
     }
 
@@ -106,6 +115,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     }
 
     val fieldShape = MaterialTheme.shapes.medium
+    val fieldLabelPosition = TextFieldLabelPosition.Attached(alwaysMinimize = true)
     val sideAction = Modifier.width(112.dp).heightIn(min = AppLayout.ActionHeight)
     Box(
         modifier = modifier
@@ -146,13 +156,12 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     modifier = Modifier.semantics { heading() },
                 )
                 OutlinedTextField(
-                    value = phone,
-                    // Filter first, then clamp: checking the raw length dropped
-                    // pasted numbers containing spaces entirely.
-                    onValueChange = { phone = it.filter(Char::isDigit).take(11) },
+                    state = phone,
+                    inputTransformation = PhoneInput,
                     label = { Text("手机号") },
+                    labelPosition = fieldLabelPosition,
                     shape = fieldShape,
-                    singleLine = true,
+                    lineLimits = TextFieldLineLimits.SingleLine,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.PhoneNumber },
                 )
@@ -161,17 +170,19 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     OutlinedTextField(
-                        value = captchaInput,
-                        onValueChange = { captchaInput = it.take(6) },
+                        state = captchaInput,
+                        inputTransformation = CaptchaInput,
                         label = { Text("图形验证码") },
+                        labelPosition = fieldLabelPosition,
                         shape = fieldShape,
-                        singleLine = true,
+                        lineLimits = TextFieldLineLimits.SingleLine,
                         modifier = Modifier.weight(1f),
                     )
                     CaptchaAction(
                         bitmap = captchaBitmap,
                         loading = captchaLoading,
-                        onRefresh = { scope.launch { loadCaptcha() } },
+                        enabled = !sending,
+                        onRefresh = { if (!sending) scope.launch { loadCaptcha() } },
                         modifier = sideAction,
                     )
                 }
@@ -180,11 +191,12 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     OutlinedTextField(
-                        value = smsInput,
-                        onValueChange = { smsInput = it.filter(Char::isDigit).take(8) },
+                        state = smsInput,
+                        inputTransformation = SmsInput,
                         label = { Text("短信验证码") },
+                        labelPosition = fieldLabelPosition,
                         shape = fieldShape,
-                        singleLine = true,
+                        lineLimits = TextFieldLineLimits.SingleLine,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f).semantics { contentType = ContentType.SmsOtpCode },
                     )
@@ -192,21 +204,26 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         shapes = ButtonDefaults.shapes(shape = fieldShape),
                         modifier = sideAction,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        enabled = countdown == 0 && !sending && !captchaLoading &&
-                            phone.length == 11 && captchaInput.isNotBlank(),
+                        enabled = countdown == 0 && !sending && !captchaLoading && captchaBitmap != null &&
+                            phone.text.length == 11 && captchaInput.text.isNotBlank(),
                         onClick = {
-                            if (sending || captchaLoading || countdown > 0) return@TextButton
+                            val number = phone.text.toString()
+                            val code = captchaInput.text.toString()
+                            if (sending || captchaLoading || captchaBitmap == null ||
+                                countdown > 0 || number.length != 11 || code.isBlank()) {
+                                return@TextButton
+                            }
+                            val challengeSeed = seed
                             sending = true
                             scope.launch {
                                 try {
                                     error = null
-                                    when (val res = vm.sendSmsCode(phone, captchaInput, seed)) {
+                                    when (val res = vm.sendSmsCode(number, code, challengeSeed)) {
                                         is Res.Ok -> countdown = 60
                                         is Res.Fail -> {
                                             error = res.msg
                                             // The captcha is single-use on the server side;
                                             // refresh it so the retry is not guaranteed to fail.
-                                            captchaInput = ""
                                             loadCaptcha()
                                         }
                                     }
@@ -229,16 +246,18 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     )
                 }
                 Button(
-                    enabled = phone.length == 11 && smsInput.isNotBlank() && !submitting,
+                    enabled = phone.text.length == 11 && smsInput.text.isNotBlank() && !submitting,
                     onClick = {
-                        if (submitting) return@Button
+                        val number = phone.text.toString()
+                        val code = smsInput.text.toString()
+                        if (submitting || number.length != 11 || code.isBlank()) return@Button
                         submitting = true
                         scope.launch {
                             try {
                                 error = null
                                 // On success MainViewModel flips `loggedIn`, which swaps
                                 // the root composable over to the main UI.
-                                when (val res = vm.login(phone, smsInput)) {
+                                when (val res = vm.login(number, code)) {
                                     is Res.Ok -> Unit
                                     is Res.Fail -> {
                                         error = res.msg.ifBlank { "登录失败，请稍后重试" }
@@ -291,6 +310,7 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 private fun CaptchaAction(
     bitmap: android.graphics.Bitmap?,
     loading: Boolean,
+    enabled: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -298,7 +318,7 @@ private fun CaptchaAction(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(enabled = !loading, role = Role.Button, onClickLabel = "更换图形验证码", onClick = onRefresh),
+            .clickable(enabled = enabled && !loading, role = Role.Button, onClickLabel = "更换图形验证码", onClick = onRefresh),
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -319,3 +339,7 @@ private fun CaptchaAction(
 }
 
 private fun newSeed(): Double = Random.nextDouble(0.0, 1.0)
+
+private val PhoneInput = InputTransformation.byValue { _, proposed -> proposed.filter(Char::isDigit).take(11) }
+private val CaptchaInput = InputTransformation.byValue { _, proposed -> proposed.take(6) }
+private val SmsInput = InputTransformation.byValue { _, proposed -> proposed.filter(Char::isDigit).take(8) }

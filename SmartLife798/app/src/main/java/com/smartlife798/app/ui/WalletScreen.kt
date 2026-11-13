@@ -86,7 +86,10 @@ fun WalletScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
         } finally { reading = false }
     }
-    LaunchedEffect(vm) { collectRefreshRequests(vm.refreshTick) { reload() } }
+    val pageActive by cardSceneActiveState()
+    LaunchedEffect(vm, pageActive) {
+        if (pageActive) collectRefreshRequests(vm.refreshTick) { reload() }
+    }
 
     Scaffold(
         topBar = {

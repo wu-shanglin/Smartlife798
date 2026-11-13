@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -259,7 +260,7 @@ private fun AppRoot(
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
     var mainTabScene by remember { mutableStateOf<MainTabScene?>(null) }
-    var deviceCardSource by remember { mutableStateOf<RetainedCardSource?>(null) }
+    var retainedCardSource by remember { mutableStateOf<RetainedCardSource?>(null) }
     val mainTabState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(incomingNfc, currentEntry?.id, loggedIn, updateRequired, lifecycleOwner, visibleDeck?.id) {
@@ -344,12 +345,44 @@ private fun AppRoot(
                             androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner provides scene.entry,
                             androidx.savedstate.compose.LocalSavedStateRegistryOwner provides scene.entry,
                         ) {
-                            val sourceVisibility = deviceCardSource
+                            val sourceVisibility = retainedCardSource
                                 ?.takeIf { it.sourceEntryId == scene.entry.id && it.includes(currentEntry?.id) }
                                 ?.visibility ?: scene.visibility
                             SharedCardScene(sharedScope, sourceVisibility, scene.entry.id,
                                 active = currentEntry?.id == scene.entry.id, clipWhenInactive = false) {
                                 MainTabContent(scene.entry, navController, vm, unpaidCount) { bottomBarHeight = it }
+                            }
+                        }
+                    }
+                }
+                @Composable
+                fun AnimatedVisibilityScope.CardPage(
+                    entry: NavBackStackEntry,
+                    source: CardSource?,
+                    itemId: String = "",
+                    content: @Composable (onBack: () -> Unit) -> Unit,
+                ) {
+                    if (source != null && source.origin != CardOrigin.SCAN_MANUAL) {
+                        val visibility = rememberCardSourceVisibility()
+                        androidx.compose.runtime.SideEffect {
+                            if (navController.currentBackStackEntry?.id == entry.id) {
+                                retainedCardSource = RetainedCardSource(source.entryId, entry.id, visibility)
+                            }
+                        }
+                        androidx.compose.runtime.DisposableEffect(visibility) {
+                            onDispose {
+                                if (retainedCardSource?.visibility === visibility) retainedCardSource = null
+                            }
+                        }
+                    }
+                    SharedCardScene(
+                        sharedScope, this, entry.id,
+                        active = currentEntry?.id == entry.id,
+                        clipWhenInactive = source != null,
+                    ) {
+                        SharedCardPage(source, itemId) {
+                            content {
+                                if (navController.currentBackStackEntry?.id == entry.id) navController.popBackStack()
                             }
                         }
                     }
@@ -418,21 +451,18 @@ private fun AppRoot(
                         "wallet?cardOrigin={cardOrigin}&cardEntry={cardEntry}",
                         arguments = cardArguments(),
                         enterTransition = {
-                            if (targetState.cardSource(CardDestination.WALLET) != null) fadeIn()
+                            if (targetState.cardSource(CardDestination.WALLET) != null) EnterTransition.None
                             else fadeIn() + scaleIn(initialScale = 1.1f)
                         },
                         exitTransition = { ExitTransition.None },
                         popEnterTransition = { EnterTransition.None },
                         popExitTransition = {
-                            if (initialState.cardSource(CardDestination.WALLET) != null) fadeOut()
-                            else scaleOut(targetScale = 0.9f)
+                            if (initialState.cardSource(CardDestination.WALLET) != null) ExitTransition.None
+                            else fadeOut() + scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
-                            val source = entry.cardSource(CardDestination.WALLET)
-                            SharedCardPage(source) {
-                                WalletScreen(vm = vm, onBack = { navController.popBackStack() })
-                            }
+                        CardPage(entry, entry.cardSource(CardDestination.WALLET)) { onBack ->
+                            WalletScreen(vm = vm, onBack = onBack)
                         }
                     }
                     composable(
@@ -449,18 +479,19 @@ private fun AppRoot(
                             else scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
-                            val source = entry.cardSource(CardDestination.SCAN)
-                            SharedCardPage(source) {
-                                ScanScreen(
-                                    vm = vm,
-                                    onClose = { navController.popBackStack() },
-                                    onManualInput = {
+                        CardPage(entry, entry.cardSource(CardDestination.SCAN)) { onBack ->
+                            ScanScreen(
+                                vm = vm,
+                                onClose = onBack,
+                                onManualInput = {
+                                    if (navController.currentBackStackEntry?.id == entry.id) {
                                         openCardPage(navController, "scan/manual", CardSource(entry.id, CardOrigin.SCAN_MANUAL))
-                                    },
-                                    onOpenDevice = { id -> openScannedDevice(navController, id) },
-                                )
-                            }
+                                    }
+                                },
+                                onOpenDevice = { id ->
+                                    if (navController.currentBackStackEntry?.id == entry.id) openScannedDevice(navController, id)
+                                },
+                            )
                         }
                     }
                     composable(
@@ -477,15 +508,14 @@ private fun AppRoot(
                             else scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
-                            val source = entry.cardSource(CardDestination.MANUAL)
-                            SharedCardPage(source) {
-                                ManualScanScreen(
-                                    vm = vm,
-                                    onBack = { navController.popBackStack() },
-                                    onOpenDevice = { id -> openScannedDevice(navController, id) },
-                                )
-                            }
+                        CardPage(entry, entry.cardSource(CardDestination.MANUAL)) { onBack ->
+                            ManualScanScreen(
+                                vm = vm,
+                                onBack = onBack,
+                                onOpenDevice = { id ->
+                                    if (navController.currentBackStackEntry?.id == entry.id) openScannedDevice(navController, id)
+                                },
+                            )
                         }
                     }
                     composable(
@@ -499,8 +529,6 @@ private fun AppRoot(
                             },
                         ) + cardArguments(),
                         enterTransition = {
-                            // sharedBounds already cross-fades the container. A second
-                            // full-page alpha animation duplicates blending and timing.
                             if (targetState.cardSource(CardDestination.DEVICE) != null) EnterTransition.None
                             else fadeIn() + scaleIn(initialScale = 1.1f)
                         },
@@ -508,40 +536,22 @@ private fun AppRoot(
                         popEnterTransition = { EnterTransition.None },
                         popExitTransition = {
                             if (initialState.cardSource(CardDestination.DEVICE) != null) ExitTransition.None
-                            else scaleOut(targetScale = 0.9f)
+                            else fadeOut() + scaleOut(targetScale = 0.9f)
                         },
                     ) { entry ->
                         val id = entry.arguments?.getString("id").orEmpty()
                         val autoStart = entry.arguments?.getBoolean("autoStart") ?: false
-                        val source = entry.cardSource(CardDestination.DEVICE)
-                        if (source != null) {
-                            val visibility = rememberCardSourceVisibility()
-                            // The retained tab outlives its NavHost slot. Use the detail's
-                            // inverse visibility until its return or interruption ends.
-                            androidx.compose.runtime.SideEffect {
-                                if (navController.currentBackStackEntry?.id == entry.id) {
-                                    deviceCardSource = RetainedCardSource(source.entryId, entry.id, visibility)
-                                }
-                            }
-                            androidx.compose.runtime.DisposableEffect(visibility) {
-                                onDispose {
-                                    if (deviceCardSource?.visibility === visibility) deviceCardSource = null
-                                }
-                            }
-                        }
-                        SharedCardScene(sharedScope, this, entry.id, active = currentEntry?.id == entry.id) {
-                            SharedCardPage(source, id) {
-                                DeviceDetailScreen(
-                                    vm = vm,
-                                    deviceId = id,
-                                    autoStart = autoStart,
-                                    nfcTicket = entry.arguments?.getString("nfcTicket").orEmpty(),
-                                    onBack = { if (navController.currentBackStackEntry?.id == entry.id) navController.popBackStack() },
-                                    onNeedPayment = {
-                                        navigateTab(navController, "orders")
-                                    },
-                                )
-                            }
+                        CardPage(entry, entry.cardSource(CardDestination.DEVICE), id) { onBack ->
+                            DeviceDetailScreen(
+                                vm = vm,
+                                deviceId = id,
+                                autoStart = autoStart,
+                                nfcTicket = entry.arguments?.getString("nfcTicket").orEmpty(),
+                                onBack = onBack,
+                                onNeedPayment = {
+                                    if (navController.currentBackStackEntry?.id == entry.id) navigateTab(navController, "orders")
+                                },
+                            )
                         }
                     }
                 }
@@ -846,7 +856,7 @@ private fun openCardPage(nav: NavHostController, route: String, source: CardSour
 }
 
 private fun openScannedDevice(nav: NavHostController, id: String) {
-    nav.navigate("device/$id?autoStart=true") {
+    nav.navigate("device/${Uri.encode(id)}?autoStart=true") {
         // Manual input lives above scan; popping to scan inclusively destroys
         // both so back from the detail page never lands on a dead scanner.
         popUpTo("scan?cardOrigin={cardOrigin}&cardEntry={cardEntry}") { inclusive = true }
