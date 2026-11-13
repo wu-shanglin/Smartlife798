@@ -131,7 +131,10 @@ fun OrdersScreen(vm: MainViewModel, onOpenDevice: (String, CardOrigin) -> Unit) 
             when (val res = vm.bills(page = requestedPage, size = com.smartlife798.app.core.Paging.RECENT_BILLS_SIZE)) {
                 is Res.Ok -> {
                     val list = res.data.orEmpty()
-                    bills = (if (reset) list else bills + list).distinctBy { it.id }
+                    // 按创建时间排列已加载的账单，追加新页后重新排序。
+                    bills = (if (reset) list else bills + list)
+                        .distinctBy { it.id }
+                        .sortedByDescending { it.ctime }
                     page = requestedPage
                     endReached = list.size < com.smartlife798.app.core.Paging.RECENT_BILLS_SIZE
                 }
