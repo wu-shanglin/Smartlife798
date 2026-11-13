@@ -4,9 +4,15 @@ package com.smartlife798.app.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -27,6 +33,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
@@ -65,6 +74,8 @@ import com.smartlife798.app.core.GuideTopic
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.ui.theme.ExpressiveEffects
 import com.smartlife798.app.ui.theme.WaterBlue80
+import kotlin.math.PI
+import kotlin.math.sin
 
 /** Shared by first use, unread updates and explicit replay. */
 @Composable
@@ -101,8 +112,6 @@ fun FeatureGuideScreen(
     }
     BackHandler { if (page > 0) previous() else onExit() }
 
-    val entrance = remember(deck.id) { Animatable(0.96f) }
-    LaunchedEffect(entrance) { entrance.animateTo(1f, ExpressiveEffects) }
     BoxWithConstraints(
         Modifier.fillMaxSize().background(colors.background).safeDrawingPadding(),
         contentAlignment = Alignment.TopCenter,
@@ -122,9 +131,13 @@ fun FeatureGuideScreen(
             )
             AnimatedContent(
                 targetState = page,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds(),
                 transitionSpec = {
-                    fadeIn(ExpressiveEffects) togetherWith fadeOut(ExpressiveEffects)
+                    val direction = if (targetState > initialState) 1 else -1
+                    val enter = tween<IntOffset>(360, easing = FastOutSlowInEasing)
+                    val exit = tween<IntOffset>(230, easing = FastOutSlowInEasing)
+                    (slideInHorizontally(enter) { direction * it / 4 } + fadeIn(tween(280))) togetherWith
+                        (slideOutHorizontally(exit) { -direction * it / 7 } + fadeOut(tween(170)))
                 },
                 label = "guidePage",
             ) { index ->
@@ -137,10 +150,11 @@ fun FeatureGuideScreen(
                         verticalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 22.dp),
                     ) {
                         GuideCopy(topics[index], copySlots)
-                        GuideVisual(topics[index].icon, Modifier.height(if (compact) 152.dp else 196.dp).graphicsLayer {
-                            scaleX = entrance.value
-                            scaleY = entrance.value
-                        })
+                        GuideVisual(
+                            topics[index].icon,
+                            active = index == page,
+                            modifier = Modifier.height(if (compact) 152.dp else 196.dp),
+                        )
                     }
                 }
             }
@@ -193,12 +207,15 @@ private fun GuideHeader(title: String, page: Int, count: Int) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             repeat(count) { index ->
-                val color = when {
+                val targetColor = when {
                     index == page -> colors.primary
                     index < page -> colors.primary.copy(alpha = 0.45f)
                     else -> colors.surfaceContainerHighest
                 }
-                Spacer(Modifier.weight(1f).height(4.dp).background(color, MaterialTheme.shapes.small))
+                val color = animateColorAsState(targetColor, tween(260), label = "guideProgress")
+                Spacer(Modifier.weight(1f).height(4.dp).clip(MaterialTheme.shapes.small).drawBehind {
+                    drawRect(color.value)
+                })
             }
         }
     }
@@ -253,23 +270,63 @@ private fun GuideCopy(topic: GuideTopic, slots: GuideCopySlots) {
 }
 
 @Composable
-private fun GuideVisual(icon: GuideIcon, modifier: Modifier = Modifier) {
+private fun GuideVisual(icon: GuideIcon, active: Boolean, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    val reveal = remember { Animatable(0.92f) }
+    val accent = remember { Animatable(0f) }
+    LaunchedEffect(active) {
+        if (active) {
+            reveal.snapTo(0.92f)
+            reveal.animateTo(1f, ExpressiveEffects)
+        }
+    }
+    LaunchedEffect(active) {
+        if (active) {
+            accent.snapTo(0f)
+            accent.animateTo(1f, tween(780, delayMillis = 120, easing = LinearEasing))
+        }
+    }
     Box(
         modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraLarge)
             .background(Brush.linearGradient(listOf(colors.primaryContainer, lerp(colors.primaryContainer, colors.surface, 0.58f)))),
         contentAlignment = Alignment.Center,
     ) {
-        when (icon) {
-            GuideIcon.WELCOME -> LoginGuideVisual()
-            GuideIcon.SCAN -> NfcGuideVisual()
-            GuideIcon.PREFERENCES -> StartupGuideVisual()
+        if (icon == GuideIcon.SCAN) {
+            Canvas(Modifier.matchParentSize()) {
+                val progress = accent.value
+                val radius = 69.dp.toPx()
+                for (wave in 0..1) {
+                    val phase = (progress * 1.45f - wave * 0.45f).coerceIn(0f, 1f)
+                    drawCircle(
+                        color = colors.primary,
+                        radius = radius + (size.width * 0.36f - radius).coerceAtLeast(26.dp.toPx()) * phase,
+                        alpha = pulse(phase) * 0.45f,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                }
+            }
+        }
+        Box(
+            modifier = Modifier.fillMaxWidth().graphicsLayer {
+                scaleX = reveal.value
+                scaleY = reveal.value
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            when (icon) {
+                GuideIcon.WELCOME -> LoginGuideVisual { accent.value }
+                GuideIcon.SCAN -> NfcGuideVisual()
+                GuideIcon.PREFERENCES -> StartupGuideVisual { accent.value }
+            }
         }
     }
 }
 
+private fun pulse(phase: Float): Float =
+    if (phase <= 0f || phase >= 1f) 0f else sin(phase * PI).toFloat()
+
 @Composable
-private fun LoginGuideVisual() {
+private fun LoginGuideVisual(progress: () -> Float) {
     val colors = MaterialTheme.colorScheme
     Surface(
         modifier = Modifier.widthIn(max = 264.dp).fillMaxWidth(0.84f)
@@ -300,13 +357,22 @@ private fun LoginGuideVisual() {
                 Text("手机号", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                repeat(6) {
+                repeat(6) { index ->
                     Box(
                         Modifier.weight(1f).height(25.dp)
-                            .background(colors.primaryContainer, MaterialTheme.shapes.extraSmall),
+                            .clip(MaterialTheme.shapes.extraSmall).drawBehind {
+                                val highlight = pulse((progress() - index * 0.10f) * 3f)
+                                drawRect(lerp(colors.primaryContainer, colors.primary, highlight * 0.58f))
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Spacer(Modifier.size(4.dp).background(colors.onPrimaryContainer, CircleShape))
+                        Spacer(
+                            Modifier.size(4.dp).background(colors.onPrimaryContainer, CircleShape).graphicsLayer {
+                                val highlight = pulse((progress() - index * 0.10f) * 3f)
+                                scaleX = 1f + highlight * 0.7f
+                                scaleY = scaleX
+                            },
+                        )
                     }
                 }
             }
@@ -357,7 +423,7 @@ private fun NfcGuideVisual() {
 }
 
 @Composable
-private fun StartupGuideVisual() {
+private fun StartupGuideVisual(progress: () -> Float) {
     val colors = MaterialTheme.colorScheme
     Surface(
         modifier = Modifier.widthIn(max = 280.dp).fillMaxWidth(0.88f).clearAndSetSemantics { hideFromAccessibility() },
@@ -370,22 +436,33 @@ private fun StartupGuideVisual() {
                 Text("启动页面", style = MaterialTheme.typography.titleSmall)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                StartupOption(StartupPage.HOME.label, Icons.Filled.Home, Modifier.weight(1f))
-                StartupOption(StartupPage.DEVICES.label, Icons.AutoMirrored.Filled.List, Modifier.weight(1f))
+                StartupOption(StartupPage.HOME.label, Icons.Filled.Home, Modifier.weight(1f)) {
+                    pulse(progress() * 2f)
+                }
+                StartupOption(StartupPage.DEVICES.label, Icons.AutoMirrored.Filled.List, Modifier.weight(1f)) {
+                    pulse((progress() - 0.42f) * 2f)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StartupOption(label: String, icon: ImageVector, modifier: Modifier) {
-    Surface(modifier, MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+private fun StartupOption(label: String, icon: ImageVector, modifier: Modifier, highlight: () -> Float) {
+    val colors = MaterialTheme.colorScheme
+    Surface(modifier, MaterialTheme.shapes.medium, color = colors.surfaceContainerHigh) {
         Column(
-            Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
+            Modifier.drawBehind {
+                drawRect(colors.primary, alpha = highlight() * 0.24f)
+            }.padding(horizontal = 4.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, null, Modifier.size(20.dp).graphicsLayer {
+                translationY = -3.dp.toPx() * highlight()
+                scaleX = 1f + 0.15f * highlight()
+                scaleY = scaleX
+            }, tint = colors.primary)
             Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }

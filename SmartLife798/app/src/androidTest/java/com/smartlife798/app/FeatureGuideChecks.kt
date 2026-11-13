@@ -246,6 +246,8 @@ object FeatureGuideChecks {
         test.finish(code, result)
     }
     private fun snapshot(test: Instrumentation, name: String) {
+        // Accessibility can become idle before the visual-only entry animation settles.
+        Thread.sleep(1_000)
         test.uiAutomation.waitForIdle(500, 5000)
         test.uiAutomation.takeScreenshot()?.let { bitmap ->
             java.io.File(test.targetContext.getExternalFilesDir(null), name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
