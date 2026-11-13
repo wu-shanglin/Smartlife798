@@ -133,7 +133,7 @@ fun FeatureGuideScreen(
                     val copySlots = measureGuideCopy(topics, constraints.maxWidth)
                     Column(
                         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            .padding(top = if (compact) 20.dp else 48.dp, bottom = 12.dp),
+                            .padding(top = 16.dp, bottom = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 22.dp),
                     ) {
                         GuideCopy(topics[index], copySlots)
