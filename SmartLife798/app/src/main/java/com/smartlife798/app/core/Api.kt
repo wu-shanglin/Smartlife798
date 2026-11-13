@@ -233,7 +233,18 @@ object Api {
         )
     }
 
-    private fun unsupportedLoginProtocol() = Res.Fail(-1, "当前官方登录协议尚未适配，请检查客户端更新")
+    /** Alipay SDK auth code exchange in the observed 3.1.10 protocol. */
+    internal suspend fun loginWithAlipay(openCode: String): Res<LoginData> {
+        if (session.versionHeader() != LoginSign.PROTOCOL) return unsupportedLoginProtocol()
+        if (!AlipayLogin.validCode(openCode)) return Res.Fail(-1, "支付宝授权码无效，请重新授权")
+        return request(
+            "POST", LoginSign.ENDPOINT, mapOf("sign" to ""),
+            body = mapOf("openCode" to openCode),
+            accountToken = null, protocolVersion = LoginSign.PROTOCOL, dataType = dataType<LoginData>(),
+        )
+    }
+
+    internal fun unsupportedLoginProtocol() = Res.Fail(-1, "当前官方登录协议尚未适配，请检查客户端更新")
 
     /** GET /api/v1/acc/logout */
     suspend fun logout(accountToken: String? = session.token): Res<Unit> =

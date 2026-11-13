@@ -35,7 +35,7 @@
     "-52": "存在付款失败账单",
     "-87": "扣款失败/余额不足",
     "-88": "未开通或未签约支付",
-    "-98": "需要支付宝账号补齐 oid",
+    "-98": "需要补充账号验证；支付宝登录提示使用手机号登录",
     "-99": "登录状态已过期"
   },
   "endpoints": [
@@ -71,12 +71,13 @@
       ],
       "body": [
         "un",
-        "authCode"
+        "authCode",
+        "openCode"
       ],
       "response": "LoginData{al{oid,token,uid},ar}",
       "use": "login",
-      "verified": "3.1.10 original offline runtime and independent synthetic vectors; live acceptance of the signed reimplementation unverified",
-      "notes": "Anonymous SMS login. Sign UTF-8 authCode=<sms>&un=<phone> with keyed BLAKE3; key is Ys3yx=j7 + the zero-padded last eight decimal digits of floor(device Unix milliseconds / 30000) * 30 + eight phone digits starting at floor((length - 8) / 2) + acclogin. Preserve leading zeroes in the SMS code. Use lowercase hex of the first 16 bytes. Pin VersionCode and user-agent to the supported signing protocol; no retries. Original Alipay login may use openCode and is outside this client flow."
+      "verified": "3.1.10 original offline runtime at the login boundary and static Retrofit declarations; live acceptance unverified",
+      "notes": "Anonymous login. SMS JSON is {un,authCode}. Sign UTF-8 authCode=<sms>&un=<phone> with keyed BLAKE3; key is Ys3yx=j7 + the zero-padded last eight decimal digits of floor(device Unix milliseconds / 30000) * 30 + eight phone digits starting at floor((length - 8) / 2) + acclogin. Preserve leading zeroes. Use lowercase hex of the first 16 bytes. Alipay JSON is {openCode}, set to the SDK auth_code when resultStatus=9000 and result_code=200. Send an empty sign query value. Both paths pin VersionCode and user-agent to 3.1.10, do not retry, and require a nonblank server token."
     },
     {
       "method": "GET",
