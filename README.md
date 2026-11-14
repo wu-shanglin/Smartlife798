@@ -48,6 +48,7 @@
 | 接口契约、版本发现与漂移检测 | [docs/04](docs/04-接口契约与变更检测.md)、[api-contract.json](docs/api-contract.json) |
 | 实测、工程验证及未验边界 | [docs/05](docs/05-真实支付与计费实测.md) |
 | 检查命令、存储、发布、待办和 Git | [docs/06](docs/06-工程规范与路线图.md) |
+| 下载站源码与 Cloudflare 部署 | [sites/smartlife798](sites/smartlife798/README.md) |
 
 ## 构建与产物
 
