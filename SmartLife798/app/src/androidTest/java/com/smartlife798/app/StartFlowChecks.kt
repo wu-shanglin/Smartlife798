@@ -20,6 +20,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** Account-free, fully intercepted start/recovery checks; never reaches the vendor. */
 object StartFlowChecks {
@@ -32,7 +33,11 @@ object StartFlowChecks {
         val clientField = Api::class.java.getDeclaredField("client").apply { isAccessible = true }
         val originalClient = Api.client
         val originalToken = session.token
+        val originalUid = session.uid
         val calls = AtomicInteger()
+        val endCalls = AtomicInteger()
+        val owner = AtomicReference<String?>(null)
+        val detailId = AtomicReference("start-fixture")
         val state = AtomicInteger(99)
         // 0 matching, 1 network failure, 2 foreign, 3 incomplete, 4 blocked read.
         val responseMode = AtomicInteger(4)
@@ -56,6 +61,10 @@ object StartFlowChecks {
                         state.set(10)
                         """{"code":0}"""
                     }
+                    path.endsWith("/dev/end") -> {
+                        endCalls.incrementAndGet()
+                        """{"code":-1,"msg":"unexpected fixture end"}"""
+                    }
                     path.endsWith("/dev/status") -> {
                         if (responseMode.get() == 5) {
                             staleEntered.countDown()
@@ -72,7 +81,10 @@ object StartFlowChecks {
                             else -> """{"code":0,"data":{"device":{"id":"start-fixture","status":1,"gene":{"status":${state.get()}}}}}"""
                         }
                     }
-                    path.endsWith("/dev/home/1") -> """{"code":0,"data":{"device":{"id":"start-fixture","name":"首页运行卡片测试饮水机","status":1,"bm":{"dtype":8},"gene":{"status":${state.get()}}}}}"""
+                    path.endsWith("/dev/home/1") -> {
+                        val user = owner.get()?.let { ""","user":{"id":"$it"}""" }.orEmpty()
+                        """{"code":0,"data":{"device":{"id":"${detailId.get()}","name":"首页运行卡片测试饮水机","status":1,"bm":{"dtype":8},"gene":{"status":${state.get()}}}$user}}"""
+                    }
                     path.endsWith("/master") -> """{"code":0,"data":{"favos":[]}}"""
                     else -> """{"code":0,"data":[]}"""
                 }
@@ -96,6 +108,7 @@ object StartFlowChecks {
             test.runOnMainSync {
 
                 session.token = "offline-start-fixture"
+                session.uid = "mine"
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 vm.setAppResumed(false)
             }
@@ -159,18 +172,29 @@ object StartFlowChecks {
             await { vm.pendingStart.value?.deviceId == device.id }
             responseMode.set(0)
             state.set(10)
+            owner.set("mine")
             runBlocking { vm.syncActiveStatus() }
             home()
             await { text(test).contains("运行中") }
-            stage = "ended record and unrelated running device"
-            test.runOnMainSync { vm.setAppResumed(false) }
+            stage = "mismatched ownership detail preserves the current bookmark"
+            detailId.set("another-device")
+            owner.set("someone-else")
+            runBlocking { check(!vm.syncActiveStatus()) }
+            check(vm.active.value?.deviceId == device.id && Store.active()?.deviceId == device.id)
+            detailId.set(device.id)
+            stage = "resume clears home card if a different owner took over while paused"
             state.set(99)
-            runBlocking { vm.syncActiveStatus() }
-            // A matching running device without a local start is never adopted.
+            // The session ends and someone else starts before the next status read.
             state.set(10)
+            test.runOnMainSync { vm.setAppResumed(true, allowAutoCheckIn = false) }
+            await { vm.active.value == null && !text(test).contains("查看设备") }
+            check(Store.active() == null && Store.pendingStart() == null && endCalls.get() == 0)
+            // A running device without a local start is never adopted.
             runBlocking { vm.loadDevice(device.id) }
             check(vm.active.value == null)
             stage = "logout rejects a late status and releases command guard"
+            test.runOnMainSync { vm.setAppResumed(false) }
+            owner.set(null)
             state.set(99) // A new start must pass the fresh standby/ownership preflight.
             runBlocking { check(vm.startDevice(device, 21, "") is Res.Ok) }
             responseMode.set(5)
@@ -193,8 +217,8 @@ object StartFlowChecks {
                 check(vm.startDevice(device, 21, "") is Res.Fail)
                 check(vm.stopDevice(device) is Res.Fail)
             }
-            check(Store.active() == null && Store.pendingStart() == null && calls.get() == 3)
-            result.putString("stream", "PASS: pending/running home cards, cross-entry exclusion, page cancellation, foreign/incomplete reads, detail end reconciliation, unknown start recovery after recreation, no foreign adoption, logout drops late response, logout isolation\n")
+            check(Store.active() == null && Store.pendingStart() == null && calls.get() == 3 && endCalls.get() == 0)
+            result.putString("stream", "PASS: pending/running home cards, duplicate guard, partial status, end reconciliation, restart recovery, foreground owner handoff clears old card without sending end, logout isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
@@ -206,6 +230,7 @@ object StartFlowChecks {
 
             if (fixtureStarted) Store.clearAccount()
             session.token = originalToken
+            session.uid = originalUid
             clientField.set(null, originalClient)
         }
         test.finish(code, result)

@@ -25,6 +25,14 @@ class DeviceAccessTest {
         assertNull(detail(10, "me").access(null, "a").action)
     }
 
+    @Test fun foreignOwnerRequiresTwoKnownDifferentAccountIds() {
+        assertTrue(detail(10, "other").hasForeignOwner("me"))
+        assertFalse(detail(10, "me").hasForeignOwner("me"))
+        assertFalse(detail(10, "other").hasForeignOwner(null))
+        assertFalse(detail(10, " ").hasForeignOwner("me"))
+        assertFalse(detail(10).hasForeignOwner("me"))
+    }
+
     @Test fun freeStandbyAndMissingData() {
         assertEquals(PrimaryAction.START, detail(99).access("me", null).action)
         assertEquals(PrimaryAction.START, detail(99, "").access("me", null).action)
