@@ -3,6 +3,9 @@ package com.smartlife798.app.core
 /** A machine's running state is shared; it is not proof that this account owns its session. */
 data class DeviceAccess(val action: PrimaryAction?, val notice: String? = null, val label: String? = null)
 
+fun DeviceDetail.hasForeignOwner(uid: String?): Boolean =
+    !uid.isNullOrBlank() && user?.id?.let { it.isNotBlank() && it != uid } == true
+
 fun DeviceDetail.access(uid: String?, ownDeviceId: String?): DeviceAccess {
     val dev = device ?: return DeviceAccess(null, "设备信息不可用，请刷新后重试")
     val owner = user?.id?.takeIf { it.isNotBlank() }

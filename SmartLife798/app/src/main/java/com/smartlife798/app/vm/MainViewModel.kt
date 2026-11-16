@@ -45,6 +45,7 @@ import com.smartlife798.app.core.blockedByOtherSession
 import com.smartlife798.app.core.isAbnormal
 import com.smartlife798.app.core.isInUse
 import com.smartlife798.app.core.access
+import com.smartlife798.app.core.hasForeignOwner
 import com.smartlife798.app.core.isStandby
 import com.smartlife798.app.core.isUnpaid
 import com.smartlife798.app.core.mergeStatus
@@ -724,6 +725,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _pendingStart: MutableStateFlow<ActiveUsage?> = MutableStateFlow<ActiveUsage?>(null)
     val pendingStart: StateFlow<ActiveUsage?> = _pendingStart.asStateFlow()
     private val deviceCommand = Mutex()
+    private val activeStatusRead = Mutex()
     private var startJob: Job? = null
     private var deviceRevision = 0L
 
@@ -1551,9 +1553,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (result is Res.Ok && detail?.device?.id != did) {
                 return@withContext Res.Fail(-1, if (detail?.device == null) "设备不存在或已停用" else "设备响应不匹配，请刷新后重试")
             }
-            val uid = session.uid
-            if (detail?.device?.id == did && !uid.isNullOrBlank() &&
-                detail.user?.id?.takeIf { it.isNotBlank() }?.let { it != uid } == true) {
+            if (detail?.device?.id == did && detail.hasForeignOwner(session.uid)) {
                 withContext(Dispatchers.Main.immediate) {
                     checkDeviceSession(token)
                     if (revision == deviceRevision) dropForeignDeviceRecord(did)
@@ -1708,7 +1708,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // One foreground watch for this install's confirmed usage or unresolved start.
     // The detail page yields no duplicate reads, and command confirmation owns its reads.
     fun setAppResumed(value: Boolean, allowAutoCheckIn: Boolean = true) {
-        if (value && !appResumed) foregroundEpoch += 1
+        if (value && !appResumed) {
+            foregroundEpoch += 1
+            if (!deviceCommand.isLocked) _liveStatus.value = null
+        }
         if (!value) {
             meRefreshJob?.cancel()
             nfcResolveJob?.cancel()
@@ -1786,23 +1789,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (it.id == device.id) it.mergeStatus(state) else it
             })
         }
-    }
-
-    /**
-     * The device a `dev/status` snapshot is merged onto.
-     *
-     * Prefers the last published snapshot; otherwise rebuilds from the saved
-     * bookmark. A bookmark written by an older build may not carry `dtype`, in
-     * which case the full record is loaded once — classifying with dtype 0 would
-     * read `gene.status = 1` as 「在线」 and end the session prematurely.
-     */
-    private suspend fun baseDeviceFor(id: String, name: String, dtype: Int): Device {
-        _liveStatus.value?.takeIf { it.id == id }?.let { return it }
-        if (dtype != 0) {
-            return Device(id = id, name = name, bm = com.smartlife798.app.core.DeviceModel(dtype = dtype))
-        }
-        val full = (withContext(Dispatchers.IO) { Api.deviceDetail(id) } as? Res.Ok)?.data?.device
-        return full ?: Device(id = id, name = name)
     }
 
     private fun clearActiveByServer(device: Device, ended: Boolean) {
@@ -2022,21 +2008,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * on resume and once at startup so an ended session — or a start that never
      * took effect — cannot leave a 「使用中」 card behind.
      */
-    suspend fun syncActiveStatus(): Boolean {
-        val usage = _active.value ?: _pendingStart.value ?: return false
-        if (!session.isLoggedIn || deviceCommand.isLocked) return false
+    suspend fun syncActiveStatus(): Boolean = withContext(Dispatchers.Main.immediate) {
+        val usage = _active.value ?: _pendingStart.value ?: return@withContext false
+        if (!session.isLoggedIn || deviceCommand.isLocked || detailPage.deviceId == usage.deviceId ||
+            !activeStatusRead.tryLock()
+        ) return@withContext false
+        try {
+            readActiveStatus(usage)
+        } finally {
+            activeStatusRead.unlock()
+        }
+    }
+
+    private suspend fun readActiveStatus(usage: ActiveUsage): Boolean {
         val token = session.token
         val revision = deviceRevision
-        val res = withContext(Dispatchers.IO) { Api.deviceStatus(usage.deviceId, false) }
+        val epoch = foregroundEpoch
+        val did = usage.deviceId
+        fun isCurrent() = revision == deviceRevision && epoch == foregroundEpoch &&
+            !deviceCommand.isLocked && detailPage.deviceId != did &&
+            (_active.value ?: _pendingStart.value) == usage
+
+        val res = withContext(Dispatchers.IO) { Api.deviceStatus(did, false) }
         checkDeviceSession(token)
-        val fresh = (res as? Res.Ok)?.data?.device ?: return false
-        val base = baseDeviceFor(usage.deviceId, usage.name, usage.dtype)
-        checkDeviceSession(token)
-        if (revision != deviceRevision || deviceCommand.isLocked ||
-            (_active.value ?: _pendingStart.value) != usage
-        ) return false
-        reconcileDevice(base.mergeStatus(fresh), StartWatch.classify(base, fresh), token, revision)
-        return true
+        if (!isCurrent()) return false
+        val fresh = (res as? Res.Ok)?.data?.device?.takeIf { it.id == did } ?: return false
+        var base = _liveStatus.value?.takeIf { it.id == did } ?: Device(
+            id = did,
+            name = usage.name,
+            bm = com.smartlife798.app.core.DeviceModel(dtype = usage.dtype),
+        )
+        if (base.dtype == 0 || StartWatch.classify(base, fresh) == StartSignal.STARTED) {
+            // The machine can go idle and start again between two status reads.
+            val detail = withContext(Dispatchers.IO) { Api.deviceDetail(did) }
+            checkDeviceSession(token)
+            if (!isCurrent()) return false
+            val full = (detail as? Res.Ok)?.data ?: return false
+            val device = full.device?.takeIf { it.id == did } ?: return false
+            if (full.hasForeignOwner(session.uid)) {
+                dropForeignDeviceRecord(did)
+                return true
+            }
+            if (base.dtype == 0) base = device
+        }
+        val signal = StartWatch.classify(base, fresh)
+        reconcileDevice(base.mergeStatus(fresh), signal, token, revision)
+        return signal != StartSignal.UNKNOWN
     }
 
     /**
@@ -2076,7 +2093,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "未能确认设备状态，请刷新后重试")
         }
         val access = detail.access(session.uid, (_active.value ?: _pendingStart.value)?.deviceId)
-        if (!session.uid.isNullOrBlank() && detail.user?.id?.takeIf { it.isNotBlank() }?.let { it != session.uid } == true)
+        if (detail.hasForeignOwner(session.uid))
             dropForeignDeviceRecord(id)
         return if (access.notice != null) Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, access.notice) else Res.Ok(detail)
     }
