@@ -38,6 +38,8 @@ npx wrangler deploy
 
 `wrangler.jsonc` 开启 Worker 请求日志，采样率为 100%，日志持久保存到 Cloudflare，链路追踪关闭。部署成功后可在 Worker 的「可观察性 → 日志」查看 Worker 执行记录。[Workers Logs 文档](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
 
+Git 分支预览由 Cloudflare Workers Builds 执行 `npx wrangler preview`，仓库用空的 `previews` 块声明预览配置。需要为预览接入数据时，用预览环境独立的绑定。[Worker Previews 文档](https://developers.cloudflare.com/workers/previews/configuration/)
+
 ### 用量统计
 
 同一个 Worker 在 `/stats` 提供管理页面，展示今日活跃安装数、今日设备启动受理次数、14 天趋势和 30 天明细。日期统一使用 UTC+8。管理页面使用 HTTPS Basic Auth，用户名是 `admin`，密码从 Worker Secret 读取。
