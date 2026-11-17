@@ -112,9 +112,6 @@ async function homepage(request, env, context) {
 export default {
   async fetch(request, env, context) {
     const url = new URL(request.url);
-    if (url.pathname === '/stats' || url.pathname === '/stats/') {
-      return Response.redirect(new URL('/#usage', url), 302);
-    }
     if ((url.pathname === '/' || url.pathname === '/index.html') && ['GET', 'HEAD'].includes(request.method)) {
       return homepage(request, env, context);
     }
