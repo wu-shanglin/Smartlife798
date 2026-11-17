@@ -35,10 +35,13 @@ object LoginInitializationChecks {
         val logins = AtomicInteger()
         val unexpectedWrites = AtomicInteger()
         var savedAutoCheckIn: Boolean? = null
+        var savedAgreementVersion: Int? = null
         try {
             test.runOnMainSync { ServiceLocator.init(test.targetContext) }
             check(Store.token.isNullOrBlank())
             savedAutoCheckIn = Store.autoCheckIn()
+            savedAgreementVersion = Store.acceptedAgreementVersion
+            Store.acceptedAgreementVersion = 0
             Store.saveAutoCheckIn(true)
             val client = original.newBuilder().apply { interceptors().removeAll { it is OfflineTransport.Router } }.addInterceptor { chain ->
                 val req = chain.request()
@@ -127,6 +130,21 @@ object LoginInitializationChecks {
                     } else false
                 }
             }
+            stage = "agreement gates login requests"
+            check(captchaRequests.get() == 0 && smsRequests.get() == 0 && logins.get() == 0)
+            lateinit var loginVm: MainViewModel
+            test.runOnMainSync { loginVm = ViewModelProvider(checkNotNull(activity))[MainViewModel::class.java] }
+            kotlinx.coroutines.runBlocking {
+                check(loginVm.sendSmsCode("13800000000", "TEST", 0.5) is Res.Fail)
+                check(loginVm.login("13800000000", "000000") is Res.Fail)
+            }
+            check(smsRequests.get() == 0 && logins.get() == 0)
+            clickAction("阅读${UserAgreement.TITLE}")
+            await { visibleText(UserAgreement.TITLE) }
+            clickAction("关闭")
+            check(Store.acceptedAgreementVersion == 0 && captchaRequests.get() == 0)
+            clickAction("我已阅读并同意${UserAgreement.TITLE}")
+            await { Store.acceptedAgreementVersion == UserAgreement.VERSION }
             stage = "captcha failure and retry"
             await { visibleText("重试") }
             check(nodes(test.uiAutomation.rootInActiveWindow).count { it.text?.toString() == "重试" } == 1)
@@ -246,14 +264,19 @@ object LoginInitializationChecks {
                     nodes(test.uiAutomation.rootInActiveWindow).none { it.isEditable }
             }
             check(logins.get() == 4 && smsRequests.get() == 1 && unexpectedWrites.get() == 0)
-            result.putString("stream", "PASS: stable field heights across focus changes, formatted phone paste, captcha retry, SMS countdown, and four signed login attempts; profile initialization and check-in read complete after LoginScreen is removed. Terminal fixtures only.\n")
+            result.putString("stream", "PASS: agreement blocks requests until actively checked; stable field heights, captcha retry, SMS countdown and four signed login attempts; profile and check-in initialization finish after navigation. Terminal fixtures only.\n")
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
             result.putString("stream", "FAIL at $stage: ${failure.javaClass.simpleName} at ${failure.stackTrace.firstOrNull()}; classes=${nodes(test.uiAutomation.rootInActiveWindow).map { it.className }.distinct()},editable=${nodes(test.uiAutomation.rootInActiveWindow).count { it.isEditable }}; fields=${nodes(test.uiAutomation.rootInActiveWindow).filter { it.isEditable }.map { "hint=${it.hintText},length=${it.text?.length}" }}; login=${logins.get()},sms=${smsRequests.get()},missions=${missions.get()},unexpectedWrites=${unexpectedWrites.get()}\n")
         } finally {
+            savedAgreementVersion?.let { Store.acceptedAgreementVersion = it }
             allowCheckInResponse.countDown()
             test.runOnMainSync { activity?.let { it.viewModelStore.clear(); it.finish() }; session.clear() }
             savedAutoCheckIn?.let { Store.saveAutoCheckIn(it) }
+            if (!test.targetContext.getSharedPreferences("smartlife798", 0).edit().commit()) {
+                result.putString("stream", "FAIL: fixture preference cleanup could not be persisted\n")
+                code = Activity.RESULT_CANCELED
+            }
             field.set(null, original)
         }
         test.finish(code, result)

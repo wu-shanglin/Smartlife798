@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -37,12 +38,12 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldLabelPosition
@@ -53,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +79,7 @@ import androidx.compose.ui.autofill.ContentType
 import com.smartlife798.app.BuildConfig
 import com.smartlife798.app.R
 import com.smartlife798.app.core.Res
+import com.smartlife798.app.core.UserAgreement
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -86,6 +89,10 @@ import kotlin.random.Random
 fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val checkingUpdate by vm.checkingUpdate.collectAsStateWithLifecycle()
     val loginMethod by vm.loginMethod.collectAsStateWithLifecycle()
+    val agreementAccepted by vm.agreementAccepted.collectAsStateWithLifecycle()
+    var agreementChecked by rememberSaveable { mutableStateOf(false) }
+    val canUseLogin = agreementChecked && agreementAccepted
+    var showAgreement by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val phone = remember { TextFieldState() }
     val captchaInput = remember { TextFieldState() }
@@ -112,7 +119,13 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         } finally { captchaLoading = false }
     }
 
-    LaunchedEffect(Unit) { loadCaptcha() }
+    LaunchedEffect(canUseLogin) {
+        if (canUseLogin) loadCaptcha()
+        else {
+            captchaBitmap = null
+            captchaInput.clearText()
+        }
+    }
     LaunchedEffect(countdown) {
         if (countdown > 0) {
             delay(1000)
@@ -204,8 +217,8 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     CaptchaAction(
                         bitmap = captchaBitmap,
                         loading = captchaLoading,
-                        enabled = !sending,
-                        onRefresh = { if (!sending) scope.launch { loadCaptcha() } },
+                        enabled = canUseLogin && !sending,
+                        onRefresh = { if (canUseLogin && !sending) scope.launch { loadCaptcha() } },
                         modifier = sideAction,
                     )
                 }
@@ -231,12 +244,12 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         shapes = ButtonDefaults.shapes(shape = fieldShape),
                         modifier = sideAction,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        enabled = countdown == 0 && !sending && loginMethod == null && !captchaLoading && captchaBitmap != null &&
+                        enabled = canUseLogin && countdown == 0 && !sending && loginMethod == null && !captchaLoading && captchaBitmap != null &&
                             phone.text.length == 11 && captchaInput.text.isNotBlank(),
                         onClick = {
                             val number = phone.text.toString()
                             val code = captchaInput.text.toString()
-                            if (sending || loginMethod != null || captchaLoading || captchaBitmap == null ||
+                            if (!canUseLogin || sending || loginMethod != null || captchaLoading || captchaBitmap == null ||
                                 countdown > 0 || number.length != 11 || code.isBlank()) {
                                 return@TextButton
                             }
@@ -272,12 +285,30 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
                     )
                 }
+                TextButton(onClick = { showAgreement = true }) { Text("阅读${UserAgreement.TITLE}") }
+                UsageStatsToggle(vm, agreementAccepted)
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(
+                        value = canUseLogin,
+                        enabled = !sending && loginMethod == null && !captchaLoading,
+                        role = Role.Checkbox,
+                        onValueChange = { checked ->
+                            agreementChecked = checked
+                            vm.setAgreementAccepted(checked)
+                        },
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Checkbox(checked = canUseLogin, onCheckedChange = null)
+                    Text("我已阅读并同意${UserAgreement.TITLE}", style = MaterialTheme.typography.bodyMedium)
+                }
                 Button(
-                    enabled = phone.text.length == 11 && smsInput.text.isNotBlank() && loginMethod == null && !sending,
+                    enabled = canUseLogin && phone.text.length == 11 && smsInput.text.isNotBlank() && loginMethod == null && !sending,
                     onClick = {
                         val number = phone.text.toString()
                         val code = smsInput.text.toString()
-                        if (loginMethod != null || sending || number.length != 11 || code.isBlank()) return@Button
+                        if (!canUseLogin || loginMethod != null || sending || number.length != 11 || code.isBlank()) return@Button
                         scope.launch {
                             error = null
                             when (val res = vm.login(number, code)) {
@@ -318,15 +349,9 @@ fun LoginScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 ) { Text(if (checkingUpdate) "正在检查更新…" else "检查客户端更新") }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                ProvideTextStyle(MaterialTheme.typography.bodySmall) {
-                    val footerColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    Text("登录即表示同意《慧生活798 服务协议》与《隐私政策》", color = footerColor)
-                    Text("独立客户端，连接慧生活 798 服务端", color = footerColor)
-                }
-            }
         }
     }
+    if (showAgreement) AgreementDialog(onClose = { showAgreement = false })
 }
 
 @Composable
@@ -353,7 +378,7 @@ private fun CaptchaAction(
                 contentScale = ContentScale.FillBounds,
             )
             else -> Text(
-                "重试",
+                if (enabled) "重试" else "待同意协议",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
