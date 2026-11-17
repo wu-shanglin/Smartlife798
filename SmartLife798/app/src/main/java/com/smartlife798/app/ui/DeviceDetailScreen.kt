@@ -516,7 +516,8 @@ fun DeviceDetailScreen(
                                     Text("使用积分", style = MaterialTheme.typography.titleSmall)
                                     Text(if (savingProfile) "正在保存账号设置…"
                                         else if (profile?.useScore == null) "请刷新以读取账号积分设置"
-                                        else "账号自动记住选择，抵扣规则以服务端为准",
+                                        else if (profile?.useScore == 1) "已开启，是否抵扣以本次账单结算为准"
+                                        else "已关闭，开启后由服务端判断是否抵扣",
                                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Switch(checked = profile?.useScore == 1,
@@ -525,7 +526,7 @@ fun DeviceDetailScreen(
                                     onCheckedChange = { enabled ->
                                         scope.launch {
                                             when (val result = vm.setUseScore(enabled)) {
-                                                is Res.Ok -> Unit
+                                                is Res.Ok -> vm.notify(if (enabled) "已开启积分抵扣偏好" else "已关闭积分抵扣偏好")
                                                 is Res.Fail -> vm.notify(result.msg)
                                             }
                                         }

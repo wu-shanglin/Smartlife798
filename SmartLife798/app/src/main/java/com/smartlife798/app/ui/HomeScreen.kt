@@ -106,7 +106,6 @@ fun HomeScreen(
     val active by vm.active.collectAsStateWithLifecycle()
     val pending by vm.pendingStart.collectAsStateWithLifecycle()
     val live by vm.liveStatus.collectAsStateWithLifecycle()
-    val liveAt by vm.liveUpdatedAt.collectAsStateWithLifecycle()
     val loading by vm.loadingMaster.collectAsStateWithLifecycle()
     val error = vm.masterError.collectAsStateWithLifecycle().value
     val scope = rememberCoroutineScope()
@@ -193,7 +192,6 @@ fun HomeScreen(
                         active = cardActive,
                         pending = active == null && pending != null,
                         live = liveForActive,
-                        liveAt = if (liveForActive != null) liveAt else 0L,
                         ending = ending,
                         onOpenDevice = { id -> onOpenDevice(id, CardOrigin.HOME_ACTIVE) },
                         onOpenOrders = onOpenOrders,
@@ -245,7 +243,7 @@ fun HomeScreen(
                 }
             }
             item(key = "recents") {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionHeader(
                         title = "最近使用",
                         action = if (recents.isNotEmpty()) "更多记录" else null,
@@ -263,7 +261,7 @@ fun HomeScreen(
                                     key(recent.id) {
                                         if (index > 0) {
                                             HorizontalDivider(
-                                                Modifier.padding(horizontal = 12.dp),
+                                                Modifier.padding(horizontal = 16.dp),
                                                 color = MaterialTheme.colorScheme.outlineVariant,
                                             )
                                         }
@@ -377,14 +375,14 @@ private fun RecentDeviceRow(recent: RecentDevice, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .sharedCard(CardOrigin.HOME_RECENT, recent.id)
             .background(colors.surfaceContainerLow)
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .heightIn(min = 68.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
+                .size(40.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(colors.secondaryContainer),
             contentAlignment = Alignment.Center,
@@ -395,7 +393,7 @@ private fun RecentDeviceRow(recent: RecentDevice, onClick: () -> Unit) {
                 color = colors.onSecondaryContainer,
             )
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 recent.name.ifBlank { type ?: "设备" },
                 modifier = Modifier.sharedCardElement(CardOrigin.HOME_RECENT, recent.id),
@@ -428,7 +426,6 @@ private fun RecentDeviceRow(recent: RecentDevice, onClick: () -> Unit) {
 private fun ActiveUsageCard(
     active: ActiveUsage,
     live: Device?,
-    liveAt: Long,
     pending: Boolean,
     ending: Boolean,
     onOpenDevice: (String) -> Unit,
@@ -447,62 +444,59 @@ private fun ActiveUsageCard(
             contentColor = colors.onTertiaryContainer,
         ),
     ) {
-        Column(Modifier.padding(AppLayout.Card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatusPill(
-                if (pending) DeviceState(DeviceStateKind.STARTING, "启动待确认") else usagePillState(live),
-            )
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 active.name.ifBlank { DeviceType.nameOrNull(active.dtype) ?: "设备" },
                 modifier = Modifier.sharedCardElement(CardOrigin.HOME_ACTIVE, active.deviceId),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (!pending) {
-                UsageDuration(
-                    startedAt = active.startedAt,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = colors.onTertiaryContainer,
-                    fontWeight = FontWeight.SemiBold,
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusPill(
+                    if (pending) DeviceState(DeviceStateKind.STARTING, "启动待确认") else usagePillState(live),
                 )
-                Text(
-                    if (liveAt > 0) "状态更新于 " + Fmt.clock(liveAt) + " · 本机计时" else "本机计时",
-                    style = MaterialTheme.typography.labelMedium,
-                )
+                if (!pending) {
+                    UsageDuration(
+                        startedAt = active.startedAt,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.onTertiaryContainer,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
             Text(
                 when {
                     pending || live == null -> "正在向服务端确认设备状态"
-                    DeviceType.isWaterLike(active.dtype) ->
-                        "请在设备上按「启动」取水，用完按「结算」或在下方结束。"
+                    DeviceType.isWaterLike(active.dtype) -> "请在设备上按「启动」取水，用完后结算。"
                     else -> "计费以服务端结算为准"
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
-            Button(
-                onClick = onEnd,
-                enabled = !ending,
-                modifier = Modifier.fillMaxWidth().heightIn(min = AppLayout.ActionHeight),
-                shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.onTertiaryContainer,
-                    contentColor = colors.tertiaryContainer,
-                ),
-            ) {
-                if (ending) {
-                    LoadingIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = colors.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(if (ending) "正在结束…" else "结束使用")
-            }
             val linkColors = ButtonDefaults.textButtonColors(contentColor = colors.onTertiaryContainer)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { onOpenDevice(active.deviceId) }, colors = linkColors) {
-                    Text("查看设备")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = onEnd,
+                    enabled = !ending,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shapes = ButtonDefaults.shapes(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.onTertiaryContainer,
+                        contentColor = colors.tertiaryContainer,
+                    ),
+                ) {
+                    if (ending) {
+                        LoadingIndicator(modifier = Modifier.size(16.dp), color = colors.tertiaryContainer)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (ending) "正在结束…" else "结束使用")
                 }
                 TextButton(onClick = onOpenOrders, colors = linkColors) { Text("使用记录") }
             }

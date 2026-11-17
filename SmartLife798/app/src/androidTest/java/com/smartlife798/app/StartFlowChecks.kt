@@ -129,7 +129,7 @@ object StartFlowChecks {
             responseMode.set(0)
             releaseRead.countDown()
             await { vm.active.value?.deviceId == device.id }
-            await { text(test).contains("运行中") }
+            await { text(test).contains("运行中") && text(test).contains("结束使用") }
             check(Store.pendingStart() == null && Store.active()?.deviceId == device.id)
             screenshot(test, "home-running.png")
             stage = "cached detail and stale standby input cannot erase or repeat a start"
@@ -154,7 +154,7 @@ object StartFlowChecks {
             responseMode.set(0)
             state.set(99)
             runBlocking { vm.pollDevice(device.id, device.copy(gene = Gene(status = 10))) }
-            await { vm.active.value == null && !text(test).contains("查看设备") }
+            await { vm.active.value == null && !text(test).contains("结束使用") }
             stage = "failed confirmation retains pending and prevents resend"
             responseMode.set(1)
             runBlocking {
@@ -175,7 +175,7 @@ object StartFlowChecks {
             owner.set("mine")
             runBlocking { vm.syncActiveStatus() }
             home()
-            await { text(test).contains("运行中") }
+            await { text(test).contains("运行中") && text(test).contains("结束使用") }
             stage = "mismatched ownership detail preserves the current bookmark"
             detailId.set("another-device")
             owner.set("someone-else")
@@ -187,7 +187,7 @@ object StartFlowChecks {
             // The session ends and someone else starts before the next status read.
             state.set(10)
             test.runOnMainSync { vm.setAppResumed(true, allowAutoCheckIn = false) }
-            await { vm.active.value == null && !text(test).contains("查看设备") }
+            await { vm.active.value == null && !text(test).contains("结束使用") }
             check(Store.active() == null && Store.pendingStart() == null && endCalls.get() == 0)
             // A running device without a local start is never adopted.
             runBlocking { vm.loadDevice(device.id) }
