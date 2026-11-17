@@ -35,3 +35,5 @@ npx wrangler deploy
 ```
 
 [Cloudflare Workers 静态资源文档](https://developers.cloudflare.com/workers/static-assets/get-started/)
+
+`wrangler.jsonc` 开启 Worker 请求日志，采样率为 100%，日志持久保存到 Cloudflare，链路追踪关闭。部署成功后可在 Worker 的「可观察性 → 日志」查看 Worker 执行记录。[Workers Logs 文档](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
