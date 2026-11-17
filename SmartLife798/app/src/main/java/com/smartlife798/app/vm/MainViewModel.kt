@@ -706,21 +706,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (!session.isLoggedIn) return Res.Fail(-99, "请先登录")
                 Api.updateProfile(patch)
             }
-            currentCoroutineContext().ensureActive()
-            if (accountGeneration != generation || session.token != token) {
-                throw CancellationException("Account changed")
-            }
+            ensureProfileSession(generation, token)
             if (result is Res.Ok) {
+                // A successful write acknowledges the request; only master confirms the stored preference.
+                val confirmedScore = if (patch.useScore != null) {
+                    val readBack = Api.master()
+                    ensureProfileSession(generation, token)
+                    (readBack as? Res.Ok)?.data?.storedProfile(session.phone)
+                        ?.takeIf { it.id == before.id }?.useScore
+                } else {
+                    before.useScore
+                }
                 val current = _profile.value ?: return Res.Fail(-1, "账号资料已变更，请刷新后重试")
-                val updated = current.copy(name = patch.name ?: current.name, useScore = patch.useScore ?: current.useScore)
+                val updated = current.copy(name = patch.name ?: current.name, useScore = confirmedScore)
                 _profile.value = updated
                 Store.saveProfile(updated)
+                if (patch.useScore != null && confirmedScore != patch.useScore) {
+                    return Res.Fail(-1, if (confirmedScore == null) "暂未确认积分设置，请刷新后查看"
+                        else "服务端未应用本次积分设置，请稍后再试")
+                }
             }
             return result
         } finally {
             profileRevision += 1
             _savingProfile.value = false
             profileMutation.unlock()
+        }
+    }
+
+    private suspend fun ensureProfileSession(generation: Long, token: String?) {
+        currentCoroutineContext().ensureActive()
+        if (accountGeneration != generation || session.token != token) {
+            throw CancellationException("Account changed")
         }
     }
 

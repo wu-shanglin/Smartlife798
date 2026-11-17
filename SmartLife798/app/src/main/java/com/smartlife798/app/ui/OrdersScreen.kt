@@ -575,7 +575,11 @@ private fun BillDetailSheet(
                 InfoRow("账单编号", bill.id, mono = true)
                 InfoRow("创建时间", Fmt.dateTime(bill.ctime))
                 InfoRow("更新时间", Fmt.dateTime(bill.utime))
-                InfoRow("优惠金额", Fmt.money(bill.discount))
+                InfoRow("优惠金额（合计）", Fmt.money(bill.discount))
+                if (!bill.dev?.id.isNullOrBlank()) {
+                    InfoRow("积分抵扣金额", "未提供明细")
+                    InfoRow("消耗积分", "未提供明细")
+                }
                 InfoRow("支付状态", bill.statusLabel)
                 bill.dev?.let { device ->
                     InfoRow("设备名称", device.name.ifBlank { "-" })

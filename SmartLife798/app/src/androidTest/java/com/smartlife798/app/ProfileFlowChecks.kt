@@ -71,6 +71,9 @@ object ProfileFlowChecks {
         val requests = AtomicInteger()
         val patches = Collections.synchronizedList(mutableListOf<String>())
         val rejectPatch = AtomicBoolean()
+        val savedScore = AtomicInteger()
+        val ignoreScorePatch = AtomicBoolean()
+        val rejectReadBack = AtomicBoolean()
         val rejectMasterToken = AtomicBoolean()
         val patchGate = AtomicReference<Gate?>()
         val masterGate = AtomicReference<Gate?>()
@@ -92,12 +95,17 @@ object ProfileFlowChecks {
                     patches.add(buffer.readUtf8())
                     patchGate.getAndSet(null)?.hold()
                     if (rejectPatch.get()) """{"code":-1,"msg":"离线保存失败"}"""
-                    else """{"code":0}"""
+                    else {
+                        val score = JsonParser.parseString(patches.last()).asJsonObject["useScore"]?.asInt
+                        if (score != null && !ignoreScorePatch.get()) savedScore.set(score)
+                        """{"code":0}"""
+                    }
                 }
                 path.endsWith("/master") -> {
                     masterGate.getAndSet(null)?.hold()
                     if (rejectMasterToken.get()) """{"code":-99}"""
-                    else """{"code":0,"data":{"account":{"id":"offline-profile","name":"旧资料","phone":"","useScore":0},"pltTotalScore":"120","favos":[]}}"""
+                    else if (rejectReadBack.get()) """{"code":-1}"""
+                    else """{"code":0,"data":{"account":{"id":"offline-profile","name":"旧资料","phone":"","useScore":${savedScore.get()}},"pltTotalScore":"120","favos":[]}}"""
                 }
                 else -> """{"code":0,"data":[]}"""
             }
@@ -172,6 +180,17 @@ object ProfileFlowChecks {
             heldPatch.release.countDown()
             runBlocking { check(first.await() is Res.Ok) }
             check(vm.profile.value?.name == "防重昵称" && vm.profile.value?.useScore == 1)
+
+            stage = "score write acknowledgement must not override a differing or unavailable read-back"
+            ignoreScorePatch.set(true)
+            runBlocking { check(vm.setUseScore(false) is Res.Fail) }
+            check(vm.profile.value?.useScore == 1 && Store.profile()?.useScore == 1)
+            ignoreScorePatch.set(false)
+            rejectReadBack.set(true)
+            runBlocking { check(vm.setUseScore(false) is Res.Fail) }
+            check(vm.profile.value?.useScore == null && Store.profile()?.useScore == null)
+            rejectReadBack.set(false)
+            runBlocking { check(vm.setUseScore(true) is Res.Ok) }
 
             stage = "stale master cannot overwrite an accepted nickname"
             val heldMaster = Gate().also { gates.add(it); masterGate.set(it) }

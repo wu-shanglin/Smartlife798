@@ -408,7 +408,7 @@
     }
   ],
   "accountBehavior": {
-    "profilePatch": "POST acc/upt sends one of name or useScore only; account changes are guarded and only server success updates local state",
+    "profilePatch": "POST acc/upt sends one of name or useScore only; account changes are guarded; score preference additionally confirms the value using master for the same account",
     "points": "mission-lst.accScoreRsp.validScore is the available points display value; master.pltTotalScore describes platform conversion; account.useScore 0/1 is the persisted server preference, not a balance or dev/start parameter",
     "avatar": "account.img is a direct URL (MeFragment.M -> ImageUtils.e -> Glide.load); this client uses HTTPS without business credentials and falls back locally; no invented fs/dl key conversion",
     "autoCheckIn": {
