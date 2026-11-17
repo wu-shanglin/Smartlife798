@@ -13,13 +13,13 @@ import com.smartlife798.app.ui.HomeScreen
 import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
 import kotlinx.coroutines.*
-import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /** Account-free, fully intercepted start/recovery checks; never reaches the vendor. */
@@ -36,6 +36,7 @@ object StartFlowChecks {
         val originalUid = session.uid
         val calls = AtomicInteger()
         val endCalls = AtomicInteger()
+        val preflightTime = AtomicLong(0L)
         val owner = AtomicReference<String?>(null)
         val detailId = AtomicReference("start-fixture")
         val state = AtomicInteger(99)
@@ -53,10 +54,17 @@ object StartFlowChecks {
             check(Store.token.isNullOrBlank() && Store.active() == null &&
                 Store.pendingStart() == null && session.token.isNullOrBlank())
             fixtureStarted = true
-            val fixture = OkHttpClient.Builder().addInterceptor { chain ->
+            val fixture = originalClient.newBuilder().apply {
+                interceptors().removeAll { it is OfflineTransport.Router }
+            }.addInterceptor { chain ->
                 val path = chain.request().url.encodedPath
                 val body = when {
                     path.endsWith("/dev/start") -> {
+                        check(chain.request().header("Authorization") == "offline-start-fixture")
+                        check(chain.request().header("VersionCode") == "3.1.10")
+                        check(chain.request().url.queryParameter("rcp") == "false")
+                        // Independent BLAKE3 vector for the synthetic owner, command and server clock.
+                        check(chain.request().url.queryParameter("sign") == "fa0a9885697f9952e43c60c476bbb3ea")
                         calls.incrementAndGet()
                         state.set(10)
                         """{"code":0}"""
@@ -83,7 +91,7 @@ object StartFlowChecks {
                     }
                     path.endsWith("/dev/home/1") -> {
                         val user = owner.get()?.let { ""","user":{"id":"$it"}""" }.orEmpty()
-                        """{"code":0,"data":{"device":{"id":"${detailId.get()}","name":"首页运行卡片测试饮水机","status":1,"bm":{"dtype":8},"gene":{"status":${state.get()}}}$user}}"""
+                        """{"code":0,"time":${preflightTime.get()},"data":{"device":{"id":"${detailId.get()}","name":"首页运行卡片测试饮水机","status":1,"bm":{"dtype":8},"gene":{"status":${state.get()}}}$user}}"""
                     }
                     path.endsWith("/master") -> """{"code":0,"data":{"favos":[]}}"""
                     else -> """{"code":0,"data":[]}"""
@@ -108,13 +116,18 @@ object StartFlowChecks {
             test.runOnMainSync {
 
                 session.token = "offline-start-fixture"
-                session.uid = "mine"
+                session.uid = "offline-start-owner"
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
                 check(!vm.usageStatsAvailable)
                 vm.setUsageStatsEnabled(true)
                 check(!vm.usageStatsEnabled.value)
                 vm.setAppResumed(false)
             }
+            stage = "unsigned start is blocked without server time"
+            runBlocking { check(vm.startDevice(device, 21, "") is Res.Fail) }
+            check(calls.get() == 0 && Store.pendingStart() == null)
+            preflightTime.set(1_792_944_010_000L)
+
             stage = "pending home card and cross-entry duplicate guard"
             home()
             val caller = callers.launch { vm.startDevice(device, 21, "") }
@@ -175,7 +188,7 @@ object StartFlowChecks {
             await { vm.pendingStart.value?.deviceId == device.id }
             responseMode.set(0)
             state.set(10)
-            owner.set("mine")
+            owner.set("offline-start-owner")
             runBlocking { vm.syncActiveStatus() }
             home()
             await { text(test).contains("运行中") && text(test).contains("结束使用") }
@@ -221,7 +234,7 @@ object StartFlowChecks {
                 check(vm.stopDevice(device) is Res.Fail)
             }
             check(Store.active() == null && Store.pendingStart() == null && calls.get() == 3 && endCalls.get() == 0)
-            result.putString("stream", "PASS: pending/running home cards, duplicate guard, partial status, end reconciliation, restart recovery, foreground owner handoff clears old card without sending end, logout isolation\n")
+            result.putString("stream", "PASS: signed start with server time, missing-clock guard, pending/running home cards, duplicate guard, partial status, end reconciliation, restart recovery, foreground owner handoff clears old card without sending end, logout isolation\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")

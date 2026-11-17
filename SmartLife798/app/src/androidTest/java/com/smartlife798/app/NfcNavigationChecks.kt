@@ -99,6 +99,9 @@ object NfcNavigationChecks {
                 }
                 "/api/v1/dev/start" -> {
                     check(automatic)
+                    check(request.header("VersionCode") == "3.1.10")
+                    check(request.url.queryParameter("rcp") == "false")
+                    check(request.url.queryParameter("sign")?.matches(Regex("[0-9a-f]{32}")) == true)
                     startCalls.incrementAndGet()
                     if (startResult.get() >= 0) deviceStates[checkNotNull(request.url.queryParameter("did"))] = 10
                     return@addInterceptor Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
@@ -118,7 +121,7 @@ object NfcNavigationChecks {
                 else -> { forbidden.incrementAndGet(); unexpectedPath.set(request.url.encodedPath); "null" }
             }
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
-                .body("""{"code":0,"data":$data}""".toResponseBody()).build()
+                .body("""{"code":0,"time":1792944010000,"data":$data}""".toResponseBody()).build()
         }.build()
         fun root(): android.view.accessibility.AccessibilityNodeInfo? {
             if (android.os.Build.VERSION.SDK_INT >= 33) test.uiAutomation.clearCache()
@@ -230,9 +233,9 @@ object NfcNavigationChecks {
                 await { visible("我的") }
                 click("我的")
                 test.waitForIdleSync()
-                stage = "diagnostic test scrolls to developer tools"
-                repeat(12) {
-                    if (!visible("开发者工具")) {
+                fun scrollTo(label: String) {
+                    repeat(12) {
+                        if (visible(label)) return
                         val bounds = android.graphics.Rect()
                         checkNotNull(root()).getBoundsInScreen(bounds)
                         val x = bounds.centerX()
@@ -242,11 +245,14 @@ object NfcNavigationChecks {
                             "input swipe $x $from $x $to 350")).use { it.readBytes() }
                         SystemClock.sleep(150)
                     }
+                    await { visible(label) }
                 }
-                await { visible("开发者工具") }
+                stage = "diagnostic test scrolls to developer tools"
+                scrollTo("开发者工具")
                 click("开发者工具")
                 stage = "diagnostic test opens NFC child"
-                await { visible("NFC 采集") }
+                await { visible("设备诊断") }
+                scrollTo("NFC 采集")
                 click("NFC 采集")
                 await { visible("开始采集") }
                 val qrBeforeTool = qrReads.get()

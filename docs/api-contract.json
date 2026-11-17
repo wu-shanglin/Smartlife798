@@ -179,22 +179,26 @@
         "ptype",
         "args",
         "rcp",
-        "cnt"
+        "cnt",
+        "sign"
       ],
       "response": "BaseReq",
       "use": "start device",
-      "verified": "static (billing needs account)"
+      "verified": "original 3.1.10 static and offline request fixtures; signed live execution not verified",
+      "notes": "3.1.10 OctUtil digest uses sorted command fields; omit blank args from signing and form-encode nonblank args before hashing. Authorization uses the same token as the digest; use the server time from device detail preflight."
     },
     {
       "method": "GET",
       "path": "/api/v1/dev/end",
       "query": [
         "did",
-        "rcp"
+        "rcp",
+        "sign"
       ],
       "response": "BaseReq",
       "use": "stop/settle",
-      "verified": "static"
+      "verified": "original 3.1.10 static and offline request fixtures; signed live settlement not verified",
+      "notes": "3.1.10 OctUtil digest signs did and rcp using the server time from device detail preflight and the same token as Authorization."
     },
     {
       "method": "GET",

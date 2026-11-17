@@ -1984,14 +1984,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Details may have remained open while another account acquired the device.
         // Recheck ownership under the command mutex, before any billable request.
-        when (val checked = checkedDeviceAccess(device.id)) {
-            is Res.Fail -> return@withContext checked
-            is Res.Ok -> if (checked.data?.access(session.uid, null)?.action != com.smartlife798.app.core.PrimaryAction.START) {
-                return@withContext Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "设备当前已在使用或不可用，请刷新设备状态")
-            }
+        val checked = when (val result = checkedDeviceAccess(device.id)) {
+            is Res.Fail -> return@withContext result
+            is Res.Ok -> result
+        }
+        if (checked.data?.access(session.uid, null)?.action != com.smartlife798.app.core.PrimaryAction.START) {
+            return@withContext Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "设备当前已在使用或不可用，请刷新设备状态")
         }
         checkDeviceSession(token)
-        val accepted = Api.deviceStart(device.id, payType, args, count = 1)
+        val accepted = Api.deviceStart(device.id, payType, args, checked.serverTime, count = 1)
         checkDeviceSession(token)
         if (accepted is Res.Fail) {
             Diag.event(
@@ -2215,18 +2216,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val access = detail.access(session.uid, (_active.value ?: _pendingStart.value)?.deviceId)
         if (detail.hasForeignOwner(session.uid))
             dropForeignDeviceRecord(id)
-        return if (access.notice != null) Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, access.notice) else Res.Ok(detail)
+        return if (access.notice != null) Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, access.notice) else result
     }
 
     private suspend fun stopDeviceInternal(device: Device): Res<Device> = withContext(Dispatchers.Main.immediate) {
 
         if (!session.isLoggedIn) return@withContext Res.Fail(ErrorCodes.TOKEN_EXPIRED, "请先登录")
         val token = session.token
-        when (val checked = checkedDeviceAccess(device.id)) {
-            is Res.Fail -> return@withContext checked
-            is Res.Ok -> if (checked.data?.access(session.uid, (_active.value ?: _pendingStart.value)?.deviceId)?.action != com.smartlife798.app.core.PrimaryAction.STOP) {
-                return@withContext Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "当前没有可结束的本账号使用，请刷新设备状态")
-            }
+        val checked = when (val result = checkedDeviceAccess(device.id)) {
+            is Res.Fail -> return@withContext result
+            is Res.Ok -> result
+        }
+        if (checked.data?.access(session.uid, (_active.value ?: _pendingStart.value)?.deviceId)?.action != com.smartlife798.app.core.PrimaryAction.STOP) {
+            return@withContext Res.Fail(ErrorCodes.DEVICE_ACCESS_CHANGED, "当前没有可结束的本账号使用，请刷新设备状态")
         }
         checkDeviceSession(token)
         watchJob?.cancel()
@@ -2234,7 +2236,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             device = device,
             send = {
                 checkDeviceSession(token)
-                Api.deviceEnd(device.id).also {
+                Api.deviceEnd(device.id, checked.serverTime).also {
                     checkDeviceSession(token)
                     if (it is Res.Ok) Diag.event("dev.end.accepted", "did" to device.id)
                 }
