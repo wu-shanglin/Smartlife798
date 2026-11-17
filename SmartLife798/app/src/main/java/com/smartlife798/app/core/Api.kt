@@ -273,7 +273,7 @@ object Api {
         request("GET", "/api/v1/dev/favo", mapOf("did" to did, "remove" to remove.toString()), dataType = dataType<Unit>())
 
     /**
-     * GET /api/v1/dev/start?did=&upgrade=&ptype=&args=&rcp=&cnt=
+     * GET /api/v1/dev/start?did=&upgrade=&ptype=&args=&rcp=&cnt=&sign=
      *
      * Returns the raw `data` payload as text (empty when absent). The command
      * endpoints are modelled as `Unit`, but `data` is not always empty and may
@@ -288,14 +288,15 @@ object Api {
         did: String,
         payType: Int,
         args: String,
+        serverTimeMs: Long,
         receipt: Boolean = false,
         count: Int = 1,
         upgrade: Boolean = true,
     ): Res<String> {
-        val res: Res<JsonElement?> = request(
-            "GET", "/api/v1/dev/start",
+        val res = signedDeviceCommand<JsonElement?>(
+            DeviceCommandSign.START,
             DeviceCommands.startQuery(did, payType, args, receipt, count, upgrade),
-            dataType = dataType<JsonElement?>(),
+            serverTimeMs,
         )
         return when (res) {
             is Res.Ok -> {
@@ -313,9 +314,28 @@ object Api {
         }
     }
 
-    /** GET /api/v1/dev/end?did=&rcp= — `receipt` false for the same reason as [deviceStart]. */
-    suspend fun deviceEnd(did: String, receipt: Boolean = false): Res<Unit> =
-        request("GET", "/api/v1/dev/end", DeviceCommands.endQuery(did, receipt), dataType = dataType<Unit>())
+    /** GET /api/v1/dev/end?did=&rcp=&sign= — `receipt` false for the same reason as [deviceStart]. */
+    suspend fun deviceEnd(did: String, serverTimeMs: Long, receipt: Boolean = false): Res<Unit> =
+        signedDeviceCommand(DeviceCommandSign.END, DeviceCommands.endQuery(did, receipt), serverTimeMs)
+
+    private suspend inline fun <reified T> signedDeviceCommand(
+        endpoint: String,
+        query: Map<String, String>,
+        serverTimeMs: Long,
+    ): Res<T> {
+        val version = session.versionHeader()
+        if (version != DeviceCommandSign.PROTOCOL) {
+            return Res.Fail(-1, "当前官方设备协议尚未适配，请检查客户端更新")
+        }
+        val token = session.token.orEmpty()
+        val uid = session.uid.orEmpty()
+        val sign = DeviceCommandSign.sign(query, token, uid, endpoint, serverTimeMs)
+            ?: return Res.Fail(-1, "无法确认设备操作签名，请刷新后重试；若仍失败，请重新登录")
+        return request(
+            "GET", endpoint, query + ("sign" to sign),
+            accountToken = token, protocolVersion = version, dataType = dataType<T>(),
+        )
+    }
 
     /** GET /api/v1/dev/mode/start?did=&mode=&args= */
     suspend fun setMode(did: String, mode: Int, args: String): Res<Unit> =

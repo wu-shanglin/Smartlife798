@@ -15,7 +15,6 @@ import com.smartlife798.app.core.session
 import com.smartlife798.app.ui.DeviceDetailScreen
 import com.smartlife798.app.ui.theme.SmartLifeTheme
 import com.smartlife798.app.vm.MainViewModel
-import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -23,6 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /** Offline fixture transport lives only in the test APK. Every request is intercepted. */
 object EndFlowChecks {
@@ -38,6 +38,7 @@ object EndFlowChecks {
         val originalToken = session.token
         val originalUid = session.uid
         val endCalls = AtomicInteger()
+        val preflightTime = AtomicLong(1_792_944_010_000L)
         val statusReads = AtomicInteger()
         val totalStatusReads = AtomicInteger()
         val reject = AtomicBoolean()
@@ -47,10 +48,17 @@ object EndFlowChecks {
         val device = """{"id":"end-fixture","name":"结束状态演示饮水机","status":1,"bm":{"dtype":8},"gene":{"status":10}}"""
         try {
             check(Store.token.isNullOrBlank() && Store.active() == null && Store.pendingStart() == null && session.token.isNullOrBlank())
-            val fixture = OkHttpClient.Builder().addInterceptor { chain ->
+            val fixture = originalClient.newBuilder().apply {
+                interceptors().removeAll { it is OfflineTransport.Router }
+            }.addInterceptor { chain ->
                 val path = chain.request().url.encodedPath
                 val body = when {
                     path.endsWith("/dev/end") -> {
+                        check(chain.request().header("Authorization") == "offline-end-fixture")
+                        check(chain.request().header("VersionCode") == "3.1.10")
+                        check(chain.request().url.queryParameter("rcp") == "false")
+                        // Independent BLAKE3 vector for the synthetic owner, command and server clock.
+                        check(chain.request().url.queryParameter("sign") == "6e2257d332d887cf47db3f78d07185ec")
                         endCalls.incrementAndGet()
                         if (reject.get()) """{"code":-2,"msg":"请在设备上按结算"}"""
                         else """{"code":0}"""
@@ -65,7 +73,7 @@ object EndFlowChecks {
                             fullEntered.countDown()
                             check(releaseFull.await(20, TimeUnit.SECONDS))
                         }
-                        """{"code":0,"data":{"device":$device,"user":{"id":"offline-end-user"},"payItems":[{"type":21}]}}"""
+                        """{"code":0,"time":${preflightTime.get()},"data":{"device":$device,"user":{"id":"offline-end-user"},"payItems":[{"type":21}]}}"""
                     }
                     else -> """{"code":0,"data":[]}"""
                 }
@@ -130,6 +138,14 @@ object EndFlowChecks {
             check(enabled(test, "结束使用并结算"))
             check(endCalls.get() == 2)
 
+            stage = "unsigned end is blocked without server time"
+            preflightTime.set(0L)
+            kotlinx.coroutines.runBlocking {
+                val running = FixtureData.devices.first().copy(id = "end-fixture")
+                check(vm.stopDevice(running) is com.smartlife798.app.core.Res.Fail)
+            }
+            check(endCalls.get() == 2)
+
             stage = "logout prevents another end command"
             val before = endCalls.get()
             test.runOnMainSync { session.clear(); vm.logout() }
@@ -137,7 +153,7 @@ object EndFlowChecks {
                 check(vm.stopDevice(FixtureData.devices.first()) is com.smartlife798.app.core.Res.Fail)
             }
             check(Store.active() == null && endCalls.get() == before)
-            result.putString("stream", "PASS: delayed standby without stop-button rebound, duplicate tap, late full response, server rejection, logout rejects further commands\n")
+            result.putString("stream", "PASS: signed end with server time, missing-clock guard, delayed standby without stop-button rebound, duplicate tap, late full response, server rejection, logout rejects further commands\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
             result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
