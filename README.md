@@ -6,7 +6,7 @@
 |---|---|
 | 正式版包名 | `com.smartlife798.app` |
 | Beta 版包名 | `com.smartlife798.app.debug` |
-| 当前版本 | `2.4.5`（`versionCode 106`） |
+| 当前版本 | `2.5.0`（`versionCode 107`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 正式发布 | [最新 Release](https://github.com/wu-shanglin/Smartlife798/releases/latest) |
@@ -14,6 +14,8 @@
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
+
+**2.5.0 / 107** 普通更新会在安装包静默下载并校验完成后再提示。可暂不更新或直接进入系统安装流程。「我的 → 关于本客户端」新增默认开启的自动检查开关。
 
 **2.4.5 / 106** 修复饮水机换人后首页仍显示本账号旧运行卡片的问题。
 
@@ -54,13 +56,13 @@
 
 ## 构建与产物
 
-2.4.5 为本次正式发布版本，日常试装使用独立 Debug 包。
+2.5.0 为本次正式发布版本，日常试装使用独立 Debug 包。
 
 唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-2.4.5-release.apk`](dist/SmartLife798-2.4.5-release.apk) |
+| 产物 | [`dist/SmartLife798-2.5.0-release.apk`](dist/SmartLife798-2.5.0-release.apk) |
 
 日常试装使用 `SmartLife798/app/build/outputs/apk/debug/app-debug.apk`。桌面的「慧生活 798 Beta 版」可与正式版并存，分别保存应用数据。上表是正式发布时的产物路径，只有明确授权打包 Release 并发布后才生成。
 
