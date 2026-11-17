@@ -169,7 +169,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
             return
         }
         if (mode.isNotEmpty()) {
-            UpdateFlowChecks.run(this, mode)
+            UpdateFlowChecks.run(this, mode, expectedHash)
             return
         }
         val result = Bundle()
