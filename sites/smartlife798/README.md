@@ -57,7 +57,7 @@ npx wrangler d1 migrations apply USAGE_DB --remote
 npx wrangler secret put STATS_PASSWORD
 ```
 
-也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。在 Secret 提示中输入随机的高强度 ASCII 密码，或在 Cloudflare Worker 的「设置 → 变量和机密」添加同名 Secret。已有 Worker 的 `/` 继续提供 APK 下载页。部署后访问 [统计页](https://smartlife798.3205604633.workers.dev/stats)，确认未登录时提示认证，授权后能读取统计。如果部署目标是纯静态 Cloudflare Pages，统计接口和后台需部署到 Worker。
+也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。在 Secret 提示中输入随机的高强度 ASCII 密码，或在 Cloudflare Worker 的「设置 → 运行时变量和密钥 → 添加变量」创建 `STATS_PASSWORD`，类型选 Secret，保存后部署。已有 Worker 的 `/` 继续提供 APK 下载页。部署后访问 [统计页](https://smartlife798.3205604633.workers.dev/stats)，确认未登录时提示认证，授权后能读取统计。如果部署目标是纯静态 Cloudflare Pages，统计接口和后台需部署到 Worker。
 
 Android 正式构建默认使用项目的 Worker，用户可在「我的 → 关于本客户端 → 匿名用量统计」自行开启。Debug 和 performance 构建默认没有上报地址，可用 `-PusageStatsOrigin=https://实际部署的Worker域名` 配置测试环境，也可用空值关闭正式构建的统计入口。独立 `.offline` 测试包禁用上报。已有 APK 需升级到带此功能的版本并开启开关后才会产生数据。
 
