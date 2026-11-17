@@ -84,12 +84,13 @@ class SingleAttemptTransportTest {
     private fun request(url: String) = Request.Builder().url(url)
         .post("{\"weekday\":1}".toRequestBody()).build()
 
-    private class Loopback(private val firstStatus: Int) : Closeable {
+    internal class Loopback(private val firstStatus: Int) : Closeable {
         private val listener = ServerSocket().apply {
             bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
             soTimeout = 3_000
         }
-        val url = "http://127.0.0.1:${listener.localPort}/write"
+        val origin = "http://127.0.0.1:${listener.localPort}"
+        val url = "$origin/write"
         val requests = AtomicInteger()
         val firstRequest = AtomicReference<String>()
         val firstBody = AtomicReference<String>()

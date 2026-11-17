@@ -110,6 +110,9 @@ object StartFlowChecks {
                 session.token = "offline-start-fixture"
                 session.uid = "mine"
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
+                check(!vm.usageStatsAvailable)
+                vm.setUsageStatsEnabled(true)
+                check(!vm.usageStatsEnabled.value)
                 vm.setAppResumed(false)
             }
             stage = "pending home card and cross-entry duplicate guard"

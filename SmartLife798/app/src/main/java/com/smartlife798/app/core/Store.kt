@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.util.UUID
 
 /** Locally persisted, non-authoritative data (session + device bookkeeping). */
 data class RecentDevice(
@@ -63,6 +64,22 @@ object Store {
     var autoCheckUpdate: Boolean
         get() = prefs.getBoolean("autoCheckUpdate", true)
         set(value) { prefs.edit { putBoolean("autoCheckUpdate", value) } }
+
+    var usageStatsEnabled: Boolean
+        get() = prefs.getBoolean("usageStatsEnabled", false)
+        set(value) { prefs.edit { putBoolean("usageStatsEnabled", value) } }
+
+    var usageStatsReportedDay: String?
+        get() = prefs.getString("usageStatsReportedDay", null)
+        set(value) { prefs.edit { putString("usageStatsReportedDay", value) } }
+
+    fun usageStatsInstallation(day: String): String {
+        val stored = prefs.getString("usageStatsInstallation", null)
+        if (stored != null && stored.startsWith("$day/")) return stored.substringAfter('/')
+        val id = UUID.randomUUID().toString()
+        prefs.edit { putString("usageStatsInstallation", "$day/$id") }
+        return id
+    }
 
     /** Public original-app version; installation-wide and retained on logout. */
     var originalAppVersion: String?

@@ -36,6 +36,7 @@ import com.smartlife798.app.core.StartWatch
 import com.smartlife798.app.core.StoredProfile
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StartupPage
+import com.smartlife798.app.core.UsageStats
 import com.smartlife798.app.core.ProfilePatch
 import com.smartlife798.app.core.CheckIn
 import com.smartlife798.app.core.pointsBalance
@@ -54,6 +55,7 @@ import com.smartlife798.app.core.statusOnly
 import com.smartlife798.app.core.session
 import com.smartlife798.app.core.stateLabel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +63,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -77,6 +81,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class PayRequest(val bill: Bill?, val note: String, val createdAt: Long = System.currentTimeMillis())
 
     init { Store.initializeGuide() }
+
+    val usageStatsAvailable = BuildConfig.USAGE_STATS_ORIGIN.isNotEmpty() &&
+        !BuildConfig.APPLICATION_ID.endsWith(".offline")
+    private val _usageStatsEnabled = MutableStateFlow(usageStatsAvailable && Store.usageStatsEnabled)
+    val usageStatsEnabled = _usageStatsEnabled.asStateFlow()
+    private val usageStatsJob = SupervisorJob(viewModelScope.coroutineContext[Job])
+    private val usageStatsScope = CoroutineScope(viewModelScope.coroutineContext + usageStatsJob)
+    private var activeStatsJob: Job? = null
+
+    fun setUsageStatsEnabled(enabled: Boolean) {
+        if (!usageStatsAvailable || _usageStatsEnabled.value == enabled) return
+        Store.usageStatsEnabled = enabled
+        _usageStatsEnabled.value = enabled
+        if (enabled && appResumed) reportUsageStats()
+        if (!enabled) usageStatsJob.cancelChildren()
+    }
+
+    private fun reportUsageStats(startAccepted: Boolean = false) {
+        if (!_usageStatsEnabled.value) return
+        val day = UsageStats.reportingDay()
+        if (!startAccepted && (Store.usageStatsReportedDay == day || activeStatsJob?.isActive == true)) return
+        val installation = Store.usageStatsInstallation(day)
+        val report = usageStatsScope.launch {
+            if (UsageStats.report(BuildConfig.USAGE_STATS_ORIGIN, day, installation, startAccepted) && !startAccepted) {
+                Store.usageStatsReportedDay = day
+            }
+        }
+        if (!startAccepted) activeStatsJob = report
+    }
     private var guideSequence = 0
     private val _guideDeck: MutableStateFlow<com.smartlife798.app.core.GuideDeck?> = MutableStateFlow(
         com.smartlife798.app.core.FeatureGuide.pending(Store.guideSeen(), includeBasics = true)
@@ -1781,6 +1814,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (value && !appResumed) {
             foregroundEpoch += 1
             if (!deviceCommand.isLocked) _liveStatus.value = null
+            reportUsageStats()
         }
         if (!value) {
             meRefreshJob?.cancel()
@@ -1953,6 +1987,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             return@withContext accepted
         }
+        reportUsageStats(startAccepted = true)
         // `code >= 0` only means the server queued the command. The machine has
         // to report that it left standby before this client may call it running.
         val serverNote = (accepted as Res.Ok<String>).data.orEmpty()
