@@ -42,7 +42,7 @@ Git 分支预览由 Cloudflare Workers Builds 执行 `npx wrangler preview`，�
 
 ### 用量统计
 
-同一个 Worker 在 `/stats` 提供管理页面，展示今日活跃安装数、今日设备启动受理次数、14 天趋势和 30 天明细。日期统一使用 UTC+8。管理页面使用 HTTPS Basic Auth，用户名是 `admin`，密码从 Worker Secret 读取。
+下载站首页在下载按钮下方公开展示今日活跃安装数和今日设备启动受理次数。日期统一使用 UTC+8。Worker 仅渲染当天的两项汇总数字，按日期在边缘缓存一分钟；数据源不可用时显示「—」。旧 `/stats` 链接跳转到首页统计区。
 
 - **活跃安装**为当天主动参与统计且打开客户端进入前台或提交了设备启动受理事件的安装。同一次安装当天只计一次，多台设备分别计数。
 - **设备启动受理**为客户端收到业务服务端受理结果后的次数，按事件 UUID 去重。统计应答与设备业务流程独立，启动确认仍由原业务服务判断。离线、时钟偏差和上报失败可能导致偏低。写入端点供客户端匿名访问，限流能降低滥发影响，数据适用于运营观察。
@@ -50,14 +50,13 @@ Git 分支预览由 Cloudflare Workers Builds 执行 `npx wrangler preview`，�
 
 #### 配置现有 Worker
 
-现有 `smartlife798` Worker 由 Cloudflare Workers Builds 部署 `main`。仓库中的 `wrangler.jsonc` 将生产数据库 `smart798` 绑定为 `USAGE_DB`。新部署可将该绑定指向自己的 D1 数据库。数据库 ID 可以提交，统计页密码存入 Worker Secret。
+现有 `smartlife798` Worker 由 Cloudflare Workers Builds 部署 `main`。仓库中的 `wrangler.jsonc` 将生产数据库 `smart798` 绑定为 `USAGE_DB`。新部署可将该绑定指向自己的 D1 数据库。
 
 ```powershell
 npx wrangler d1 migrations apply USAGE_DB --remote
-npx wrangler secret put STATS_PASSWORD
 ```
 
-也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。在 Secret 提示中输入随机的高强度 ASCII 密码，或在 Cloudflare Worker 的「设置 → 运行时变量和密钥 → 添加变量」创建 `STATS_PASSWORD`，类型选 Secret，保存后部署。已有 Worker 的 `/` 继续提供 APK 下载页。部署后访问 [统计页](https://smartlife798.3205604633.workers.dev/stats)，确认未登录时提示认证，授权后能读取统计。如果部署目标是纯静态 Cloudflare Pages，统计接口和后台需部署到 Worker。
+也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。部署后访问[下载站首页](https://smartlife798.3205604633.workers.dev/#usage)查看汇总。纯静态 Cloudflare Pages 部署显示「—」。
 
 Android 正式构建默认使用项目的 Worker，用户可在「我的 → 关于本客户端 → 匿名用量统计」自行开启。Debug 和 performance 构建默认没有上报地址，可用 `-PusageStatsOrigin=https://实际部署的Worker域名` 配置测试环境，也可用空值关闭正式构建的统计入口。独立 `.offline` 测试包禁用上报。已有 APK 需升级到带此功能的版本并开启开关后才会产生数据。
 

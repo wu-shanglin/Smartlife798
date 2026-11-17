@@ -1,9 +1,7 @@
-import { renderDashboard } from './dashboard.mjs';
-
 const dayMillis = 86_400_000;
 const reportDays = 30;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const encoder = new TextEncoder();
+const countFormat = new Intl.NumberFormat('zh-CN');
 
 export function reportingDay(now, daysAgo = 0) {
   return new Date(now + 8 * 3_600_000 - daysAgo * dayMillis).toISOString().slice(0, 10);
@@ -74,60 +72,55 @@ async function ingest(request, env, day) {
   return reply(204);
 }
 
-async function authorized(request, password) {
-  const credentials = request.headers.get('Authorization');
-  if (!credentials || !credentials.startsWith('Basic ') || credentials.length > 1024) return false;
-  let provided;
-  try {
-    provided = atob(credentials.slice(6));
-  } catch {
-    return false;
-  }
-  const [expectedHash, providedHash] = await Promise.all([`admin:${password}`, provided].map(
-    value => crypto.subtle.digest('SHA-256', encoder.encode(value)),
-  ));
-  return crypto.subtle.timingSafeEqual(expectedHash, providedHash);
+async function todayCounts(url, db, context) {
+  const day = reportingDay(Date.now());
+  const key = new Request(new URL(`/.usage-cache/${day}`, url));
+  const cached = await caches.default.match(key);
+  if (cached) return cached.json();
+  const counts = await db.prepare(`SELECT
+    (SELECT COUNT(*) FROM daily_installations WHERE day = ?1) AS active,
+    (SELECT COUNT(*) FROM accepted_starts WHERE day = ?1) AS starts`).bind(day).first();
+  context.waitUntil(caches.default.put(key, Response.json(counts, {
+    headers: { 'Cache-Control': 'public, max-age=60' },
+  })).catch(() => {}));
+  return counts;
 }
 
-async function dashboard(request, env, now) {
-  if (request.method !== 'GET') return reply(405, null, { Allow: 'GET' });
-  if (!env.USAGE_DB || !env.STATS_PASSWORD) return reply(503, '统计服务尚未配置');
-  if (!await authorized(request, env.STATS_PASSWORD)) {
-    const { success } = await env.USAGE_RATE_LIMIT.limit({
-      key: `dashboard:${request.headers.get('CF-Connecting-IP') || 'unknown'}`,
-    });
-    return success ? reply(401, null, { 'WWW-Authenticate': 'Basic realm="SmartLife798 stats"' }) : reply(429);
-  }
+async function homepage(request, env, context) {
+  // Fetch the full asset regardless of the client's previously cached HTML.
+  const response = await env.ASSETS.fetch(new Request(request.url, { method: request.method }));
+  if (!response.ok) return response;
+  const page = new Response(response.body, response);
+  page.headers.delete('ETag');
+  page.headers.delete('Last-Modified');
+  page.headers.delete('Content-Length');
+  page.headers.set('Cache-Control', 'no-store');
+  if (!env.USAGE_DB || request.method === 'HEAD') return page;
 
-  const from = reportingDay(now, reportDays - 1);
-  const through = reportingDay(now);
-  const [active, starts] = await env.USAGE_DB.batch([
-    env.USAGE_DB.prepare('SELECT day, COUNT(*) AS total FROM daily_installations WHERE day BETWEEN ? AND ? GROUP BY day')
-      .bind(from, through),
-    env.USAGE_DB.prepare('SELECT day, COUNT(*) AS total FROM accepted_starts WHERE day BETWEEN ? AND ? GROUP BY day')
-      .bind(from, through),
-  ]);
-  const activeByDay = new Map(active.results.map(row => [row.day, row.total]));
-  const startsByDay = new Map(starts.results.map(row => [row.day, row.total]));
-  const days = Array.from({ length: reportDays }, (_, offset) => {
-    const day = reportingDay(now, offset);
-    return { day, active: activeByDay.get(day) ?? 0, starts: startsByDay.get(day) ?? 0 };
-  });
-  return reply(200, renderDashboard(days), {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'",
-    'Referrer-Policy': 'no-referrer',
-    'X-Robots-Tag': 'noindex',
-  });
+  let counts;
+  try {
+    counts = await todayCounts(request.url, env.USAGE_DB, context);
+  } catch {
+    return page;
+  }
+  return new HTMLRewriter()
+    .on('[data-usage-active]', { element: el => el.setInnerContent(countFormat.format(counts.active)) })
+    .on('[data-usage-starts]', { element: el => el.setInnerContent(countFormat.format(counts.starts)) })
+    .transform(page);
 }
 
 export default {
-  async fetch(request, env) {
-    const path = new URL(request.url).pathname;
-    if (path !== '/stats' && path !== '/stats/' && path !== '/api/usage/v1') return env.ASSETS.fetch(request);
-    const now = Date.now();
+  async fetch(request, env, context) {
+    const url = new URL(request.url);
+    if (url.pathname === '/stats' || url.pathname === '/stats/') {
+      return Response.redirect(new URL('/#usage', url), 302);
+    }
+    if ((url.pathname === '/' || url.pathname === '/index.html') && ['GET', 'HEAD'].includes(request.method)) {
+      return homepage(request, env, context);
+    }
+    if (url.pathname !== '/api/usage/v1') return env.ASSETS.fetch(request);
     try {
-      return path === '/api/usage/v1' ? await ingest(request, env, reportingDay(now)) : await dashboard(request, env, now);
+      return await ingest(request, env, reportingDay(Date.now()));
     } catch {
       return reply(503, '统计服务暂不可用');
     }

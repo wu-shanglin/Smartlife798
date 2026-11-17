@@ -71,6 +71,11 @@ h1 small { display: block; margin-top: 5px; color: var(--accent); font-size: .42
 .download-icon::after { content: ""; position: absolute; width: 6px; height: 6px; border: solid currentColor; border-width: 0 2px 2px 0; rotate: 45deg; left: 3px; top: 4px; }
 .spec { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 20px; color: var(--muted); font-size: 13px; }
 .spec span + span { border-left: 1px solid #b7c9e3; padding-left: 14px; }
+.usage { max-width: 390px; margin-top: 22px; border-top: 1px solid #b7c9e3; padding-top: 14px; scroll-margin-top: 84px; }
+.usage dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.usage dt { color: var(--muted); font-size: 13px; }
+.usage dd { margin: 3px 0 0; color: var(--ink); font-size: clamp(22px, 3vw, 30px); line-height: 1.2; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.usage p { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .hero-visual {
   height: clamp(476px, 70svh, 680px); isolation: isolate; position: relative; overflow: hidden;
   border-radius: clamp(24px, 3vw, 42px); border: 1px solid #9bbcf0;
@@ -140,7 +145,7 @@ footer { padding: 28px 0 32px; background: #0f2851; color: #fff; }
   .actions { margin-top: 17px; }
   .actions .button { width: 100%; min-height: 46px; }
   .spec { margin-top: 13px; font-size: 12px; }
-  .hero-visual { height: clamp(230px, calc(100svh - 495px), 440px); }
+  .hero-visual { height: clamp(200px, calc(100svh - 593px), 440px); }
   .phone-main { width: 54%; left: 12%; top: 9%; }
   .phone-back { width: 49%; left: 49%; top: 25%; }
   .more { display: none; }
