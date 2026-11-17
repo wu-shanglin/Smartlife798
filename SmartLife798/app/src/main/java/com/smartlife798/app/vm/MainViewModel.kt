@@ -37,6 +37,7 @@ import com.smartlife798.app.core.StoredProfile
 import com.smartlife798.app.core.Store
 import com.smartlife798.app.core.StartupPage
 import com.smartlife798.app.core.UsageStats
+import com.smartlife798.app.core.UserAgreement
 import com.smartlife798.app.core.ProfilePatch
 import com.smartlife798.app.core.CheckIn
 import com.smartlife798.app.core.pointsBalance
@@ -84,11 +85,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val usageStatsAvailable = BuildConfig.USAGE_STATS_ORIGIN.isNotEmpty() &&
         !BuildConfig.APPLICATION_ID.endsWith(".offline")
+    private val _agreementAccepted = MutableStateFlow(Store.acceptedAgreementVersion == UserAgreement.VERSION)
+    val agreementAccepted = _agreementAccepted.asStateFlow()
     private val _usageStatsEnabled = MutableStateFlow(usageStatsAvailable && Store.usageStatsEnabled)
     val usageStatsEnabled = _usageStatsEnabled.asStateFlow()
     private val usageStatsJob = SupervisorJob(viewModelScope.coroutineContext[Job])
     private val usageStatsScope = CoroutineScope(viewModelScope.coroutineContext + usageStatsJob)
     private var activeStatsJob: Job? = null
+
+    fun setAgreementAccepted(accepted: Boolean) {
+        if (_agreementAccepted.value == accepted) return
+        Store.acceptedAgreementVersion = if (accepted) UserAgreement.VERSION else 0
+        _agreementAccepted.value = accepted
+        if (accepted && appResumed) reportUsageStats()
+        if (!accepted) usageStatsJob.cancelChildren()
+    }
 
     fun setUsageStatsEnabled(enabled: Boolean) {
         if (!usageStatsAvailable || _usageStatsEnabled.value == enabled) return
@@ -99,7 +110,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun reportUsageStats(startAccepted: Boolean = false) {
-        if (!_usageStatsEnabled.value) return
+        if (!_agreementAccepted.value || !_usageStatsEnabled.value) return
         val day = UsageStats.reportingDay()
         if (!startAccepted && (Store.usageStatsReportedDay == day || activeStatsJob?.isActive == true)) return
         val installation = Store.usageStatsInstallation(day)
@@ -1100,11 +1111,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val loginMethod = _loginMethod.asStateFlow()
 
     suspend fun requestCaptcha(seed: String, ts: String): ByteArray? = withContext(Dispatchers.IO) {
-        Api.captcha(seed, ts)
+        if (_agreementAccepted.value) Api.captcha(seed, ts) else null
     }
 
     suspend fun sendSmsCode(phone: String, captcha: String, seed: Double): Res<Unit> =
-        withContext(Dispatchers.IO) { Api.sendSms(phone, captcha, seed) }
+        withContext(Dispatchers.IO) {
+            if (_agreementAccepted.value) Api.sendSms(phone, captcha, seed)
+            else Res.Fail(-1, UserAgreement.REQUIRED_MESSAGE)
+        }
 
     suspend fun login(phone: String, sms: String): Res<LoginData> =
         runLogin(LoginMethod.SMS, phone) { Api.login(phone, sms) }
@@ -1114,6 +1128,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         phone: String?,
         request: suspend (Long) -> Res<LoginData>,
     ): Res<LoginData> = withContext(Dispatchers.Main.immediate) {
+        if (!_agreementAccepted.value) return@withContext Res.Fail(-1, UserAgreement.REQUIRED_MESSAGE)
         if (!loginAttempt.tryLock()) return@withContext Res.Fail(-1, "登录处理中，请稍候")
         val loginGeneration = accountGeneration
         _loginMethod.value = method

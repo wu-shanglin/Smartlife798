@@ -66,8 +66,12 @@ object Store {
         set(value) { prefs.edit { putBoolean("autoCheckUpdate", value) } }
 
     var usageStatsEnabled: Boolean
-        get() = prefs.getBoolean("usageStatsEnabled", false)
+        get() = prefs.getBoolean("usageStatsEnabled", true)
         set(value) { prefs.edit { putBoolean("usageStatsEnabled", value) } }
+
+    var acceptedAgreementVersion: Int
+        get() = prefs.getInt("acceptedAgreementVersion", 0)
+        set(value) { prefs.edit { putInt("acceptedAgreementVersion", value) } }
 
     var usageStatsReportedDay: String?
         get() = prefs.getString("usageStatsReportedDay", null)

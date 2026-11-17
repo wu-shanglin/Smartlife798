@@ -67,6 +67,7 @@ object ProfileFlowChecks {
         val originalPhone = session.phone
         val preferences = test.targetContext.getSharedPreferences("smartlife798", Context.MODE_PRIVATE)
         val originalAuto = preferences.all["autoCheckIn"] as? Boolean
+        val originalAgreement = preferences.all["acceptedAgreementVersion"] as? Int
         val callers = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val requests = AtomicInteger()
         val patches = Collections.synchronizedList(mutableListOf<String>())
@@ -290,6 +291,7 @@ object ProfileFlowChecks {
             check(Store.profileJson == null && !Store.autoCheckIn())
             check(requests.get() == requestsBeforeExit)
 
+            test.runOnMainSync { vm.setAgreementAccepted(true) }
             for (exitPreview in listOf(false, true)) {
                 stage = "late login after Preview transition and exit=$exitPreview never publishes credentials"
                 test.runOnMainSync { session.clear(); vm.logout() }
@@ -323,7 +325,7 @@ object ProfileFlowChecks {
             result.putString("stream", "PASS: partial nickname/score POSTs, failure preservation, cached profile after VM recreation, concurrent entry guard, stale master rejection, late/queued token rejection preserves replacement session, logout rejects late account response and profile mutations; account replacement clears A caches, successful B login clears account caches and preserves installation preference, only proven same uid retains caches, late login after logout cannot publish credentials; offline profile screenshot saved; patches=${patches.size}\n")
             code = Activity.RESULT_OK
         } catch (error: Exception) {
-            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName}\n")
+            result.putString("stream", "FAIL at $stage: ${error.javaClass.simpleName} at ${error.stackTrace.firstOrNull()}\n")
         } finally {
             gates.forEach { it.release.countDown() }
             callers.cancel()
@@ -340,6 +342,8 @@ object ProfileFlowChecks {
                 // Instrumentation may end the process immediately; wait for preceding apply() writes.
                 val editor = preferences.edit()
                 if (originalAuto == null) editor.remove("autoCheckIn") else editor.putBoolean("autoCheckIn", originalAuto)
+                if (originalAgreement == null) editor.remove("acceptedAgreementVersion")
+                else editor.putInt("acceptedAgreementVersion", originalAgreement)
                 if (!editor.commit()) {
                     result.putString("stream", "FAIL at fixture cleanup: preference flush failed\n")
                     code = Activity.RESULT_CANCELED
