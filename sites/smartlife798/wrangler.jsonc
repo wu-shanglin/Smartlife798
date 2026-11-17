@@ -21,6 +21,13 @@
     "binding": "ASSETS",
     "run_worker_first": ["/stats", "/stats/*", "/api/usage/v1", "/api/usage/v1/*"]
   },
+  "d1_databases": [
+    {
+      "binding": "USAGE_DB",
+      "database_name": "smartlife798-usage",
+      "database_id": "a7284194-6c05-4593-8b5e-5b0086b5d245"
+    }
+  ],
   "ratelimits": [
     {
       "name": "USAGE_RATE_LIMIT",

@@ -50,18 +50,15 @@ Git 分支预览由 Cloudflare Workers Builds 执行 `npx wrangler preview`，�
 
 #### 配置现有 Worker
 
-从本目录复制 `wrangler.jsonc` 为部署用的 `wrangler.production.jsonc`。在副本中保留现有 Worker 名称、生产域名路由与其他已有绑定。首次启用统计时新建 D1，或手动把已有 D1 的名称和 ID 配为 `USAGE_DB` 绑定。
+现有 `smartlife798` Worker 由 Cloudflare Workers Builds 部署 `main`。仓库中的 `wrangler.jsonc` 将生产数据库 `smartlife798-usage` 绑定为 `USAGE_DB`。新部署可将该绑定指向自己的 D1 数据库。数据库 ID 可以提交，统计页密码存入 Worker Secret。
 
 ```powershell
-Copy-Item wrangler.jsonc wrangler.production.jsonc
-npx wrangler d1 create smartlife798-usage --binding USAGE_DB --update-config --config wrangler.production.jsonc
-npx wrangler d1 migrations apply USAGE_DB --config wrangler.production.jsonc --remote
-npx wrangler secret put STATS_PASSWORD --config wrangler.production.jsonc
-npx wrangler deploy --config wrangler.production.jsonc
+npx wrangler d1 migrations apply USAGE_DB --remote
+npx wrangler secret put STATS_PASSWORD
 ```
 
-在 Secret 提示中输入随机的高强度 ASCII 密码。之后继续使用配置了绑定的副本部署，配置信息也可由现有 Cloudflare 部署流程管理。已有 Worker 的 `/` 继续提供 APK 下载页。部署后通过实际 Worker 域名访问 `/stats`，确认未登录时提示认证，授权后能读取统计。如果部署目标是纯静态 Cloudflare Pages，统计接口和后台需部署到 Worker。
+也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。在 Secret 提示中输入随机的高强度 ASCII 密码，或在 Cloudflare Worker 的「设置 → 变量和机密」添加同名 Secret。已有 Worker 的 `/` 继续提供 APK 下载页。部署后访问 [统计页](https://smartlife798.3205604633.workers.dev/stats)，确认未登录时提示认证，授权后能读取统计。如果部署目标是纯静态 Cloudflare Pages，统计接口和后台需部署到 Worker。
 
-在 Android 工程目录构建时传入实际 Worker 的 HTTPS 源地址，例如 `-PusageStatsOrigin=https://实际部署的Worker域名`，即可显示「我的 → 关于本客户端 → 匿名用量统计」。无该属性的构建与独立 `.offline` 测试包均不会上报。已有 APK 需升级到带此功能的构建并开启开关后才会产生数据。
+Android 正式构建默认使用项目的 Worker，用户可在「我的 → 关于本客户端 → 匿名用量统计」自行开启。Debug 和 performance 构建默认没有上报地址，可用 `-PusageStatsOrigin=https://实际部署的Worker域名` 配置测试环境，也可用空值关闭正式构建的统计入口。独立 `.offline` 测试包禁用上报。已有 APK 需升级到带此功能的版本并开启开关后才会产生数据。
 
 [D1 Wrangler 命令](https://developers.cloudflare.com/d1/wrangler-commands/)

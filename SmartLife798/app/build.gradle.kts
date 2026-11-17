@@ -46,8 +46,9 @@ if (hasReleaseSigning) {
 
 val releaseAlipayCallback = "smartlife798sign"
 val debugAlipayCallback = "smartlife798debugsign"
-val usageStatsOrigin = providers.gradleProperty("usageStatsOrigin").orElse("").get().trimEnd('/')
-if (usageStatsOrigin.isNotEmpty()) {
+val usageStatsOrigin = providers.gradleProperty("usageStatsOrigin").orNull?.trimEnd('/')
+val officialUsageStatsOrigin = URI("https", "smartlife798.3205604633.workers.dev", null, null).toString()
+if (!usageStatsOrigin.isNullOrEmpty()) {
     val origin = URI(usageStatsOrigin)
     check(origin.scheme == "https" && origin.host != null && origin.rawAuthority == origin.host &&
         origin.rawPath.isEmpty() && origin.rawQuery == null && origin.rawFragment == null) {
@@ -70,7 +71,7 @@ android {
         manifestPlaceholders["alipayCallbackScheme"] = releaseAlipayCallback
         buildConfigField("String", "ALIPAY_CALLBACK_SCHEME", "\"$releaseAlipayCallback\"")
         buildConfigField("boolean", "RELEASE_UPDATES_ENABLED", "true")
-        buildConfigField("String", "USAGE_STATS_ORIGIN", "\"$usageStatsOrigin\"")
+        buildConfigField("String", "USAGE_STATS_ORIGIN", "\"${usageStatsOrigin.orEmpty()}\"")
     }
 
     signingConfigs {
@@ -93,6 +94,8 @@ android {
             isMinifyEnabled = false
         }
         release {
+            val origin = usageStatsOrigin ?: officialUsageStatsOrigin
+            buildConfigField("String", "USAGE_STATS_ORIGIN", "\"$origin\"")
             // Minification stays off until the R8 path is verified on a device;
             // app/proguard-rules.pro already carries the keeps needed to turn it on.
             isDebuggable = false
@@ -105,6 +108,7 @@ android {
 
     buildTypes.create("performance") {
         initWith(buildTypes.getByName("release"))
+        buildConfigField("String", "USAGE_STATS_ORIGIN", "\"${usageStatsOrigin.orEmpty()}\"")
         isDebuggable = false
         signingConfig = signingConfigs.getByName("debug")
         matchingFallbacks += "release"
