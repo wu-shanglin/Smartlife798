@@ -279,12 +279,13 @@ fun HomeScreen(
     }
 }
 
+private val HomeHeroMinHeight = 192.dp
+
 @Composable
 private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
     val palette = MaterialTheme.colorScheme.scanCardColors()
     val container = lerp(palette.container, Color.White, 0.06f)
     val highlight = lerp(lerp(palette.container, palette.content, 0.13f), Color.White, 0.06f)
-    val cardHeight = 192.dp
     val verticalInset = 18.dp
     Card(
         onClick = onScan,
@@ -295,7 +296,7 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = cardHeight)
+                .heightIn(min = HomeHeroMinHeight)
                 .drawWithCache {
                     val background = Brush.linearGradient(
                         0f to highlight,
@@ -310,7 +311,7 @@ private fun ScanHeroCard(onScan: () -> Unit, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(
-                modifier = Modifier.weight(1f).heightIn(min = cardHeight - verticalInset * 2),
+                modifier = Modifier.weight(1f).heightIn(min = HomeHeroMinHeight - verticalInset * 2),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -438,47 +439,55 @@ private fun ActiveUsageCard(
             .clickable { onOpenDevice(active.deviceId) }
             .sharedCard(CardOrigin.HOME_ACTIVE, active.deviceId)
             .fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
             containerColor = colors.tertiaryContainer,
             contentColor = colors.onTertiaryContainer,
         ),
     ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                active.name.ifBlank { DeviceType.nameOrNull(active.dtype) ?: "设备" },
-                modifier = Modifier.sharedCardElement(CardOrigin.HOME_ACTIVE, active.deviceId),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusPill(
-                    if (pending) DeviceState(DeviceStateKind.STARTING, "启动待确认") else usagePillState(live),
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .heightIn(min = HomeHeroMinHeight)
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    active.name.ifBlank { DeviceType.nameOrNull(active.dtype) ?: "设备" },
+                    modifier = Modifier.sharedCardElement(CardOrigin.HOME_ACTIVE, active.deviceId),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (!pending) {
-                    UsageDuration(
-                        startedAt = active.startedAt,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.onTertiaryContainer,
-                        fontWeight = FontWeight.SemiBold,
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StatusPill(
+                        if (pending) DeviceState(DeviceStateKind.STARTING, "启动待确认") else usagePillState(live),
                     )
+                    if (!pending) {
+                        UsageDuration(
+                            startedAt = active.startedAt,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colors.onTertiaryContainer,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
+                Text(
+                    when {
+                        pending || live == null -> "正在向服务端确认设备状态"
+                        DeviceType.isWaterLike(active.dtype) -> "请在设备上按「启动」取水，用完后结算。"
+                        else -> "计费以服务端结算为准"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
-            Text(
-                when {
-                    pending || live == null -> "正在向服务端确认设备状态"
-                    DeviceType.isWaterLike(active.dtype) -> "请在设备上按「启动」取水，用完后结算。"
-                    else -> "计费以服务端结算为准"
-                },
-                style = MaterialTheme.typography.bodySmall,
-            )
             val linkColors = ButtonDefaults.textButtonColors(contentColor = colors.onTertiaryContainer)
             FlowRow(
+                modifier = Modifier.padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
