@@ -342,6 +342,27 @@ fun MeScreen(
                             onClick = onOpenDeveloperTools,
                         ) { Text("开发者工具") }
                     }
+                    if (vm.usageStatsAvailable) {
+                        val usageStatsEnabled by vm.usageStatsEnabled.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("匿名用量统计", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "向项目的 Cloudflare 服务发送每日随机安装标识和设备启动受理次数。无需提供账号、手机号或设备编号。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Switch(
+                                checked = usageStatsEnabled,
+                                onCheckedChange = vm::setUsageStatsEnabled,
+                                modifier = Modifier.semantics { contentDescription = "匿名用量统计开关" },
+                            )
+                        }
+                    }
                     if (BuildConfig.RELEASE_UPDATES_ENABLED) {
                         val autoCheckUpdate by vm.autoCheckUpdate.collectAsStateWithLifecycle()
                         val preferredSource by vm.updateSource.collectAsStateWithLifecycle()

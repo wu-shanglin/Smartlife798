@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 import java.security.KeyStore
 import java.security.MessageDigest
 
@@ -45,6 +46,14 @@ if (hasReleaseSigning) {
 
 val releaseAlipayCallback = "smartlife798sign"
 val debugAlipayCallback = "smartlife798debugsign"
+val usageStatsOrigin = providers.gradleProperty("usageStatsOrigin").orElse("").get().trimEnd('/')
+if (usageStatsOrigin.isNotEmpty()) {
+    val origin = URI(usageStatsOrigin)
+    check(origin.scheme == "https" && origin.host != null && origin.rawAuthority == origin.host &&
+        origin.rawPath.isEmpty() && origin.rawQuery == null && origin.rawFragment == null) {
+        "usageStatsOrigin must be the HTTPS origin of the project's Worker"
+    }
+}
 
 android {
     namespace = "com.smartlife798.app"
@@ -61,6 +70,7 @@ android {
         manifestPlaceholders["alipayCallbackScheme"] = releaseAlipayCallback
         buildConfigField("String", "ALIPAY_CALLBACK_SCHEME", "\"$releaseAlipayCallback\"")
         buildConfigField("boolean", "RELEASE_UPDATES_ENABLED", "true")
+        buildConfigField("String", "USAGE_STATS_ORIGIN", "\"$usageStatsOrigin\"")
     }
 
     signingConfigs {

@@ -1,7 +1,18 @@
 {
   "name": "smartlife798",
   "compatibility_date": "2026-11-14",
+  "main": "worker.mjs",
   "assets": {
-    "directory": "./public"
-  }
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/stats", "/stats/*", "/api/usage/v1", "/api/usage/v1/*"]
+  },
+  "ratelimits": [
+    {
+      "name": "USAGE_RATE_LIMIT",
+      "namespace_id": "79801",
+      "simple": { "limit": 180, "period": 60 }
+    }
+  ],
+  "triggers": { "crons": ["20 16 * * *"] }
 }
