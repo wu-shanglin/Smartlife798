@@ -24,8 +24,8 @@
   "d1_databases": [
     {
       "binding": "USAGE_DB",
-      "database_name": "smartlife798-usage",
-      "database_id": "a7284194-6c05-4593-8b5e-5b0086b5d245"
+      "database_name": "smart798",
+      "database_id": "9e8d0fef-4f02-4acb-9135-c543979ce3c1"
     }
   ],
   "ratelimits": [

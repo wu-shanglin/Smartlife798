@@ -50,7 +50,7 @@ Git 分支预览由 Cloudflare Workers Builds 执行 `npx wrangler preview`，�
 
 #### 配置现有 Worker
 
-现有 `smartlife798` Worker 由 Cloudflare Workers Builds 部署 `main`。仓库中的 `wrangler.jsonc` 将生产数据库 `smartlife798-usage` 绑定为 `USAGE_DB`。新部署可将该绑定指向自己的 D1 数据库。数据库 ID 可以提交，统计页密码存入 Worker Secret。
+现有 `smartlife798` Worker 由 Cloudflare Workers Builds 部署 `main`。仓库中的 `wrangler.jsonc` 将生产数据库 `smart798` 绑定为 `USAGE_DB`。新部署可将该绑定指向自己的 D1 数据库。数据库 ID 可以提交，统计页密码存入 Worker Secret。
 
 ```powershell
 npx wrangler d1 migrations apply USAGE_DB --remote
