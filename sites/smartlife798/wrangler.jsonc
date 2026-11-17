@@ -1,6 +1,7 @@
 {
   "name": "smartlife798",
   "compatibility_date": "2026-11-14",
+  "previews": {},
   "observability": {
     "logs": {
       "enabled": true,
