@@ -343,7 +343,23 @@ fun MeScreen(
                         ) { Text("开发者工具") }
                     }
                     if (BuildConfig.RELEASE_UPDATES_ENABLED) {
+                        val autoCheckUpdate by vm.autoCheckUpdate.collectAsStateWithLifecycle()
                         val preferredSource by vm.updateSource.collectAsStateWithLifecycle()
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("自动检查更新", style = MaterialTheme.typography.titleSmall)
+                                Text("发现新版本时先下载，完成后提醒安装", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(
+                                checked = autoCheckUpdate,
+                                onCheckedChange = vm::setAutoCheckUpdate,
+                                modifier = Modifier.semantics { contentDescription = "自动检查更新开关" },
+                            )
+                        }
                         Text("优先更新源", style = MaterialTheme.typography.titleSmall)
                         var sourceMenuExpanded by remember { mutableStateOf(false) }
                         PageInactiveEffect { sourceMenuExpanded = false }

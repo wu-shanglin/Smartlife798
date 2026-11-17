@@ -29,6 +29,7 @@ object UpdateSourceChecks {
         check(Store.token.isNullOrBlank())
         val oldSource = Store.updateSource
         val oldPolicy = Store.updatePolicyJson
+        val oldAutoCheck = Store.autoCheckUpdate
         val field = AppUpdate::class.java.getDeclaredField("client").apply { isAccessible = true }
         val original = field.get(null)
         val downloadField = UpdatePackage::class.java.getDeclaredField("client").apply { isAccessible = true }
@@ -60,6 +61,7 @@ object UpdateSourceChecks {
             }.build())
             Store.updatePolicyJson = null
             Store.updateSource = UpdateSource.GITHUB
+            Store.autoCheckUpdate = true
             test.runOnMainSync { vm = MainViewModel(test.targetContext.applicationContext as android.app.Application) }
             activity = test.startActivitySync(Intent(test.targetContext, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
@@ -106,8 +108,9 @@ object UpdateSourceChecks {
             stage = "manual retry permits fallback accepted without preference mutation"
             checkUpdate()
             click(test, "是，临时切换")
-            repeat(100) { if (downloadHost.get().isEmpty()) Thread.sleep(20) }
+            repeat(100) { if (vm!!.updateDownload.value.error == null) Thread.sleep(20) }
             check(downloadHost.get() == "gh-proxy.org")
+            check(vm!!.updateDownload.value.error != null && !vm!!.showUpdate.value)
             check(Store.updateSource == UpdateSource.GITHUB && Store.updatePolicyJson == null)
             check(vm!!.updatePolicy.value?.required(BuildConfig.VERSION_CODE) == false)
             stage = "source retained after account clear and total failure"
@@ -154,6 +157,7 @@ object UpdateSourceChecks {
             downloadField.set(null, originalDownload)
             Store.updateSource = oldSource
             Store.updatePolicyJson = oldPolicy
+            Store.autoCheckUpdate = oldAutoCheck
         }
         test.finish(code, result)
     }

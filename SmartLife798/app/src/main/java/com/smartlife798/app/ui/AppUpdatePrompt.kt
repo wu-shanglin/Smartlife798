@@ -22,11 +22,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -69,8 +68,7 @@ fun AppUpdatePrompt(
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
-    var installing by rememberSaveable { mutableStateOf(false) }
-    var autoOpened by rememberSaveable(policy.sha256) { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
 
     fun install() {
         if (installing) return
@@ -104,13 +102,6 @@ fun AppUpdatePrompt(
             }
         }
     }
-    LaunchedEffect(download.ready) {
-        if (download.ready != null && !autoOpened) {
-            lifecycle.withResumed { }
-            autoOpened = true
-            beginInstall()
-        }
-    }
     AlertDialog(
         onDismissRequest = {
             if (required) onExit()
@@ -130,8 +121,8 @@ fun AppUpdatePrompt(
                     item {
                         Text(
                             (if (required) "当前版本已停止支持，请安装新版后继续使用。"
-                            else "下载后将打开系统安装界面，也可以稍后更新。") +
-                                "安装需您确认，首次可能需要允许安装未知来源应用。" +
+                            else "可以立即安装，也可以暂不更新。") +
+                                "安装时需在系统界面确认。" +
                                 policy.notesSince(BuildConfig.VERSION_NAME).let {
                                     if (it.isBlank()) "" else "\n\n" +
                                         (if (policy.releases.isNotEmpty()) "" else if (policy.historyAvailable)
@@ -147,15 +138,12 @@ fun AppUpdatePrompt(
         confirmButton = {
             TextButton(
                 shapes = androidx.compose.material3.ButtonDefaults.shapes(),
-                enabled = !download.busy && !installing,
+                enabled = !download.busy && !installing && (download.ready != null || !checking),
                 onClick = {
                     if (download.ready != null) beginInstall()
-                    else {
-                        autoOpened = false
-                        vm.downloadAppUpdate()
-                    }
+                    else vm.downloadAppUpdate()
                 },
-            ) { Text(if (download.ready != null) "安装新版" else if (download.error != null) "重新下载" else "立即更新") }
+            ) { Text(if (download.ready != null) "立即更新" else if (download.error != null) "重新下载" else "下载更新") }
         },
         dismissButton = {
             if (download.busy) {
@@ -165,7 +153,7 @@ fun AppUpdatePrompt(
                     Text(if (checking) "正在检查…" else "重新检查")
                 }
             } else {
-                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onDismiss) { Text("稍后更新") }
+                TextButton(shapes = androidx.compose.material3.ButtonDefaults.shapes(), onClick = onDismiss) { Text("暂不更新") }
             }
         },
     )
@@ -193,9 +181,9 @@ private fun UpdateDownloadStatus(download: MainViewModel.UpdateDownload) {
                         modifier = progressModifier,
                     )
                 }
-                download.ready != null -> Text("安装包已校验，请完成系统安装；取消后可再次点击安装。")
+                download.ready != null -> Text("安装包已下载并校验。")
                 download.error != null -> Text(download.error, color = MaterialTheme.colorScheme.error)
-                else -> Text("点击「立即更新」开始下载")
+                else -> Text("点击「下载更新」开始下载")
             }
         }
     }

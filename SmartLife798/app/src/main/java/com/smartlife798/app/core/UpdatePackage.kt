@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -37,6 +38,19 @@ object UpdatePackage {
             var success = false
             val downloadContext = currentCoroutineContext()
             try {
+                if (complete.isFile) {
+                    try {
+                        verify(context, complete, policy)
+                        return@withContext complete
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: IOException) {
+                        // The cache can be evicted while opening the file.
+                    } catch (_: RuntimeException) {
+                        // Fetch a fresh copy when cached bytes fail verification.
+                    }
+                    downloadContext.ensureActive()
+                }
                 Api.awaitResponse(client.newCall(Request.Builder().url(source.url(policy.apkUrl)).build())) { response ->
                     if (!response.isSuccessful) throw IOException("APK unavailable")
                     val body = response.body ?: throw IOException("Empty APK")
@@ -66,6 +80,7 @@ object UpdatePackage {
                 }
                 currentCoroutineContext().ensureActive()
                 verify(context, partial, policy)
+                currentCoroutineContext().ensureActive()
                 if (complete.exists() && !complete.delete()) throw IOException("Cannot replace APK")
                 if (!partial.renameTo(complete)) throw IOException("Cannot save APK")
                 success = true

@@ -432,16 +432,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val updatePolicy = _updatePolicy.asStateFlow()
     private val _checkingUpdate = MutableStateFlow(false)
     val checkingUpdate = _checkingUpdate.asStateFlow()
+    private val _autoCheckUpdate = MutableStateFlow(Store.autoCheckUpdate)
+    val autoCheckUpdate = _autoCheckUpdate.asStateFlow()
     private val _updateSource = MutableStateFlow(Store.updateSource)
     val updateSource = _updateSource.asStateFlow()
     private var downloadSource = Store.updateSource
-    data class SourceFallback(val json: String, val source: com.smartlife798.app.core.UpdateSource, val versionCode: Int)
+    data class SourceFallback(
+        val json: String,
+        val source: com.smartlife798.app.core.UpdateSource,
+        val versionCode: Int,
+        val manual: Boolean,
+    )
     private var dismissedFallback: Pair<com.smartlife798.app.core.UpdateSource, Int>? = null
     private val _sourceFallback = MutableStateFlow<SourceFallback?>(null)
     val sourceFallback = _sourceFallback.asStateFlow()
 
+    fun setAutoCheckUpdate(enabled: Boolean) {
+        if (_autoCheckUpdate.value == enabled) return
+        Store.autoCheckUpdate = enabled
+        _autoCheckUpdate.value = enabled
+        lastUpdateCheck = 0L
+        if (enabled) {
+            checkAppUpdate()
+        } else {
+            if (!updateCheckManual) updateJob?.cancel()
+            if (downloadAutomatic && _updatePolicy.value?.required(BuildConfig.VERSION_CODE) != true) {
+                cancelUpdateDownload()
+            }
+            if (_sourceFallback.value?.manual == false) _sourceFallback.value = null
+        }
+    }
+
     fun setUpdateSource(source: com.smartlife798.app.core.UpdateSource) {
-        if (_checkingUpdate.value || downloadJob?.isActive == true) return
+        if (_checkingUpdate.value || downloadJob?.isCompleted == false) return
         Store.updateSource = source
         _updateSource.value = source
         downloadSource = source
@@ -464,7 +487,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (applyUpdatePolicy(fallback.json, manual = true, trusted = fallback.source == com.smartlife798.app.core.UpdateSource.GITHUB)) {
             downloadSource = fallback.source
-            if (_updatePolicy.value?.available(BuildConfig.VERSION_CODE) == true) downloadAppUpdate()
+            prepareAppUpdate(manual = true)
         }
     }
 
@@ -474,20 +497,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val parsed = com.smartlife798.app.core.UpdatePolicy.parse(json)
         val known = com.smartlife798.app.core.UpdatePolicy.cached(Store.updatePolicyJson)
         if (!trusted && known != null && parsed.versionCode < known.versionCode) {
-            _showUpdate.value = known.required(BuildConfig.VERSION_CODE)
             if (manual) notify("备用源版本落后，请稍后重试")
             return false
         }
         val policy = if (trusted) parsed else parsed.copy(minSupportedVersionCode = known?.minSupportedVersionCode ?: 1)
-        if (policy != _updatePolicy.value) _updateDownload.value = UpdateDownload()
+        if (policy.cacheApkName != _updatePolicy.value?.cacheApkName || !policy.available(BuildConfig.VERSION_CODE)) {
+            _showUpdate.value = false
+            _updateDownload.value = UpdateDownload()
+        }
         if (trusted) Store.updatePolicyJson = json
         _updatePolicy.value = policy
-        _showUpdate.value = policy.available(BuildConfig.VERSION_CODE) && (manual || dismissedUpdateCode != policy.versionCode)
         if (manual && !policy.available(BuildConfig.VERSION_CODE)) notify("当前已是最新版本")
         return true
     }
 
     private var updateJob: Job? = null
+    private var updateCheckManual = false
     private var lastUpdateCheck = 0L
     private var dismissedUpdateCode: Int? = null
     private val _showUpdate = MutableStateFlow(false)
@@ -501,15 +526,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _updateDownload = MutableStateFlow(UpdateDownload())
     val updateDownload = _updateDownload.asStateFlow()
     private var downloadJob: Job? = null
+    private var downloadAutomatic = false
 
     fun cancelUpdateDownload() {
         downloadJob?.cancel()
     }
 
     fun downloadAppUpdate() {
-        if (downloadJob?.isActive == true) return
+        if (!_checkingUpdate.value) prepareAppUpdate(manual = true)
+    }
+
+    private fun prepareAppUpdate(manual: Boolean) {
+        if (downloadJob?.isCompleted == false) return
         val policy = _updatePolicy.value ?: return
-        if (!policy.available(BuildConfig.VERSION_CODE)) return
+        val required = policy.required(BuildConfig.VERSION_CODE)
+        if (!policy.available(BuildConfig.VERSION_CODE) ||
+            (!required && !manual && dismissedUpdateCode == policy.versionCode)) return
+        if (_updateDownload.value.ready != null) {
+            _showUpdate.value = true
+            return
+        }
+        downloadAutomatic = !manual
         downloadJob = viewModelScope.launch {
             _updateDownload.value = UpdateDownload(busy = true)
             try {
@@ -518,6 +555,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 if (_updatePolicy.value == policy) {
                     _updateDownload.value = UpdateDownload(ready = file, percent = 100)
+                    _showUpdate.value = true
                 } else {
                     _updateDownload.value = UpdateDownload()
                 }
@@ -532,6 +570,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 if (_updateDownload.value.busy) _updateDownload.value = UpdateDownload()
             }
+            if (!downloadAutomatic && !required && !_showUpdate.value) _updateDownload.value.error?.let(::notify)
         }
     }
 
@@ -540,15 +579,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val file = _updateDownload.value.ready ?: return null
         return try {
             withContext(Dispatchers.IO) { com.smartlife798.app.core.UpdatePackage.verify(getApplication(), file, policy) }
-            if (policy != _updatePolicy.value) null
+            if (policy.cacheApkName != _updatePolicy.value?.cacheApkName) null
             else com.smartlife798.app.core.UpdatePackage.installIntent(getApplication(), file)
         } catch (e: CancellationException) {
             throw e
         } catch (_: java.io.IOException) {
-            _updateDownload.value = UpdateDownload(error = "安装包已失效，请重新下载")
+            if (policy.cacheApkName == _updatePolicy.value?.cacheApkName) {
+                _updateDownload.value = UpdateDownload(error = "安装包已失效，请重新下载")
+            }
             null
         } catch (_: RuntimeException) {
-            _updateDownload.value = UpdateDownload(error = "安装包校验失败，请重新下载")
+            if (policy.cacheApkName == _updatePolicy.value?.cacheApkName) {
+                _updateDownload.value = UpdateDownload(error = "安装包校验失败，请重新下载")
+            }
             null
         }
     }
@@ -557,14 +600,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!BuildConfig.RELEASE_UPDATES_ENABLED) return
 
         refreshProtocolVersion(manual)
-        if (updateJob?.isActive == true || downloadJob?.isActive == true || _sourceFallback.value != null) return
+        if (!manual && !_autoCheckUpdate.value) return
+        if (updateJob?.isCompleted == false || _sourceFallback.value != null) return
+        if (downloadJob?.isCompleted == false) {
+            if (manual) {
+                downloadAutomatic = false
+                notify("正在准备更新，下载完成后将提示安装")
+            }
+            return
+        }
         val now = android.os.SystemClock.elapsedRealtime()
         if (!manual && lastUpdateCheck != 0L && now - lastUpdateCheck < 300_000L) return
         lastUpdateCheck = now
-        _updatePolicy.value?.let { cached ->
-            _showUpdate.value = cached.available(BuildConfig.VERSION_CODE) &&
-                (manual || dismissedUpdateCode != cached.versionCode)
-        }
+        updateCheckManual = manual
         updateJob = viewModelScope.launch {
             _checkingUpdate.value = true
             try {
@@ -580,19 +628,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         !candidate.available(BuildConfig.VERSION_CODE) -> {
                             if (manual) notify("备用源未发现新版本")
                         }
-                        !manual && dismissedFallback == (fetched.source to candidate.versionCode) -> Unit
+                        !manual && (dismissedFallback == (fetched.source to candidate.versionCode) ||
+                            dismissedUpdateCode == candidate.versionCode) -> Unit
+                        fetched.source == downloadSource && candidate.cacheApkName == _updatePolicy.value?.cacheApkName &&
+                            _updateDownload.value.ready != null -> prepareAppUpdate(manual)
                         else -> {
                             _showUpdate.value = false
-                            _sourceFallback.value = SourceFallback(fetched.json, fetched.source, candidate.versionCode)
+                            _sourceFallback.value = SourceFallback(fetched.json, fetched.source, candidate.versionCode, manual)
                         }
                     }
                 } else if (applyUpdatePolicy(fetched.json, manual, trusted = fetched.source == com.smartlife798.app.core.UpdateSource.GITHUB)) {
                     downloadSource = fetched.source
+                    prepareAppUpdate(manual)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: java.io.IOException) {
-                if (manual) notify("无法检查更新，请检查网络或稍后重试")
+                if (_updatePolicy.value?.available(BuildConfig.VERSION_CODE) == true) prepareAppUpdate(manual)
+                else if (manual) notify("无法检查更新，请检查网络或稍后重试")
             } catch (_: RuntimeException) {
                 if (manual) notify("更新信息无效，请稍后重试")
             } finally {

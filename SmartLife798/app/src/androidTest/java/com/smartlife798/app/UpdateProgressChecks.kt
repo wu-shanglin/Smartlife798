@@ -56,7 +56,7 @@ object UpdateProgressChecks {
             val screen = activity
             lateinit var vm: MainViewModel
             lateinit var download: MutableStateFlow<MainViewModel.UpdateDownload>
-            val policy = UpdatePolicy(BuildConfig.VERSION_CODE + 1, "99.0.0", 1,
+            val policy = UpdatePolicy(BuildConfig.VERSION_CODE + 1, "99.0.0", BuildConfig.VERSION_CODE + 1,
                 (1..45).joinToString("\n") { "更新说明 $it：优化设备详情加载与应用更新体验。" }, "a".repeat(64))
             test.runOnMainSync {
                 vm = ViewModelProvider(screen)[MainViewModel::class.java]
@@ -75,8 +75,8 @@ object UpdateProgressChecks {
                 }
             }
             stage = "click starts download with visible indeterminate progress"
-            await { find(test, "立即更新") != null }
-            click(test, "立即更新")
+            await { find(test, "下载更新") != null }
+            click(test, "下载更新")
             await { calls.get() == 1 && find(test, "正在下载…") != null }
             check(find(test, "安装包下载") == null)
             stage = "determinate progress remains fixed while long notes scroll"
@@ -107,7 +107,7 @@ object UpdateProgressChecks {
             val jobField = MainViewModel::class.java.getDeclaredField("downloadJob").apply { isAccessible = true }
             await { (jobField.get(vm) as? kotlinx.coroutines.Job)?.isCancelled == true }
             releaseRetry.countDown()
-            await { find(test, "点击「立即更新」开始下载") != null }
+            await { find(test, "点击「下载更新」开始下载") != null }
             check(calls.get() == 2)
             result.putString("stream", "PASS: click starts one download, indeterminate/determinate progress, fixed visible bounds above actions while long notes scroll, visible failure/retry and cancellation; synthetic percentage and offline transport\n")
             code = Activity.RESULT_OK

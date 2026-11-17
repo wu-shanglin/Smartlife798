@@ -30,6 +30,7 @@ object UxFlowChecks {
         val protocol = Store.originalAppVersion
         val theme = Store.themeModeName()
         val dynamicColor = Store.dynamicColor()
+        val autoCheckUpdate = Store.autoCheckUpdate
         try {
             check(Store.token.isNullOrBlank())
             accountFree = true
@@ -159,6 +160,14 @@ object UxFlowChecks {
                         stage = "dynamic color unavailable before Android 12"
                         check(!text(test).contains("动态取色"))
                     }
+                    if (settingsOnly) {
+                        stage = "automatic update switch persists the selected preference"
+                        reveal(test, "自动检查更新开关")
+                        click(test, "自动检查更新开关")
+                        check(Store.autoCheckUpdate != autoCheckUpdate)
+                        click(test, "自动检查更新开关")
+                        check(Store.autoCheckUpdate == autoCheckUpdate)
+                    }
                     test.uiAutomation.waitForIdle(1_000, 5_000)
                     val frames = java.util.concurrent.CountDownLatch(1)
                     test.runOnMainSync {
@@ -203,6 +212,7 @@ object UxFlowChecks {
                 Appearance.setDynamicColor(dynamicColor)
             }
             if (accountFree) {
+                Store.autoCheckUpdate = autoCheckUpdate
                 // All activities have finished already; flush apply() before instrumentation exits.
                 val field = Store::class.java.getDeclaredField("prefs").apply { isAccessible = true }
                 val preferences = field.get(null) as android.content.SharedPreferences
