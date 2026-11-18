@@ -26,7 +26,7 @@ class UpdateInstallInstrumentation : Instrumentation() {
     }
 
     override fun callActivityOnCreate(activity: Activity, state: Bundle?) {
-        val appRoot = mode in setOf("visual", "detail-stress", "detail-input", "detail-reopen", "favorite-return", "detail-morph", "tabs", "interrupt", "ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
+        val appRoot = mode in setOf("visual", "detail-stress", "detail-input", "detail-reopen", "favorite-return", "detail-morph", "entry-latency", "entry-interrupt", "tabs", "interrupt", "ux", "settings", "login-init", "check-in-ui", "detail-load", "nfc-navigation", "nfc-auto-start", "nfc-auto-reject")
         if (appRoot && activity.intent?.getBooleanExtra("offlineFixture", false) == true) {
             ServiceLocator.init(activity)
             com.smartlife798.app.core.Store.saveAutoCheckIn(false)
@@ -66,6 +66,8 @@ class UpdateInstallInstrumentation : Instrumentation() {
         if (mode == "detail-reopen") { DetailStressChecks.run(this, reopenOnly = true); return }
         if (mode == "favorite-return") { FavoriteReturnChecks.run(this); return }
         if (mode == "detail-morph") { DetailMorphChecks.run(this, wallet = collectProfile); return }
+        if (mode == "entry-latency") { EntryLatencyChecks.run(this); return }
+        if (mode == "entry-interrupt") { EntryLatencyChecks.run(this, interrupt = true); return }
         if (mode == "account-reads") { AccountReadChecks.run(this); return }
         if (mode == "update-sources") { UpdateSourceChecks.run(this); return }
         if (mode == "feature-guide") { FeatureGuideChecks.run(this); return }

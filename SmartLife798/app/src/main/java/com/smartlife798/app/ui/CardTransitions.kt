@@ -47,16 +47,10 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
-// One morph spec for bounds, corners and the flying label. Independent springs made
-// the title reach the app bar while the card was still expanding, which reads as two
-// separate animations instead of one container transform.
+// One morph spec for bounds and corners. Independent springs made the title reach the app
+// bar while the card was still expanding, which reads as two separate animations.
 private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 650f)
 private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 650f)
-// The page must be gone well before the container reaches card size, otherwise the
-// collapsing box is filled with a scaled-down copy of the detail page and only snaps to
-// the real card at the very end. Faster than CardMorphBounds on purpose: the card keeps
-// drawing opaquely underneath, so the tail of the collapse already shows card content.
-private val DeviceCardExit = spring<Float>(dampingRatio = 1f, stiffness = 1600f, visibilityThreshold = 0.01f)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -205,9 +199,6 @@ private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
             this@cardElement.sharedBounds(
                 sharedContentState = state,
                 animatedVisibilityScope = scene.visibility,
-                // Same spring as the container: a faster label spring made the title
-                // reach the app bar while the card was still expanding.
-                boundsTransform = { _, _ -> CardMorphBounds },
                 zIndexInOverlay = 2f,
             )
         } else {
@@ -258,30 +249,23 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         }
     }
     return with(scene.shared) {
-        // Device cards need asymmetric alpha, and `enter`/`exit` apply to both ends of the
-        // shared bounds, so the page and the source card must differ:
+        // Only the page cross-fades; the source card stays fully opaque for the whole
+        // transform, which is what makes the morph read as one container:
         //
-        //  - Page (expanding): no fade. A device card is already large, so any page alpha
-        //    lets the list show through the half-grown container and the detail then looks
-        //    like it pops in at full screen.
-        //  - Page (collapsing): fades out early. Otherwise the box arrives at card size
-        //    still filled with a scaled-down detail page and only snaps to the real card
-        //    on the last frame — the "content does not match the card" the user sees.
-        //  - Source card: never fades. It is the destination of the collapse and must stay
-        //    opaque underneath so the shrinking box is progressively filled with the card's
-        //    own content instead of the page's.
-        val device = key.origin.destination == CardDestination.DEVICE
-        val enter = if (device) EnterTransition.None else fadeIn()
-        val exit = when {
-            !device -> fadeOut()
-            page -> fadeOut(DeviceCardExit)
-            else -> ExitTransition.None
-        }
+        //  - Frame 0 shows the card. An opaque page at frame 0 would paint the scaled-down
+        //    detail over the card the instant the finger lifts, which feels unresponsive and
+        //    folds back to the wrong content when an entry is interrupted.
+        //  - Fading the card as well multiplied both alphas, so the list showed through the
+        //    dip and the detail looked like a second full-screen animation.
+        //  - On the way back the card is still there, so the shrinking box lands on the
+        //    card's own content instead of a scaled-down page that snaps at the last frame.
+        // Default fadeIn/fadeOut is a 220ms tween and carries the tap feedback; a spring
+        // here would take ~600ms to settle and the tap would feel ignored.
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
-            enter = enter,
-            exit = exit,
+            enter = if (page) fadeIn() else EnterTransition.None,
+            exit = if (page) fadeOut() else ExitTransition.None,
             boundsTransform = { _, _ -> CardMorphBounds },
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 ContentScale.FillWidth,

@@ -121,13 +121,15 @@ object DetailMorphChecks {
             }
             var worstBleed = 0
             var worstFrame = -1
-            // Only frames where the container already covers most of the page width can
-            // tell whether the page behind it is opaque: before that the box is still the
-            // source card, and the wallet's own balance is painted in the same blue.
-            val comparable = size.widthPixels * 60 / 100
-            for (i in 0 until frames.size - 1) {
+            // Only frames after the incoming page has finished fading in can tell whether
+            // the container is opaque. While it fades (220ms) the box legitimately shows the
+            // outgoing page around the growing card: that is the container transform, not a
+            // see-through dip. Before the fade completes the box is also still card-sized,
+            // and the wallet's own balance is painted in the same blue.
+            val settledFrom = boxes.size * 2 / 3
+            for (i in settledFrom until frames.size - 1) {
                 val box = boxes[i]
-                if (box.width() < comparable) continue
+                if (box.width() < size.widthPixels * 60 / 100) continue
                 val bleed = bleed(frames[i], box)
                 trace += "${i}:${box.width()}x${box.height()}@${box.top}b$bleed "
                 if (bleed > worstBleed) {
