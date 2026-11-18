@@ -2,6 +2,8 @@ package com.smartlife798.app.ui
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.ExperimentalTransitionApi
 import androidx.compose.animation.core.animateDp
@@ -45,7 +47,11 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
-private val DeviceCardFade = spring<Float>(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.01f)
+// One morph spec for bounds, corners and the flying label. Independent springs made
+// the title reach the app bar while the card was still expanding, which reads as two
+// separate animations instead of one container transform.
+private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 650f)
+private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 650f)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -194,6 +200,9 @@ private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
             this@cardElement.sharedBounds(
                 sharedContentState = state,
                 animatedVisibilityScope = scene.visibility,
+                // Same spring as the container: a faster label spring made the title
+                // reach the app bar while the card was still expanding.
+                boundsTransform = { _, _ -> CardMorphBounds },
                 zIndexInOverlay = 2f,
             )
         } else {
@@ -214,7 +223,7 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
     // Unmatched cards must not extend a peer-tab transition just to animate a clip.
     val corner = if (state.isMatchFound) {
         scene.visibility.transition.animateDp(
-            transitionSpec = { spring(dampingRatio = 0.9f, stiffness = 650f) }, label = "cardCorner",
+            transitionSpec = { CardMorphCorner }, label = "cardCorner",
         ) { phase ->
             if ((phase == EnterExitState.Visible) == page) 0.dp else key.origin.cornerDp.dp
         }
@@ -244,15 +253,17 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         }
     }
     return with(scene.shared) {
-        // Reveal detail content as the bounds expand, including for short source cards
-        // whose width reaches the viewport before the height does.
+        // A device card is already large when it starts growing, so any alpha fade on
+        // the page is visible as the list showing through the half-grown container:
+        // the card appears to dissolve at medium size and the page then pops in at full
+        // screen. Keep the container opaque and let the growing clip reveal the page.
         val device = key.origin.destination == CardDestination.DEVICE
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
-            enter = if (device) fadeIn(DeviceCardFade) else fadeIn(),
-            exit = if (device) fadeOut(DeviceCardFade) else fadeOut(),
-            boundsTransform = { _, _ -> spring(dampingRatio = 0.9f, stiffness = 650f) },
+            enter = if (device) EnterTransition.None else fadeIn(),
+            exit = if (device) ExitTransition.None else fadeOut(),
+            boundsTransform = { _, _ -> CardMorphBounds },
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 ContentScale.FillWidth,
                 if (page) Alignment.TopStart else Alignment.Center,
