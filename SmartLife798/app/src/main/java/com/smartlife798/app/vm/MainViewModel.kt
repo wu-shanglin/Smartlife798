@@ -89,8 +89,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val agreementAccepted = _agreementAccepted.asStateFlow()
     private val _usageStatsEnabled = MutableStateFlow(usageStatsAvailable && Store.usageStatsEnabled)
     val usageStatsEnabled = _usageStatsEnabled.asStateFlow()
+    // Telemetry is fire-and-forget and must never touch the main thread: the old scope
+    // inherited Dispatchers.Main.immediate, so building the OkHttp client, serialising the
+    // payload and reading SharedPreferences all ran on the UI thread at exactly the moment
+    // the user tapped a card. IO keeps it off the frame budget entirely.
     private val usageStatsJob = SupervisorJob(viewModelScope.coroutineContext[Job])
-    private val usageStatsScope = CoroutineScope(viewModelScope.coroutineContext + usageStatsJob)
+    private val usageStatsScope = CoroutineScope(
+        viewModelScope.coroutineContext + usageStatsJob + Dispatchers.IO,
+    )
     private var activeStatsJob: Job? = null
 
     fun setAgreementAccepted(accepted: Boolean) {
@@ -111,10 +117,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun reportUsageStats(startAccepted: Boolean = false) {
         if (!_agreementAccepted.value || !_usageStatsEnabled.value) return
-        val day = UsageStats.reportingDay()
-        if (!startAccepted && (Store.usageStatsReportedDay == day || activeStatsJob?.isActive == true)) return
-        val installation = Store.usageStatsInstallation(day)
+        // Reading the in-flight job is a field read; everything below touches disk or the
+        // network and therefore stays inside the IO job.
+        if (!startAccepted && activeStatsJob?.isActive == true) return
         val report = usageStatsScope.launch {
+            val day = UsageStats.reportingDay()
+            if (!startAccepted && Store.usageStatsReportedDay == day) return@launch
+            val installation = Store.usageStatsInstallation(day)
             if (UsageStats.report(BuildConfig.USAGE_STATS_ORIGIN, day, installation, startAccepted) && !startAccepted) {
                 Store.usageStatsReportedDay = day
             }

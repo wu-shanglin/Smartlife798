@@ -47,10 +47,16 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
-// One morph spec for bounds and corners. Independent springs made the title reach the app
-// bar while the card was still expanding, which reads as two separate animations.
-private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 650f)
-private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 650f)
+// One morph spec for the container, its corners and the flying label, tuned so the whole
+// transform settles in roughly the same 220ms as the page's own cross-fade.
+//
+// Two things go wrong if this is slower:
+//  - The page becomes fully opaque while the title is still expanding, so the card's label
+//    visibly floats over an already full-screen page ("the card text grows, then the page").
+//  - Everything that waits for the entry (`awaitCardEntry`) is delayed by the same amount,
+//    which reads as the detail page being slow to become usable.
+private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 1200f)
+private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 1200f)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
