@@ -23,16 +23,27 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 /**
- * Samples presented frames while a shared card opens and asserts the growing container
- * is opaque. The scan hero card on Home is a saturated brand blue that the detail page
- * never paints; if the card and the page are cross-faded, that blue shows through the
- * container while it is still growing, and the detail then looks like it pops in at
- * full screen after the card dissolves. One opaque container transform keeps it at 0%.
+ * Samples presented frames in both directions of a shared card transform.
+ *
+ * Expanding: the container must stay opaque. The scan hero card on Home is a saturated
+ * brand blue the detail page never paints, so that blue showing through the growing box
+ * means the card and the page were cross-faded and the detail then pops in at full screen.
+ *
+ * Collapsing: the container must arrive at card size already showing the card's own
+ * content. If the detail page is still opaque at the end, the box lands on the card
+ * position filled with a scaled-down detail page and only snaps to the real card
+ * afterwards — the content mismatch that reads as a visual glitch.
  */
 object DetailMorphChecks {
     private const val Favorite = "3 栋 2 层淋浴机 02"
     /** Blue bleed allowed, as a percentage of the sampled container interior. */
     private const val MaxBleedPercent = 1
+    /** Page-background share allowed inside the container once it is back at card size. */
+    private const val MaxPageBgPercentAtCard = 8
+    /** The detail page fills its surface with MaterialTheme.background in the light theme. */
+    private const val PageBackground = 0xFFF9F8FE.toInt()
+    /** Frame-by-frame collapse log of the last run, reported with the result. */
+    private var exitTrace = ""
 
     fun run(test: Instrumentation, wallet: Boolean = false) {
         val result = Bundle()
@@ -72,7 +83,9 @@ object DetailMorphChecks {
                 await { find(test, "常用设备") != null && find(test, Favorite) != null }
             }
             SystemClock.sleep(1_200)
-            val source = Rect().also { checkNotNull(find(test, name)).getBoundsInScreen(it) }
+            val label = checkNotNull(find(test, name))
+            val source = Rect().also { label.getBoundsInScreen(it) }
+            val card = cardBounds(label)
             stage = "tap ${if (wallet) "wallet" else "device"} source $source"
             val home = copyFrame(test, handler, window)
             val size = test.targetContext.resources.displayMetrics
@@ -123,7 +136,6 @@ object DetailMorphChecks {
                 }
             }
             frames.forEach { it.recycle() }
-            home.recycle()
             if (!wallet) {
                 check(worstBleed <= MaxBleedPercent) {
                     "the scan card's brand blue showed through the growing container at frame " +
@@ -131,11 +143,20 @@ object DetailMorphChecks {
                         "cross-faded instead of one opaque container transform"
                 }
             }
+            stage = "return to the source card"
+            val exit = sampleExit(test, handler, window, home, screen, card)
+            check(exit.second <= MaxPageBgPercentAtCard) {
+                "the collapse ends with the detail page still on screen " +
+                    "(${exit.second}% of the card area is the page background); the page must " +
+                    "fade out before the container reaches card size so the card's own content " +
+                    "arrives with the bounds"
+            }
             result.putString(
                 "stream",
                 "PASS ${if (wallet) "wallet" else "device"} morph frames=${boxes.size} " +
                     "reached=${last.width()}x${last.height()}@${last.top} " +
-                    "blueBleed=${worstBleed}%${if (wallet) " (reference only)" else ""}; $trace\n",
+                    "blueBleed=${worstBleed}%${if (wallet) " (reference only)" else ""} " +
+                    "exitFrames=${exit.first} pageBgAtCard=${exit.second}%; $trace$exitTrace\n",
             )
             code = Activity.RESULT_OK
         } catch (failure: Exception) {
@@ -166,6 +187,70 @@ object DetailMorphChecks {
         check(latch.await(3, TimeUnit.SECONDS)) { "PixelCopy timeout" }
         check(code == PixelCopy.SUCCESS) { "PixelCopy failed $code" }
         return bitmap
+    }
+
+    /**
+     * Taps Back and samples the collapse. Returns the frame count plus the page-background
+     * share inside the card rectangle on the last frame that still differs from home.
+     *
+     * That frame is the moment the collapse ends, which is exactly what the eye reads as
+     * "the card is back". If the detail page is still opaque there, the container lands on
+     * the card position filled with a scaled-down detail page and only snaps to the real
+     * card afterwards — the content mismatch the morph must not have.
+     */
+    private fun sampleExit(
+        test: Instrumentation,
+        handler: Handler,
+        window: android.view.Window,
+        home: Bitmap,
+        screen: Rect,
+        card: Rect,
+    ): Pair<Int, Int> {
+        val back = Rect().also { checkNotNull(find(test, "返回")).getBoundsInScreen(it) }
+        tap(test, back.centerX(), back.centerY())
+        val start = SystemClock.uptimeMillis()
+        var frames = 0
+        var last: Bitmap? = null
+        while (SystemClock.uptimeMillis() - start < 4_000) {
+            val shot = copyFrame(test, handler, window)
+            frames++
+            if (changed(home, shot, screen) == null) {
+                shot.recycle()
+                continue
+            }
+            last?.recycle()
+            last = shot
+        }
+        check(frames > 0) { "no frames captured while collapsing" }
+        val tail = checkNotNull(last) { "the container never moved back towards the card" }
+        val share = pageBackground(tail, card)
+        tail.recycle()
+        home.recycle()
+        return frames to share
+    }
+
+    /**
+     * Share of sampled pixels inside [box] that are the detail page's flat background.
+     * Uses a tight tolerance on purpose: the card surface (229,231,244) is only ~20/17/10
+     * away from the page background (249,248,254), so the loose comparison used for
+     * "changed" would count card pixels as page pixels and the check would be blind.
+     */
+    private fun pageBackground(shot: Bitmap, box: Rect): Int {
+        var hits = 0
+        var total = 0
+        for (y in box.top + 6 until box.bottom - 6 step 4) {
+            for (x in box.left + 6 until box.right - 6 step 4) {
+                total++
+                val color = shot.getPixel(x, y)
+                if (abs(Color.red(color) - Color.red(PageBackground)) <= 6 &&
+                    abs(Color.green(color) - Color.green(PageBackground)) <= 6 &&
+                    abs(Color.blue(color) - Color.blue(PageBackground)) <= 6
+                ) {
+                    hits++
+                }
+            }
+        }
+        return if (total == 0) 0 else hits * 100 / total
     }
 
     private fun changed(home: Bitmap, shot: Bitmap, area: Rect): Rect? {
@@ -199,6 +284,13 @@ object DetailMorphChecks {
             }
         }
         return if (total == 0) 0 else hits * 100 / total
+    }
+
+    /** The clickable ancestor of [label]: the card's real bounds, not the label's. */
+    private fun cardBounds(label: AccessibilityNodeInfo): Rect {
+        var node = label
+        while (!node.isClickable) node = checkNotNull(node.parent) { "no clickable card ancestor" }
+        return Rect().also { node.getBoundsInScreen(it) }
     }
 
     private fun differs(home: Bitmap, shot: Bitmap, x: Int, y: Int): Boolean =

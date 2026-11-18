@@ -30,6 +30,10 @@ class UpdateInstallInstrumentation : Instrumentation() {
         if (appRoot && activity.intent?.getBooleanExtra("offlineFixture", false) == true) {
             ServiceLocator.init(activity)
             com.smartlife798.app.core.Store.saveAutoCheckIn(false)
+            // The login gate requires an accepted agreement; without it a cleared install
+            // stops on the login page and every appRoot fixture times out.
+            com.smartlife798.app.core.Store.acceptedAgreementVersion =
+                com.smartlife798.app.core.UserAgreement.VERSION
             com.smartlife798.app.core.session.token = "offline-ui-token"
             com.smartlife798.app.core.session.uid = "preview-user"
         }

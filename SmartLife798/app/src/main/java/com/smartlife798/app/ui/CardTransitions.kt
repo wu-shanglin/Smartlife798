@@ -52,6 +52,11 @@ private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { nu
 // separate animations instead of one container transform.
 private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 650f)
 private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 650f)
+// The page must be gone well before the container reaches card size, otherwise the
+// collapsing box is filled with a scaled-down copy of the detail page and only snaps to
+// the real card at the very end. Faster than CardMorphBounds on purpose: the card keeps
+// drawing opaquely underneath, so the tail of the collapse already shows card content.
+private val DeviceCardExit = spring<Float>(dampingRatio = 1f, stiffness = 1600f, visibilityThreshold = 0.01f)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -253,16 +258,30 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         }
     }
     return with(scene.shared) {
-        // A device card is already large when it starts growing, so any alpha fade on
-        // the page is visible as the list showing through the half-grown container:
-        // the card appears to dissolve at medium size and the page then pops in at full
-        // screen. Keep the container opaque and let the growing clip reveal the page.
+        // Device cards need asymmetric alpha, and `enter`/`exit` apply to both ends of the
+        // shared bounds, so the page and the source card must differ:
+        //
+        //  - Page (expanding): no fade. A device card is already large, so any page alpha
+        //    lets the list show through the half-grown container and the detail then looks
+        //    like it pops in at full screen.
+        //  - Page (collapsing): fades out early. Otherwise the box arrives at card size
+        //    still filled with a scaled-down detail page and only snaps to the real card
+        //    on the last frame — the "content does not match the card" the user sees.
+        //  - Source card: never fades. It is the destination of the collapse and must stay
+        //    opaque underneath so the shrinking box is progressively filled with the card's
+        //    own content instead of the page's.
         val device = key.origin.destination == CardDestination.DEVICE
+        val enter = if (device) EnterTransition.None else fadeIn()
+        val exit = when {
+            !device -> fadeOut()
+            page -> fadeOut(DeviceCardExit)
+            else -> ExitTransition.None
+        }
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
-            enter = if (device) EnterTransition.None else fadeIn(),
-            exit = if (device) ExitTransition.None else fadeOut(),
+            enter = enter,
+            exit = exit,
             boundsTransform = { _, _ -> CardMorphBounds },
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 ContentScale.FillWidth,
