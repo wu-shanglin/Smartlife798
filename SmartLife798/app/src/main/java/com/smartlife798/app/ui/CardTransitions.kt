@@ -9,6 +9,7 @@ import androidx.compose.animation.core.ExperimentalTransitionApi
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.createChildTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
@@ -47,16 +48,23 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
-// One morph spec for the container, its corners and the flying label, tuned so the whole
-// transform settles in roughly the same 220ms as the page's own cross-fade.
+// One unhurried morph, shared by the container, its corners and the page's own cross-fade.
 //
-// Two things go wrong if this is slower:
-//  - The page becomes fully opaque while the title is still expanding, so the card's label
-//    visibly floats over an already full-screen page ("the card text grows, then the page").
-//  - Everything that waits for the entry (`awaitCardEntry`) is delayed by the same amount,
-//    which reads as the detail page being slow to become usable.
-private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 1200f)
-private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 1200f)
+// Sharing one spring is the whole point. When the page faded on its own fixed tween while
+// the container took longer, the page reached full screen with the card's label still
+// expanding over it ("the card text grows, then the page arrives"). Driving the bounds, the
+// corners and the fade from the same spring keeps them together at any pace, so this can
+// stay relaxed without splitting the animation into two beats.
+private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 650f)
+private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 650f)
+// Entering: the page fades in on the container's own spring, so the card's label, the bounds
+// and the page content all arrive together at whatever pace the morph is tuned to.
+private val CardMorphEnter = spring<Float>(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.01f)
+// Leaving: the page has to be gone *before* the bounds reach card size, so this is a fixed
+// short fade rather than a spring. Any spring tied to the container (even a stiff one) still
+// leaves page content inside the card area on the last frame, and the box then snaps to the
+// card. A 220ms tween always finishes while the collapse is still running.
+private val CardMorphExit = tween<Float>(durationMillis = 200)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -265,13 +273,14 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         //    dip and the detail looked like a second full-screen animation.
         //  - On the way back the card is still there, so the shrinking box lands on the
         //    card's own content instead of a scaled-down page that snaps at the last frame.
-        // Default fadeIn/fadeOut is a 220ms tween and carries the tap feedback; a spring
-        // here would take ~600ms to settle and the tap would feel ignored.
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
-            enter = if (page) fadeIn() else EnterTransition.None,
-            exit = if (page) fadeOut() else ExitTransition.None,
+            // Asymmetric on purpose: a fixed-duration tween would finish while the container
+            // is still expanding (splitting the transform), and a matching exit spring would
+            // leave page content inside the collapsed card.
+            enter = if (page) fadeIn(CardMorphEnter) else EnterTransition.None,
+            exit = if (page) fadeOut(CardMorphExit) else ExitTransition.None,
             boundsTransform = { _, _ -> CardMorphBounds },
             resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
                 ContentScale.FillWidth,

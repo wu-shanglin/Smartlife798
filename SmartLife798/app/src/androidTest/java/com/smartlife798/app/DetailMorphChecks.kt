@@ -225,7 +225,7 @@ object DetailMorphChecks {
         }
         check(frames > 0) { "no frames captured while collapsing" }
         val tail = checkNotNull(last) { "the container never moved back towards the card" }
-        val share = pageBackground(tail, card)
+        val share = pageBackground(home, tail, card)
         tail.recycle()
         home.recycle()
         return frames to share
@@ -237,11 +237,15 @@ object DetailMorphChecks {
      * away from the page background (249,248,254), so the loose comparison used for
      * "changed" would count card pixels as page pixels and the check would be blind.
      */
-    private fun pageBackground(shot: Bitmap, box: Rect): Int {
+    private fun pageBackground(home: Bitmap, shot: Bitmap, box: Rect): Int {
         var hits = 0
         var total = 0
         for (y in box.top + 6 until box.bottom - 6 step 4) {
             for (x in box.left + 6 until box.right - 6 step 4) {
+                // Only card pixels count. The home list background is the same colour as the
+                // detail page background, so including empty area would report the card's own
+                // offset as "page still visible".
+                if (!differsAt(PageBackground, home.getPixel(x, y))) continue
                 total++
                 val color = shot.getPixel(x, y)
                 if (abs(Color.red(color) - Color.red(PageBackground)) <= 6 &&
