@@ -56,8 +56,8 @@ Git 分支预览由 Cloudflare Workers Builds 执行 `npx wrangler preview`，�
 npx wrangler d1 migrations apply USAGE_DB --remote
 ```
 
-也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。部署后访问[下载站首页](https://smartlife798.3205604633.workers.dev/#usage)查看汇总。纯静态 Cloudflare Pages 部署显示「—」。
+也可在 D1 控制台执行 `migrations/0001_usage.sql` 初始化表，之后用 Wrangler 补记首个迁移。部署后访问[下载站首页](https://smartlife798.networkcore.top/#usage)查看汇总。纯静态 Cloudflare Pages 部署显示「—」。
 
-Android 正式构建默认使用项目的 Worker。Debug 和 performance 构建默认没有上报地址，可用 `-PusageStatsOrigin=https://实际部署的Worker域名` 配置测试环境，也可用空值关闭正式构建的统计入口。独立 `.offline` 测试包禁用上报。
+Android 正式构建默认向 `https://smartlife798.networkcore.top/api/usage/v1` 上报匿名用量。Debug 和 performance 构建默认没有上报地址，可用 `-PusageStatsOrigin=https://实际部署的Worker域名` 配置测试环境，也可用空值关闭正式构建的统计入口。独立 `.offline` 测试包禁用上报。
 
 [D1 Wrangler 命令](https://developers.cloudflare.com/d1/wrangler-commands/)
