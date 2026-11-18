@@ -47,7 +47,7 @@ if (hasReleaseSigning) {
 val releaseAlipayCallback = "smartlife798sign"
 val debugAlipayCallback = "smartlife798debugsign"
 val usageStatsOrigin = providers.gradleProperty("usageStatsOrigin").orNull?.trimEnd('/')
-val officialUsageStatsOrigin = URI("https", "smartlife798.3205604633.workers.dev", null, null).toString()
+val officialUsageStatsOrigin = URI("https", "smartlife798.networkcore.top", null, null).toString()
 if (!usageStatsOrigin.isNullOrEmpty()) {
     val origin = URI(usageStatsOrigin)
     check(origin.scheme == "https" && origin.host != null && origin.rawAuthority == origin.host &&
