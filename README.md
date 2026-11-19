@@ -6,7 +6,7 @@
 |---|---|
 | 正式版包名 | `com.smartlife798.app` |
 | Beta 版包名 | `com.smartlife798.app.debug` |
-| 当前版本 | `2.5.3`（`versionCode 110`） |
+| 当前版本 | `2.5.4`（`versionCode 111`） |
 | 技术栈 | Kotlin 2.2 · Jetpack Compose (Material 3 Expressive) · OkHttp · CameraX + ML Kit · Alipay SDK |
 | 最低版本 | Android 7.0（API 24） |
 | 下载站 | [慧生活798 Android 下载](https://smartlife798.networkcore.top/) |
@@ -15,6 +15,8 @@
 客户端发布版本、官方协议请求标识与静态 APK 基线相互独立。运行时从已核验包名和开发者的原应用分发页发现版本，失败保留缓存及内置保底；这不代表新协议或设备兼容性已验，见 [协议维护](docs/04-接口契约与变更检测.md#6-原-apk-版本与更新通道)。
 
 ## 当前版本
+
+**2.5.4 / 111** 修复首页设备卡片与设备详情之间的过渡：打开与返回共用一条临界阻尼弹簧，容器变形期间保持不透明，详情内容由放大的裁剪窗口揭示；返回时来源卡片按收缩后的边界重新布局、页面先短淡出交还容器，标题与卡片同字号，不再出现中途消失、两段动画或落位跳动。
 
 **2.5.3 / 110** 补齐原版协议的启动和结束设备请求签名。首页使用中与扫码卡片默认同高，最近使用更易点按。设备页会读回确认积分开关，账单分别展示总优惠与积分明细的可用状态。登录前需确认用户协议与隐私说明，匿名用量统计可在登录前关闭。
 
@@ -57,13 +59,13 @@
 
 ## 构建与产物
 
-2.5.3 为本轮正式发布版本，日常试装使用独立 Debug 包。
+2.5.4 为本轮正式发布版本，日常试装使用独立 Debug 包。
 
 唯一 Android 工程为 `SmartLife798/`；先按 [构建与运行](docs/03-技术方案与开发计划.md#4-构建与运行) 准备 JDK/SDK、本机 `local.properties`，再按 [检查与证据](docs/06-工程规范与路线图.md#2-检查与证据) 执行适用检查。release 签名及产物准备见 [版本与发布](docs/06-工程规范与路线图.md#3-版本与发布)。
 
 | 本地构建 | 文件 |
 |---|---|
-| 产物 | [`dist/SmartLife798-2.5.3-release.apk`](dist/SmartLife798-2.5.3-release.apk) |
+| 产物 | [`dist/SmartLife798-2.5.4-release.apk`](dist/SmartLife798-2.5.4-release.apk) |
 
 日常试装使用 `SmartLife798/app/build/outputs/apk/debug/app-debug.apk`。桌面的「慧生活 798 Beta 版」可与正式版并存，分别保存应用数据。上表是正式发布时的产物路径，只有明确授权打包 Release 并发布后才生成。
 
