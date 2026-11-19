@@ -48,23 +48,25 @@ private data class CardScene(
 
 private val LocalCardScene = staticCompositionLocalOf<CardScene?> { null }
 private val LocalPageCardKey = staticCompositionLocalOf<CardTransitionKey?> { null }
-// One unhurried morph, shared by the container, its corners and the page's own cross-fade.
-//
-// Sharing one spring is the whole point. When the page faded on its own fixed tween while
-// the container took longer, the page reached full screen with the card's label still
-// expanding over it ("the card text grows, then the page arrives"). Driving the bounds, the
-// corners and the fade from the same spring keeps them together at any pace, so this can
-// stay relaxed without splitting the animation into two beats.
-private val CardMorphBounds = spring<Rect>(dampingRatio = 0.9f, stiffness = 650f)
-private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 650f)
-// Entering: the page fades in on the container's own spring, so the card's label, the bounds
-// and the page content all arrive together at whatever pace the morph is tuned to.
+// One morph spec for the container, its corners and the entering page, so the bounds and
+// the page arrive together at any pace. Critically damped on purpose: 0.9 overshoots by
+// ~16%, which on the way back rendered the card's text larger than the card itself before
+// snapping to size.
+private val CardMorphBounds = spring<Rect>(dampingRatio = 1f, stiffness = 650f)
+private val CardMorphCorner = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 1f, stiffness = 650f)
 private val CardMorphEnter = spring<Float>(dampingRatio = 1f, stiffness = 650f, visibilityThreshold = 0.01f)
-// Leaving: the page has to be gone *before* the bounds reach card size, so this is a fixed
-// short fade rather than a spring. Any spring tied to the container (even a stiff one) still
-// leaves page content inside the card area on the last frame, and the box then snaps to the
-// card. A 220ms tween always finishes while the collapse is still running.
-private val CardMorphExit = tween<Float>(durationMillis = 200)
+// Leaving must not follow the full bounds spring. The source card is already drawn inside
+// the shrinking box (and remeasured, so its layout is right at every size); a page that
+// fades over the whole collapse leaves a scaled-down copy of itself on top of that card
+// until the last frame, which reads as a misaligned ghost. A short fade hands the box over
+// to the card while the bounds are still collapsing.
+private val CardMorphExit = tween<Float>(durationMillis = 180)
+
+// The flying label is a separate shared node, so it needs its own bounds and its own fade. It
+// runs slightly faster than the container so it has settled onto the card's text slot by the
+// time the box lands, instead of arriving still mid-scale.
+private val CardMorphLabelBounds = spring<Rect>(dampingRatio = 1f, stiffness = 900f)
+private val CardMorphLabelFade = spring<Float>(dampingRatio = 1f, stiffness = 900f, visibilityThreshold = 0.01f)
 
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
@@ -213,6 +215,12 @@ private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
             this@cardElement.sharedBounds(
                 sharedContentState = state,
                 animatedVisibilityScope = scene.visibility,
+                // Its own spring, tuned just faster than the container: the label has to be
+                // back at the card's text size by the time the box lands, otherwise it arrives
+                // mid-scale and the card looks wrong for a few frames.
+                boundsTransform = { _, _ -> CardMorphLabelBounds },
+                enter = fadeIn(CardMorphLabelFade),
+                exit = fadeOut(CardMorphLabelFade),
                 zIndexInOverlay = 2f,
             )
         } else {
@@ -263,29 +271,23 @@ private fun Modifier.cardBounds(key: CardTransitionKey?, page: Boolean): Modifie
         }
     }
     return with(scene.shared) {
-        // Only the page cross-fades; the source card stays fully opaque for the whole
-        // transform, which is what makes the morph read as one container:
-        //
-        //  - Frame 0 shows the card. An opaque page at frame 0 would paint the scaled-down
-        //    detail over the card the instant the finger lifts, which feels unresponsive and
-        //    folds back to the wrong content when an entry is interrupted.
-        //  - Fading the card as well multiplied both alphas, so the list showed through the
-        //    dip and the detail looked like a second full-screen animation.
-        //  - On the way back the card is still there, so the shrinking box lands on the
-        //    card's own content instead of a scaled-down page that snaps at the last frame.
         this@cardBounds.sharedBounds(
             sharedContentState = state,
             animatedVisibilityScope = scene.visibility,
-            // Asymmetric on purpose: a fixed-duration tween would finish while the container
-            // is still expanding (splitting the transform), and a matching exit spring would
-            // leave page content inside the collapsed card.
+            // The card never fades on either end: it is the opaque backdrop the page is
+            // revealed against while expanding, and the content the shrinking box lands on
+            // while collapsing. Only the page fades; it enters with the bounds but leaves on
+            // a short fade so the collapse is not covered by a scaled page ghost.
             enter = if (page) fadeIn(CardMorphEnter) else EnterTransition.None,
             exit = if (page) fadeOut(CardMorphExit) else ExitTransition.None,
             boundsTransform = { _, _ -> CardMorphBounds },
-            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(
-                ContentScale.FillWidth,
-                if (page) Alignment.TopStart else Alignment.Center,
-            ),
+            // The page is width-scaled and top-aligned so it keeps its final layout while the
+            // clip grows. The card must instead re-lay-out: scaling it proportionally into a
+            // wider box enlarged its text and cropped its lower rows, so the shrinking box
+            // showed one oversized line instead of the card's four rows.
+            resizeMode = if (page) SharedTransitionScope.ResizeMode.scaleToBounds(
+                ContentScale.FillWidth, Alignment.TopStart,
+            ) else SharedTransitionScope.ResizeMode.RemeasureToBounds,
             clipInOverlayDuringTransition = clip,
             zIndexInOverlay = if (page) 1f else 0f,
         )
