@@ -62,12 +62,6 @@ private val CardMorphEnter = spring<Float>(dampingRatio = 1f, stiffness = 650f, 
 // to the card while the bounds are still collapsing.
 private val CardMorphExit = tween<Float>(durationMillis = 180)
 
-// The flying label is a separate shared node, so it needs its own bounds and its own fade. It
-// runs slightly faster than the container so it has settled onto the card's text slot by the
-// time the box lands, instead of arriving still mid-scale.
-private val CardMorphLabelBounds = spring<Rect>(dampingRatio = 1f, stiffness = 900f)
-private val CardMorphLabelFade = spring<Float>(dampingRatio = 1f, stiffness = 900f, visibilityThreshold = 0.01f)
-
 /** A retained source must change visibility in the same transition as its detail. */
 @OptIn(ExperimentalTransitionApi::class)
 @Composable
@@ -197,14 +191,14 @@ fun Modifier.sharedCardElement(
     origin: CardOrigin,
     itemId: String = "",
     part: CardPart = CardPart.TITLE,
-): Modifier = cardElement(currentCardSource(origin)?.key(itemId)?.copy(part = part))
+): Modifier = cardElement(currentCardSource(origin)?.key(itemId)?.copy(part = part), page = false)
 
 @Composable
 fun Modifier.sharedCardPageElement(part: CardPart = CardPart.TITLE): Modifier =
-    cardElement(LocalPageCardKey.current?.copy(part = part))
+    cardElement(LocalPageCardKey.current?.copy(part = part), page = true)
 
 @Composable
-private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
+private fun Modifier.cardElement(key: CardTransitionKey?, page: Boolean): Modifier {
     val scene = LocalCardScene.current ?: return this
     if (key == null) return this
     return with(scene.shared) {
@@ -215,12 +209,12 @@ private fun Modifier.cardElement(key: CardTransitionKey?): Modifier {
             this@cardElement.sharedBounds(
                 sharedContentState = state,
                 animatedVisibilityScope = scene.visibility,
-                // Its own spring, tuned just faster than the container: the label has to be
-                // back at the card's text size by the time the box lands, otherwise it arrives
-                // mid-scale and the card looks wrong for a few frames.
-                boundsTransform = { _, _ -> CardMorphLabelBounds },
-                enter = fadeIn(CardMorphLabelFade),
-                exit = fadeOut(CardMorphLabelFade),
+                // Same asymmetric fade as the container: the card's title stays opaque while
+                // the page's title fades with its page. Giving both nodes the same fade left
+                // the page title fully drawn over the card until the transition ended.
+                boundsTransform = { _, _ -> CardMorphBounds },
+                enter = if (page) fadeIn(CardMorphEnter) else EnterTransition.None,
+                exit = if (page) fadeOut(CardMorphExit) else ExitTransition.None,
                 zIndexInOverlay = 2f,
             )
         } else {

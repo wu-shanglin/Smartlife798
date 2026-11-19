@@ -419,6 +419,12 @@ fun DeviceDetailScreen(
                     Text(
                         shownDevice.name.ifBlank { "设备详情" },
                         modifier = Modifier.sharedCardPageElement(),
+                        // Match the source card's title typography. The shared label keeps
+                        // drawing its last content in the overlay until the container lands,
+                        // and a larger app-bar style scaled into the card's title rect leaves
+                        // a visibly larger ghost that snaps when the overlay is removed.
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
